@@ -1,4 +1,4 @@
-# PowerSystems.jl
+# PowerSystemsInvestments.jl
 
 ```@meta
 CurrentModule = SIIP_PACKAGE
