@@ -1,5 +1,13 @@
-module SIIP
--PACKAGE
+module PowerSystemsInvestments
+
+import InfrastructureSystems
+import PowerSystems
+import JuMP
+import MathOptInterface
+
+const IS = InfrastructureSystems
+const PSY = PowerSystems
+const MOI = MathOptInterface
 
 using DocStringExtensions
 

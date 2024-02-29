@@ -1,4 +1,4 @@
-using Documenter, SIIP - PACKAGE
+using Documenter, PowerSystemsInvestments
 
 pages = OrderedDict(
     "Welcome Page" => "index.md",
@@ -9,15 +9,15 @@ pages = OrderedDict(
 )
 
 makedocs(
-    modules=[SIIP-PACKAGE],
+    modules=[PowerSystemsInvestments],
     format=Documenter.HTML(prettyurls=haskey(ENV, "GITHUB_ACTIONS")),
-    sitename="SIIP-PACKAGE.jl",
+    sitename="PowerSystemsInvestments.jl",
     authors="Freddy Mercury, Nikola Tesla, Leonard Bernestein",
     pages=Any[p for p in pages],
 )
 
 deploydocs(
-    repo="github.com/NREL-SIIP/SIIP-PACKAGE.git",
+    repo="github.com/NREL-Sienna/PowerSystemsInvestments.git",
     target="build",
     branch="gh-pages",
     devbranch="master",

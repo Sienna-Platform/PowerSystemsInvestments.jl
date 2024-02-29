@@ -1,10 +1,13 @@
-name = "SIIP-Package"
+name = "PowerSystemsInvestments"
 uuid = "bed98974-b02a-5e2f-9ee0-a103f5c450dd"
-authors = ["YOUR_NAME"]
+authors = ["Jose Daniel Lara"]
 version = "0.1.0"
 
 [deps]
+InfrastructureSystems = "2cd47ed4-ca9b-11e9-27f2-ab636a7671f1"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+PowerSystems = "bcd98974-b02a-5e2f-9ee0-a103f5c450dd"
+
 
 [compat]
 DocStringExtensions = "~0.8, ~0.9"

@@ -2,11 +2,11 @@ using Test
 import Logging
 
 import Aqua
-Aqua.test_unbound_args(SIIP - PACKAGE)
-Aqua.test_undefined_exports(SIIP - PACKAGE)
-Aqua.test_ambiguities(SIIP - PACKAGE)
-Aqua.test_stale_deps(SIIP - PACKAGE)
-Aqua.test_deps_compat(SIIP - PACKAGE)
+Aqua.test_unbound_args(PowerSystemsInvestments)
+Aqua.test_undefined_exports(PowerSystemsInvestments)
+Aqua.test_ambiguities(PowerSystemsInvestments)
+Aqua.test_stale_deps(PowerSystemsInvestments)
+Aqua.test_deps_compat(PowerSystemsInvestments)
 
 LOG_FILE = "power-systems.log"
 LOG_LEVELS = Dict(
@@ -87,7 +87,7 @@ function run_tests()
         end
 
         # Testing Topological components of the schema
-        @time @testset "Begin SIIP-PACKAGE tests" begin
+        @time @testset "Begin PowerSystemsInvestments tests" begin
             @includetests ARGS
         end
 
