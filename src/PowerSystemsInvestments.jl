@@ -11,6 +11,8 @@ const PSY = PowerSystems
 const MOI = MathOptInterface
 const PSIP = PowerSystemsInvestmentsPortfolios
 
+export InvestmentModel
+
 using DocStringExtensions
 
 include("base/constraints.jl")
