@@ -24,6 +24,7 @@ include("base/capital_model.jl")
 include("base/operation_model.jl")
 include("base/feasibility_model.jl")
 include("base/investment_problem.jl")
+include("base/investment_model_store.jl")
 include("base/investment_model.jl")
 
 @template (FUNCTIONS, METHODS) = """
