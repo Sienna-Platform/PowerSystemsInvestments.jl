@@ -4,10 +4,11 @@ authors = ["Jose Daniel Lara"]
 version = "0.1.0"
 
 [deps]
-InfrastructureSystems = "2cd47ed4-ca9b-11e9-27f2-ab636a7671f1"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+InfrastructureSystems = "2cd47ed4-ca9b-11e9-27f2-ab636a7671f1"
+JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 PowerSystems = "bcd98974-b02a-5e2f-9ee0-a103f5c450dd"
-
+PowerSystemsInvestmentsPortfolios = "bed98974-b02a-5e2f-9fe0-a103f5c450dd"
 
 [compat]
 DocStringExtensions = "~0.8, ~0.9"

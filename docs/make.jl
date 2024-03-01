@@ -12,7 +12,7 @@ makedocs(
     modules=[PowerSystemsInvestments],
     format=Documenter.HTML(prettyurls=haskey(ENV, "GITHUB_ACTIONS")),
     sitename="PowerSystemsInvestments.jl",
-    authors="Freddy Mercury, Nikola Tesla, Leonard Bernestein",
+    authors="Jose Daniel Lara",
     pages=Any[p for p in pages],
 )
 
