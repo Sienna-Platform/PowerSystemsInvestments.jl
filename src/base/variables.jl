@@ -1,4 +1,9 @@
 """
 Total installed capacity for a technology
 """
-struct InstalledCapacity <: IS.VariableType end
+struct BuildCapacity <: ISOPT.VariableType end
+
+"""
+Dispatch of technology in operations period
+"""
+struct Dispatch <: ISOPT.VariableType end

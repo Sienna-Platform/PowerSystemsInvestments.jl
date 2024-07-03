@@ -30,7 +30,22 @@ function ObjectiveFunction()
     )
 end
 
-Base.@kwdef mutable struct MultiOptimizationContainer{T <: SolutionAlgorithm} <: ISOPT.AbstractModelContainer
+struct MpiInfo
+    comm::Any
+    rank::Int
+    root::Bool
+    nprocs::Int
+
+    function MpiInfo(comm)
+        rank = MPI.Comm_rank(comm) + 1
+        is_root = (rank == 1)
+        nprocs = MPI.Comm_size(comm)
+        return new(comm, rank, is_root, nprocs)
+    end
+end
+
+Base.@kwdef mutable struct MultiOptimizationContainer{T <: SolutionAlgorithm} <:
+                           AbstractModelContainer
     main_problem::OptimizationContainer
     subproblems::Dict{String, OptimizationContainer}
     time_steps::UnitRange{Int}
@@ -63,9 +78,8 @@ function MultiOptimizationContainer(
     end
 
     # define dictionary containing the optimization container for the subregion
-    subproblems = Dict(
-        k => OptimizationContainer(sys, settings, nothing, U) for k in subproblem_keys
-    )
+    subproblems =
+        Dict(k => OptimizationContainer(sys, settings, nothing, U) for k in subproblem_keys)
 
     return MultiOptimizationContainer{T}(;
         main_problem=OptimizationContainer(sys, settings, nothing, U),
@@ -82,6 +96,7 @@ function MultiOptimizationContainer(
         expressions=Dict{ExpressionKey, AbstractArray}(),
         parameters=Dict{ParameterKey, ParameterContainer}(),
         base_power=PSY.get_base_power(sys),
+        optimizer_stats=ISOPT.OptimizerStats(),
         optimizer_stats=OptimizerStats(),
         built_for_recurrent_solves=false,
         metadata=OptimizationContainerMetadata(),
@@ -94,14 +109,18 @@ function get_container_keys(container::MultiOptimizationContainer)
     return Iterators.flatten(keys(getfield(container, f)) for f in STORE_CONTAINERS)
 end
 
+=======
+end
+
+function get_container_keys(container::MultiOptimizationContainer)
+    return Iterators.flatten(keys(getfield(container, f)) for f in STORE_CONTAINERS)
+end
+
 get_default_time_series_type(container::MultiOptimizationContainer) =
     container.default_time_series_type
 get_duals(container::MultiOptimizationContainer) = container.duals
 get_expressions(container::MultiOptimizationContainer) = container.expressions
-get_initial_conditions(container::MultiOptimizationContainer) =
-    container.initial_conditions
-get_initial_conditions_data(container::MultiOptimizationContainer) =
-    container.initial_conditions_data
+get_initial_conditions(container::MultiOptimizationContainer) = container.initial_conditions
 get_initial_time(container::MultiOptimizationContainer) =
     get_initial_time(container.settings)
 get_jump_model(container::MultiOptimizationContainer) =
@@ -148,6 +167,7 @@ function _finalize_jump_model!(
     return
 end
 
+#=
 function init_optimization_container!(
     container::MultiOptimizationContainer,
     network_model::NetworkModel{<:PM.AbstractPowerModel},
@@ -192,7 +212,9 @@ function init_optimization_container!(
     return
 end
 
+
 function serialize_optimization_model(
     container::MultiOptimizationContainer,
     save_path::String,
 ) end
+=#

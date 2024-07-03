@@ -1,6 +1,6 @@
-mutable struct InvestmentModel{<:InvestmentProblem, <:SolutionAlgorithm}
+mutable struct InvestmentModel{I <: InvestmentProblem, S <: SolutionAlgorithm}
     portfolio::PSIP.Portfolio
-    internal::Union{Nothing, IS.ModelInternal}
+    internal::Union{Nothing, ISOPT.ModelInternal}
     store::InvestmentModelStore
     ext::Dict{String, Any}
 end

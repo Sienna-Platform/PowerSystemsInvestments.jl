@@ -1,7 +1,7 @@
 """
 Stores results data for one InvestmentModel
 """
-mutable struct InvestmentModelStore <: IS.AbstractModelStore
+mutable struct InvestmentModelStore <: ISOPT.AbstractModelStore
     # All DenseAxisArrays have axes (column names, row indexes)
     duals::Dict{ConstraintKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
     parameters::Dict{ParameterKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
@@ -11,7 +11,7 @@ mutable struct InvestmentModelStore <: IS.AbstractModelStore
         ExpressionKey,
         OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}},
     }
-    optimizer_stats::OrderedDict{Dates.DateTime, OptimizerStats}
+    optimizer_stats::OrderedDict{Dates.DateTime, ISOPT.OptimizerStats}
 end
 
 function InvestmentModelStore()
@@ -21,13 +21,72 @@ function InvestmentModelStore()
         Dict{VariableKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
         Dict{AuxVarKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
         Dict{ExpressionKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
-        OrderedDict{Dates.DateTime, OptimizerStats}(),
+        OrderedDict{Dates.DateTime, ISOPT.OptimizerStats}(),
     )
 end
 
+struct ModelStoreParams <: IS.Optimization.AbstractModelStoreParams
+    num_executions::Int
+    horizon_count::Int
+    interval::Dates.Millisecond
+    resolution::Dates.Millisecond
+    base_power::Float64
+    system_uuid::Base.UUID
+    container_metadata::IS.Optimization.OptimizationContainerMetadata
+
+    function ModelStoreParams(
+        num_executions::Int,
+        horizon_count::Int,
+        interval::Dates.Millisecond,
+        resolution::Dates.Millisecond,
+        base_power::Float64,
+        system_uuid::Base.UUID,
+        container_metadata=IS.Optimization.OptimizationContainerMetadata(),
+    )
+        new(
+            num_executions,
+            horizon_count,
+            Dates.Millisecond(interval),
+            Dates.Millisecond(resolution),
+            base_power,
+            system_uuid,
+            container_metadata,
+        )
+    end
+end
+
+function ModelStoreParams(
+    num_executions::Int,
+    horizon::Dates.Millisecond,
+    interval::Dates.Millisecond,
+    resolution::Dates.Millisecond,
+    base_power::Float64,
+    system_uuid::Base.UUID,
+    container_metadata=IS.Optimization.OptimizationContainerMetadata(),
+)
+    return ModelStoreParams(
+        num_executions,
+        horizon ÷ resolution,
+        Dates.Millisecond(interval),
+        Dates.Millisecond(resolution),
+        base_power,
+        system_uuid,
+        container_metadata,
+    )
+end
+
+get_num_executions(params::ModelStoreParams) = params.num_executions
+get_horizon_count(params::ModelStoreParams) = params.horizon_count
+get_interval(params::ModelStoreParams) = params.interval
+get_resolution(params::ModelStoreParams) = params.resolution
+get_base_power(params::ModelStoreParams) = params.base_power
+get_system_uuid(params::ModelStoreParams) = params.system_uuid
+deserialize_key(params::ModelStoreParams, name) =
+    deserialize_key(params.container_metadata, name)
+
 function initialize_storage!(
     store::InvestmentModelStore,
-    container::AbstractOptimizationContainer,
+    container::ISOPT.AbstractOptimizationContainer,
     params::ModelStoreParams,
 )
     num_of_executions = get_num_executions(params)
@@ -58,6 +117,8 @@ function initialize_storage!(
     end
     return
 end
+
+struct InvestmentModelIndexType end
 
 function write_result!(
     store::InvestmentModelStore,
@@ -114,7 +175,7 @@ end
 
 function write_optimizer_stats!(
     store::InvestmentModelStore,
-    stats::OptimizerStats,
+    stats::ISOPT.OptimizerStats,
     index::InvestmentModelIndexType,
 )
     if index in keys(store.optimizer_stats)
