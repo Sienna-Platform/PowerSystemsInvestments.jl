@@ -1,3 +1,5 @@
 abstract type InvestmentProblem end
 
-struct SimpleCapacityExpansion <: InvestmentProblem end
+abstract type DefaultInvestmentProblem <: InvestmentProblem end
+
+struct GenericCapacityExpansion <: DefaultInvestmentProblem end

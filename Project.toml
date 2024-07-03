@@ -13,9 +13,10 @@ JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 PowerModels = "c36e90e8-916a-50a6-bd94-075b64ef4655"
+PowerNetworkMatrices = "bed98974-b02a-5e2f-9fe0-a103f5c450dd"
 PowerSystems = "bcd98974-b02a-5e2f-9ee0-a103f5c450dd"
 PowerSystemsInvestmentsPortfolios = "bed98974-b02a-5e2f-9fe0-a103f8c450dd"
-Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 
 [compat]
 DocStringExtensions = "~0.8, ~0.9"

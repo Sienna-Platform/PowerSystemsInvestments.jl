@@ -9,7 +9,7 @@ struct Settings
     optimizer_solve_log_print::Bool
     detailed_optimizer_stats::Bool
     calculate_conflict::Bool
-    system_to_file::Bool
+    portfolio_to_file::Bool
     initialize_model::Bool
     initialization_file::String
     deserialize_initial_conditions::Bool
@@ -22,7 +22,7 @@ struct Settings
 end
 
 function Settings(
-    sys;
+    portfolio;
     initial_time::Dates.DateTime=UNSET_INI_TIME,
     time_series_cache_size::Int=IS.TIME_SERIES_CACHE_SIZE_BYTES,
     warm_start::Bool=true,
@@ -33,7 +33,7 @@ function Settings(
     optimizer_solve_log_print::Bool=false,
     detailed_optimizer_stats::Bool=false,
     calculate_conflict::Bool=false,
-    system_to_file::Bool=true,
+    portfolio_to_file::Bool=true,
     initialize_model::Bool=true,
     initialization_file="",
     deserialize_initial_conditions::Bool=false,
@@ -44,7 +44,7 @@ function Settings(
     store_variable_names=false,
     ext=Dict{String, Any}(),
 )
-    if time_series_cache_size > 0 && PSY.stores_time_series_in_memory(sys)
+    if time_series_cache_size > 0 && PSY.stores_time_series_in_memory(portfolio)
         @info "Overriding time_series_cache_size because time series is stored in memory"
         time_series_cache_size = 0
     end
@@ -70,7 +70,7 @@ function Settings(
         optimizer_solve_log_print,
         detailed_optimizer_stats,
         calculate_conflict,
-        system_to_file,
+        portfolio_to_file,
         initialize_model,
         initialization_file,
         deserialize_initial_conditions,
@@ -137,7 +137,7 @@ get_initial_time(settings::Settings)::Dates.DateTime = settings.initial_time[]
 get_optimizer(settings::Settings) = settings.optimizer
 get_ext(settings::Settings) = settings.ext
 get_warm_start(settings::Settings) = settings.warm_start[]
-get_system_to_file(settings::Settings) = settings.system_to_file
+get_portfolio_to_file(settings::Settings) = settings.portfolio_to_file
 get_initialize_model(settings::Settings) = settings.initialize_model
 get_initialization_file(settings::Settings) = settings.initialization_file
 get_deserialize_initial_conditions(settings::Settings) =
