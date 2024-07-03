@@ -7,6 +7,7 @@ import MathOptInterface
 import PowerSystemsInvestmentsPortfolios
 
 const IS = InfrastructureSystems
+const ISOPT = InfrastructureSystems.Optimization
 const PSY = PowerSystems
 const MOI = MathOptInterface
 const PSIP = PowerSystemsInvestmentsPortfolios
@@ -19,6 +20,7 @@ using DocStringExtensions
 include("base/constraints.jl")
 include("base/variables.jl")
 include("base/expressions.jl")
+include("base/solution_algorithms.jl")
 include("base/optimization_container.jl")
 include("base/capital_model.jl")
 include("base/operation_model.jl")

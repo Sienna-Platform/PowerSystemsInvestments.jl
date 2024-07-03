@@ -4,10 +4,7 @@ Stores results data for one InvestmentModel
 mutable struct InvestmentModelStore <: IS.AbstractModelStore
     # All DenseAxisArrays have axes (column names, row indexes)
     duals::Dict{ConstraintKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
-    parameters::Dict{
-        ParameterKey,
-        OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}},
-    }
+    parameters::Dict{ParameterKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
     variables::Dict{VariableKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
     aux_variables::Dict{AuxVarKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
     expressions::Dict{
@@ -50,7 +47,7 @@ function initialize_storage!(
             column_names = get_column_names(key, field_container)
             data = OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}()
             for timestamp in
-                range(initial_time; step = model_interval, length = num_of_executions)
+                range(initial_time; step=model_interval, length=num_of_executions)
                 data[timestamp] = fill!(
                     DenseAxisArray{Float64}(undef, column_names..., 1:time_steps_count),
                     NaN,
@@ -102,7 +99,7 @@ end
 function read_results(
     store::InvestmentModelStore,
     key::OptimizationContainerKey;
-    index::Union{InvestmentModelIndexType, Nothing} = nothing,
+    index::Union{InvestmentModelIndexType, Nothing}=nothing,
 )
     container = getfield(store, get_store_container_type(key))
     data = container[key]
