@@ -25,14 +25,14 @@ function InvestmentModelStore()
     )
 end
 
-struct ModelStoreParams <: IS.Optimization.AbstractModelStoreParams
+struct ModelStoreParams <: ISOPT.AbstractModelStoreParams
     num_executions::Int
     horizon_count::Int
     interval::Dates.Millisecond
     resolution::Dates.Millisecond
     base_power::Float64
     system_uuid::Base.UUID
-    container_metadata::IS.Optimization.OptimizationContainerMetadata
+    container_metadata::ISOPT.OptimizationContainerMetadata
 
     function ModelStoreParams(
         num_executions::Int,
@@ -41,7 +41,7 @@ struct ModelStoreParams <: IS.Optimization.AbstractModelStoreParams
         resolution::Dates.Millisecond,
         base_power::Float64,
         system_uuid::Base.UUID,
-        container_metadata=IS.Optimization.OptimizationContainerMetadata(),
+        container_metadata=ISOPT.OptimizationContainerMetadata(),
     )
         new(
             num_executions,
@@ -62,7 +62,7 @@ function ModelStoreParams(
     resolution::Dates.Millisecond,
     base_power::Float64,
     system_uuid::Base.UUID,
-    container_metadata=IS.Optimization.OptimizationContainerMetadata(),
+    container_metadata=ISOPT.OptimizationContainerMetadata(),
 )
     return ModelStoreParams(
         num_executions,
