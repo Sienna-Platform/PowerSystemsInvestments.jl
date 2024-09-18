@@ -9,7 +9,7 @@ function add_capital_cost!(
     ::V,
 ) where {T <: PSIP.SupplyTechnology, U <: BuildCapacity, V <: ContinuousInvestment}
     for d in devices
-        capital_cost_data = PSIP.get_capital_cost(d)
+        capital_cost_data = PSIP.get_capital_costs(d)
         _add_cost_to_objective!(container, U(), d, capital_cost_data, V())
     end
     return
@@ -41,7 +41,7 @@ function add_fixed_om_cost!(
     ::V,
 ) where {T <: PSIP.SupplyTechnology, U <: CumulativeCapacity, V <: ContinuousInvestment}
     for d in devices
-        fixed_cost_data = PSIP.get_operations_cost(d)
+        fixed_cost_data = PSIP.get_operation_costs(d)
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V())
     end
     return

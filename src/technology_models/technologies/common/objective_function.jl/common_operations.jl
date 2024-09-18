@@ -9,7 +9,7 @@ function add_variable_cost!(
     ::V,
 ) where {T <: PSIP.SupplyTechnology, U <: ActivePowerVariable, V <: BasicDispatch}
     for d in devices
-        op_cost_data = PSIP.get_variable_cost(d)
+        op_cost_data = PSIP.get_operation_costs(d)
         _add_cost_to_objective!(container, U(), d, op_cost_data, V())
     end
     return

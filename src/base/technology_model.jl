@@ -8,40 +8,6 @@ mutable struct TechnologyModel{
     attributes::Dict{String, Any}
 end
 
-function _check_technology_formulation(
-    ::Type{D},
-    ::Type{B},
-    ::Type{C},
-) where {
-    D <: Union{AbstractTechnologyFormulation, PSIP.Technology},
-    B <: Union{AbstractTechnologyFormulation, PSIP.Technology},
-    C <: Union{AbstractTechnologyFormulation, PSIP.Technology},
-}
-    if !isconcretetype(D)
-        throw(
-            ArgumentError(
-                "The technology model must contain only concrete types, $(D) is an Abstract Type",
-            ),
-        )
-    end
-
-    if !isconcretetype(B)
-        throw(
-            ArgumentError(
-                "The technology model must contain only concrete types, $(B) is an Abstract Type",
-            ),
-        )
-    end
-
-    if !isconcretetype(C)
-        throw(
-            ArgumentError(
-                "The technology model must contain only concrete types, $(C) is an Abstract Type",
-            ),
-        )
-    end
-end
-
 function _set_model!(
     dict::Dict,
     model::TechnologyModel{D, B, C},
@@ -74,7 +40,7 @@ get_investment_formulation(
     C <: OperationsTechnologyFormulation,
 } = B
 
-get_operations_formulation(
+get_feasibility_formulation(
     ::TechnologyModel{D, B, C},
 ) where {
     D <: PSIP.Technology,
@@ -108,6 +74,5 @@ function TechnologyModel(
         duals,
         time_series_names,
         attributes_,
-        nothing,
     )
 end

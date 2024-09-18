@@ -38,19 +38,50 @@ function _add_cost_to_objective!(
     return
 end
 
+#Fixed OM calculated from cumulative capacity
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
     ::T,
     technology::PSIP.Technology,
-    value_curve::IS.ValueCurve,
+    om_cost::PSY.OperationalCost,
     ::U,
 ) where {T <: ExpressionType, U <: AbstractTechnologyFormulation}
     #base_power = get_base_power(component)
     device_base_power = PSIP.get_base_power(technology)
     #value_curve = PSY.get_value_curve(cost_function)
     #power_units = PSY.get_power_units(cost_function)
-    cost_component = PSY.get_function_data(value_curve)
-    proportional_term = PSY.get_proportional_term(cost_component)
+    #cost_component = PSY.get_function_data(value_curve)
+    proportional_term = PSY.get_fixed(om_cost)
+    proportional_term_per_unit = get_proportional_cost_per_system_unit(
+        proportional_term,
+        #power_units,
+        #base_power,
+        device_base_power,
+    )
+    multiplier = 1.0 #objective_function_multiplier(T(), U())
+    _add_linearcurve_cost!(
+        container,
+        T(),
+        technology,
+        multiplier * proportional_term_per_unit,
+    )
+    return
+end
+
+#Variable OM from dispatch
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    ::U,
+) where {T <: VariableType, U <: AbstractTechnologyFormulation}
+    #base_power = get_base_power(component)
+    device_base_power = PSIP.get_base_power(technology)
+
+    cost_curve = PSY.get_variable(om_cost)
+    value_curve = PSY.get_value_curve(cost_curve)
+    proportional_term = PSY.get_proportional_term(value_curve)
     proportional_term_per_unit = get_proportional_cost_per_system_unit(
         proportional_term,
         #power_units,

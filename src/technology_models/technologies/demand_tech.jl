@@ -62,7 +62,6 @@ function add_expression!(
     for d in devices
         name = PSIP.get_name(d)
         peak_load = PSIP.get_peak_load(d)
-
         ts_name = "ops_peak_load"
         ts_keys = filter(x -> x.name == ts_name, IS.get_time_series_keys(d))
         for ts_key in ts_keys
@@ -79,7 +78,7 @@ function add_expression!(
             for (ix, t) in enumerate(time_steps_ix)
                 _add_to_jump_expression!(
                     expression[t],
-                    ts_data[ix] * peak_load * multiplier,
+                    ts_data[ix] * multiplier,
                 )
             end
         end

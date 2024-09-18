@@ -2,6 +2,7 @@ function construct_technologies!(
     container::SingleOptimizationContainer,
     p::PSIP.Portfolio,
     ::ArgumentConstructStage,
+    model::CapitalCostModel,
     technology_model::TechnologyModel{T, B, C},
     # network_model::NetworkModel{<:PM.AbstractActivePowerModel},
 ) where {T <: PSIP.StorageTechnology, B <: ContinuousInvestment, C <: BasicDispatch}
@@ -16,7 +17,20 @@ function construct_technologies!(
     # CumulativeCapacity expressions
     add_expression!(container, CumulativePowerCapacity(), devices, B())
     add_expression!(container, CumulativeEnergyCapacity(), devices, B())
+    return
+end
 
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    ::ArgumentConstructStage,
+    model::OperationCostModel,
+    technology_model::TechnologyModel{T, B, C},
+    # network_model::NetworkModel{<:PM.AbstractActivePowerModel},
+) where {T <: PSIP.StorageTechnology, B <: ContinuousInvestment, C <: BasicDispatch}
+
+    #TODO: Port get_available_component functions from PSY
+    devices = PSIP.get_technologies(T, p)
     #ActivePowerVariables
     add_variable!(container, ActiveInPowerVariable(), devices, C())
     add_variable!(container, ActiveOutPowerVariable(), devices, C())
@@ -25,8 +39,6 @@ function construct_technologies!(
     add_variable!(container, EnergyVariable(), devices, C())
 
     # SupplyTotal
-    #add_expression!(container, SupplyTotal(), devices, C())
-
     add_to_expression!(container, SupplyTotal(), devices, C())
     add_to_expression!(container, DemandTotal(), devices, C())
 
@@ -36,6 +48,23 @@ end
 function construct_technologies!(
     container::SingleOptimizationContainer,
     p::PSIP.Portfolio,
+    ::ArgumentConstructStage,
+    model::FeasibilityModel,
+    technology_model::TechnologyModel{T, B, C},
+    # network_model::NetworkModel{<:PM.AbstractActivePowerModel},
+) where {T <: PSIP.StorageTechnology, B <: ContinuousInvestment, C <: BasicDispatch}
+
+    #TODO: Port get_available_component functions from PSY
+    devices = PSIP.get_technologies(T, p)
+
+    return
+end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    ::ModelConstructStage,
+    model::CapitalCostModel,
     ::ModelConstructStage,
     technology_model::TechnologyModel{T, B, C},
     # network_model::NetworkModel{<:PM.AbstractActivePowerModel},
@@ -66,6 +95,28 @@ function construct_technologies!(
         CumulativeEnergyCapacity(),
         devices,
     )
+    return
+end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    ::ModelConstructStage,
+    model::OperationCostModel,
+    technology_model::TechnologyModel{T, B, C},
+    # network_model::NetworkModel{<:PM.AbstractActivePowerModel},
+) where {T <: PSIP.StorageTechnology, B <: ContinuousInvestment, C <: BasicDispatch}
+    devices = PSIP.get_technologies(T, p)
+
+    # TODO: Add objective function to storage constructor after costs are added to storage in portfolio
+    # Capital Component of objective function
+    #objective_function!(container, devices, B())
+
+    # Operations Component of objective function
+    #objective_function!(container, devices, C())
+
+    # Add objective function from container to JuMP model
+    #update_objective_function!(container)
 
     # Dispatch input power constraint
     add_constraints!(
@@ -91,3 +142,27 @@ function construct_technologies!(
 
     return
 end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    ::ModelConstructStage,
+    model::FeasibilityModel,
+    technology_model::TechnologyModel{T, B, C},
+    # network_model::NetworkModel{<:PM.AbstractActivePowerModel},
+) where {T <: PSIP.StorageTechnology, B <: ContinuousInvestment, C <: BasicDispatch}
+    devices = PSIP.get_technologies(T, p)
+
+    # TODO: Add objective function to storage constructor after costs are added to storage in portfolio
+    # Capital Component of objective function
+    #objective_function!(container, devices, B())
+
+    # Operations Component of objective function
+    #objective_function!(container, devices, C())
+
+    # Add objective function from container to JuMP model
+    #update_objective_function!(container)
+
+    return
+end
+
