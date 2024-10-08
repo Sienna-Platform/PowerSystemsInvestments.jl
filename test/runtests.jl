@@ -1,5 +1,18 @@
 using Test
-import Logging
+import InfrastructureSystems
+using JuMP
+using Logging
+using PowerSystemsInvestments
+using PowerSystemsInvestmentsPortfolios
+using PowerSystems
+using HiGHS
+
+const IS = InfrastructureSystems
+const PSIP = PowerSystemsInvestmentsPortfolios
+const PSINV = PowerSystemsInvestments
+const PSY = PowerSystems
+
+include("test_utils/test_data.jl")
 
 import Aqua
 Aqua.test_unbound_args(PowerSystemsInvestments)
@@ -8,7 +21,7 @@ Aqua.test_ambiguities(PowerSystemsInvestments)
 Aqua.test_stale_deps(PowerSystemsInvestments)
 Aqua.test_deps_compat(PowerSystemsInvestments)
 
-LOG_FILE = "power-systems.log"
+LOG_FILE = "power-systems-investments.log"
 LOG_LEVELS = Dict(
     "Debug" => Logging.Debug,
     "Info" => Logging.Info,

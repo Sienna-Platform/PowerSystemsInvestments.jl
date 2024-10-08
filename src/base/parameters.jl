@@ -51,17 +51,11 @@ end
 
 get_attribute_key(attr::VariableValueAttributes) = attr.attribute_key
 
-IS.@scoped_enum(SOSStatusVariable, NO_VARIABLE = 1, PARAMETER = 2, VARIABLE = 3,)
-
 struct CostFunctionAttributes{T} <: ParameterAttributes
     variable_type::Type
-    sos_status::SOSStatusVariable
-    uses_compact_power::Bool
 end
 
-get_sos_status(attr::CostFunctionAttributes) = attr.sos_status
 get_variable_type(attr::CostFunctionAttributes) = attr.variable_type
-get_uses_compact_power(attr::CostFunctionAttributes) = attr.uses_compact_power
 
 struct ParameterContainer{T <: AbstractArray, U <: AbstractArray}
     attributes::ParameterAttributes
@@ -233,3 +227,32 @@ function set_parameter!(
     _set_parameter!(param_array, jump_model, parameter, ixs)
     return
 end
+
+"""
+Parameter to define active power time series
+"""
+struct ActivePowerTimeSeriesParameter <: TimeSeriesParameter end
+
+"""
+Parameter to define requirement time series
+"""
+struct RequirementTimeSeriesParameter <: TimeSeriesParameter end
+
+abstract type VariableValueParameter <: RightHandSideParameter end
+
+"""
+Parameter to FixValueParameter
+"""
+struct FixValueParameter <: VariableValueParameter end
+
+"""
+Parameter to define cost function coefficient
+"""
+struct CostFunctionParameter <: ObjectiveFunctionParameter end
+
+abstract type AuxVariableValueParameter <: RightHandSideParameter end
+
+should_write_resulting_value(::Type{<:RightHandSideParameter}) = true
+
+convert_result_to_natural_units(::Type{ActivePowerTimeSeriesParameter}) = true
+convert_result_to_natural_units(::Type{RequirementTimeSeriesParameter}) = true
