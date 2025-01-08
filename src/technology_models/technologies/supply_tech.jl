@@ -239,7 +239,7 @@ function add_to_expression!(
 ) where {
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
-    V <: MultiRegionBalanceModel,
+    V <: AbstractTransportAggregation,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
@@ -309,7 +309,7 @@ function add_to_expression!(
 ) where {
     T <: FeasibilitySurplus,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
-    V <: MultiRegionBalanceModel,
+    V <: AbstractTransportAggregation,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)

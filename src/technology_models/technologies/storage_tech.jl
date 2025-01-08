@@ -360,7 +360,7 @@ function add_to_expression!(
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: ActiveOutPowerVariable,
-    W <: MultiRegionBalanceModel,
+    W <: AbstractTransportAggregation,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
@@ -397,7 +397,7 @@ function add_to_expression!(
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: ActiveInPowerVariable,
-    W <: MultiRegionBalanceModel,
+    W <: AbstractTransportAggregation,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
@@ -506,7 +506,7 @@ function add_to_expression!(
     T <: FeasibilitySurplus,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: ActiveOutPowerVariable,
-    W <: MultiRegionBalanceModel,
+    W <: AbstractTransportAggregation,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
@@ -543,7 +543,7 @@ function add_to_expression!(
     T <: FeasibilitySurplus,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: ActiveInPowerVariable,
-    W <: MultiRegionBalanceModel,
+    W <: AbstractTransportAggregation,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
