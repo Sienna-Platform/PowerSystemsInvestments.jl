@@ -4,13 +4,13 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     ::CapitalCostModel,
-    technology_model::TechnologyModel{T,B,C,D},
+    technology_model::TechnologyModel{T, B, C, D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
 ) where {
-    T<:PSIP.StorageTechnology,
-    B<:ContinuousInvestment,
-    C<:BasicDispatch,
-    D<:FeasibilityTechnologyFormulation,
+    T <: PSIP.StorageTechnology,
+    B <: ContinuousInvestment,
+    C <: BasicDispatch,
+    D <: FeasibilityTechnologyFormulation,
 }
 
     #TODO: Port get_available_component functions from PSY
@@ -36,13 +36,13 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     ::CapitalCostModel,
-    technology_model::TechnologyModel{T,B,C,D},
+    technology_model::TechnologyModel{T, B, C, D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
 ) where {
-    T<:PSIP.StorageTechnology,
-    B<:IntegerInvestment,
-    C<:BasicDispatch,
-    D<:FeasibilityTechnologyFormulation,
+    T <: PSIP.StorageTechnology,
+    B <: IntegerInvestment,
+    C <: BasicDispatch,
+    D <: FeasibilityTechnologyFormulation,
 }
 
     #TODO: Port get_available_component functions from PSY
@@ -68,13 +68,13 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     model::OperationCostModel,
-    technology_model::TechnologyModel{T,B,C,D},
+    technology_model::TechnologyModel{T, B, C, D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
 ) where {
-    T<:PSIP.StorageTechnology,
-    B<:InvestmentTechnologyFormulation,
-    C<:BasicDispatch,
-    D<:FeasibilityTechnologyFormulation,
+    T <: PSIP.StorageTechnology,
+    B <: InvestmentTechnologyFormulation,
+    C <: BasicDispatch,
+    D <: FeasibilityTechnologyFormulation,
 }
 
     #TODO: Port get_available_component functions from PSY
@@ -120,13 +120,13 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     model::FeasibilityModel,
-    technology_model::TechnologyModel{T,B,C,D},
+    technology_model::TechnologyModel{T, B, C, D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
 ) where {
-    T<:PSIP.StorageTechnology,
-    B<:InvestmentTechnologyFormulation,
-    C<:BasicDispatch,
-    D<:FeasibilityTechnologyFormulation,
+    T <: PSIP.StorageTechnology,
+    B <: InvestmentTechnologyFormulation,
+    C <: BasicDispatch,
+    D <: FeasibilityTechnologyFormulation,
 }
 
     #TODO: Port get_available_component functions from PSY
@@ -170,13 +170,13 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::CapitalCostModel,
-    technology_model::TechnologyModel{T,B,C,D},
+    technology_model::TechnologyModel{T, B, C, D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
 ) where {
-    T<:PSIP.StorageTechnology,
-    B<:InvestmentTechnologyFormulation,
-    C<:BasicDispatch,
-    D<:FeasibilityTechnologyFormulation,
+    T <: PSIP.StorageTechnology,
+    B <: InvestmentTechnologyFormulation,
+    C <: BasicDispatch,
+    D <: FeasibilityTechnologyFormulation,
 }
     #devices = PSIP.get_technologies(T, p)
     devices = [PSIP.get_technology(T, p, n) for n in names]
@@ -215,13 +215,13 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::OperationCostModel,
-    technology_model::TechnologyModel{T,B,C,D},
+    technology_model::TechnologyModel{T, B, C, D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
 ) where {
-    T<:PSIP.StorageTechnology,
-    B<:InvestmentTechnologyFormulation,
-    C<:BasicDispatch,
-    D<:FeasibilityTechnologyFormulation,
+    T <: PSIP.StorageTechnology,
+    B <: InvestmentTechnologyFormulation,
+    C <: BasicDispatch,
+    D <: FeasibilityTechnologyFormulation,
 }
     #devices = PSIP.get_technologies(T, p)
     devices = [PSIP.get_technology(T, p, n) for n in names]
@@ -270,24 +270,6 @@ function construct_technologies!(
         devices,
         tech_model,
     )
-    # if PSI.get_attribute(model, "energy_target")
-    add_constraints!(
-        container,
-        StateofChargeTargetConstraint(),
-        EnergyVariable(),
-        devices,
-        tech_model,
-    )
-    # end
-
-    add_constraints!(
-        container,
-        InitialStateOfChargeConstraint(),
-        EnergyVariable(),
-        devices,
-        tech_model,
-    )
-
 
     #State of charge constraint
     add_constraints!(
@@ -307,17 +289,17 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::FeasibilityModel,
-    technology_model::TechnologyModel{T,B,C,D},
+    technology_model::TechnologyModel{T, B, C, D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
 ) where {
-    T<:PSIP.StorageTechnology,
-    B<:InvestmentTechnologyFormulation,
-    C<:BasicDispatch,
-    D<:FeasibilityTechnologyFormulation,
+    T <: PSIP.StorageTechnology,
+    B <: InvestmentTechnologyFormulation,
+    C <: BasicDispatch,
+    D <: FeasibilityTechnologyFormulation,
 }
     #devices = PSIP.get_technologies(T, p)
     devices = [PSIP.get_technology(T, p, n) for n in names]
     tech_model = metadata_string(technology_model)
-
+    
     return
 end
