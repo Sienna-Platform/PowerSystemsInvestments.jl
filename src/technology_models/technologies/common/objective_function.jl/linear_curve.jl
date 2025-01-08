@@ -32,6 +32,78 @@ function _add_cost_to_objective!(
     return
 end
 
+#TODO: Organize these functions and move them to technology-specific files
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    value_curve::IS.ValueCurve,
+    ::U,
+    tech_model::String,
+) where {T <: VariableType, U <: IntegerInvestment}
+    cost_component = PSY.get_function_data(value_curve)
+    proportional_term = PSY.get_proportional_term(cost_component)
+    @debug "Cost is assumed to be in natural units: \$/MWh"
+    # TODO: multiplier
+    multiplier = PSIP.get_unit_size(technology) #objective_function_multiplier(T(), U())
+    _add_linearcurve_cost!(
+        container,
+        T(),
+        technology,
+        value_curve,
+        multiplier * proportional_term,
+        tech_model,
+    )
+    return
+end
+
+#TODO: Organize these functions and move them to technology-specific files
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    value_curve::IS.ValueCurve,
+    ::U,
+    tech_model::String,
+) where {T <: BuildEnergyCapacity, U <: IntegerInvestment}
+    cost_component = PSY.get_function_data(value_curve)
+    proportional_term = PSY.get_proportional_term(cost_component)
+    @debug "Cost is assumed to be in natural units: \$/MWh"
+    multiplier = PSIP.get_unit_size_energy(technology) #objective_function_multiplier(T(), U())
+    _add_linearcurve_cost!(
+        container,
+        T(),
+        technology,
+        value_curve,
+        multiplier * proportional_term,
+        tech_model,
+    )
+    return
+end
+
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    value_curve::IS.ValueCurve,
+    ::U,
+    tech_model::String,
+) where {T <: BuildPowerCapacity, U <: IntegerInvestment}
+    cost_component = PSY.get_function_data(value_curve)
+    proportional_term = PSY.get_proportional_term(cost_component)
+    @debug "Cost is assumed to be in natural units: \$/MWh"
+    multiplier = PSIP.get_unit_size_power(technology) 
+    _add_linearcurve_cost!(
+        container,
+        T(),
+        technology,
+        value_curve,
+        multiplier * proportional_term,
+        tech_model,
+    )
+    return
+end
+
 #Fixed OM calculated from build capacity
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
