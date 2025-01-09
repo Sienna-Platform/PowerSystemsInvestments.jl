@@ -872,6 +872,7 @@ end
 function _make_system_expressions!(
     container::SingleOptimizationContainer,
     ::Type{SingleRegionBalanceModel},
+    port::PSIP.Portfolio,
 )
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
@@ -892,6 +893,7 @@ function _make_system_expressions!(
     regions = PSIP.get_regions(PSIP.Zone, port)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
+    #TODO: Change FeasibilitySurplus to only be indexed by feasibility time steps?
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
@@ -901,20 +903,52 @@ function _make_system_expressions!(
     return
 end
 
-function initialize_system_expressions!(
+function _make_system_expressions!(
     container::SingleOptimizationContainer,
-    transport_model::TransportModel{T},
+    ::Type{NodalBalanceModel},
     port::PSIP.Portfolio,
-) where {T <: SingleRegionBalanceModel}
-    _make_system_expressions!(container, T)
+)
+    regions = PSIP.get_regions(PSIP.Bus, port)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    container.expressions = Dict(
+        ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
+            _make_container_array(regions, time_steps),
+        ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
+            _make_container_array(regions, time_steps),
+    )
+
+    container.variables = Dict(
+        VariableKey(VoltageAngle, PSIP.Portfolio) =>
+        _make_container_array(regions, time_steps)
+    )
     return
 end
+
+
+# function initialize_system_expressions!(
+#     container::SingleOptimizationContainer,
+#     transport_model::TransportModel{T},
+#     port::PSIP.Portfolio,
+# ) where {T <: SingleRegionBalanceModel}
+#     _make_system_expressions!(container, T)
+#     return
+# end
+
+# function initialize_system_expressions!(
+#     container::SingleOptimizationContainer,
+#     transport_model::TransportModel{T},
+#     port::PSIP.Portfolio,
+# ) where {T <: MultiRegionBalanceModel}
+#     _make_system_expressions!(container, T, port)
+#     return
+# end
 
 function initialize_system_expressions!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel{T},
     port::PSIP.Portfolio,
-) where {T <: MultiRegionBalanceModel}
+) where {T <: AbstractTransportAggregation}
     _make_system_expressions!(container, T, port)
     return
 end
