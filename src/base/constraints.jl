@@ -33,4 +33,4 @@ struct InitialStateOfChargeConstraint <: ISOPT.ConstraintType end
 
 struct SingleRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
 
-struct ReferenceBusConstaint <: ISOPT.ConstraintType end
+struct ReferenceBusConstraint <: ISOPT.ConstraintType end
