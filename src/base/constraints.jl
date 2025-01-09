@@ -13,6 +13,8 @@ struct SingleRegionBalanceConstraint <: ISOPT.ConstraintType end
 
 struct MultiRegionBalanceConstraint <: ISOPT.ConstraintType end
 
+struct NodalBalanceConstraint <: ISOPT.ConstraintType end
+
 struct ActivePowerVariableLimitsConstraint <: ISOPT.ConstraintType end
 
 struct ActivePowerLimitsConstraint <: ISOPT.ConstraintType end
@@ -30,3 +32,5 @@ struct StateofChargeTargetConstraint <: ISOPT.ConstraintType end
 struct InitialStateOfChargeConstraint <: ISOPT.ConstraintType end
 
 struct SingleRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
+
+struct ReferenceBusConstaint <: ISOPT.ConstraintType end

@@ -18,3 +18,13 @@ function construct_transport!(
 )
     add_constraints!(container, MultiRegionBalanceConstraint, p)
 end
+
+function construct_transport!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    model::TransportModel{NodalBalanceModel},
+    #names::Vector{String},
+    #::ArgumentConstructStage,
+)
+    add_constraints!(container, NodalBalanceConstraint, p)
+end
