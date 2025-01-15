@@ -2,3 +2,4 @@
 struct StaticLoadInvestment <: InvestmentTechnologyFormulation end
 struct ContinuousInvestment <: InvestmentTechnologyFormulation end
 struct IntegerInvestment <: InvestmentTechnologyFormulation end
+struct TransmissionInvestment <: InvestmentTechnologyFormulation end
