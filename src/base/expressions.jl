@@ -19,3 +19,5 @@ struct TotalCapitalCost <: ISOPT.ExpressionType end
 struct VariableOMCost <: OperationsExpressionType end
 
 struct FeasibilitySurplus <: FeasibilityExpressionType end
+
+struct LineFlow <: OperationsExpressionType end

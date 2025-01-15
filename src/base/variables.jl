@@ -12,12 +12,12 @@ Total installed capacity for a technology
 struct BuildCapacity <: InvestmentVariableType end
 
 """
-Total installed capacity for a technology
+Total installed charge/discharge capacity for a storage technology
 """
 struct BuildPowerCapacity <: InvestmentVariableType end
 
 """
-Total installed capacity for a technology
+Total installed energy capacity for a storage technology
 """
 struct BuildEnergyCapacity <: InvestmentVariableType end
 
@@ -29,19 +29,24 @@ Dispatch of a technology at a timepoint
 struct ActivePowerVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Charging of a storage technology at a timepoint
 """
 struct ActiveInPowerVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Discharging of a storage technology at a timepoint
 """
 struct ActiveOutPowerVariable <: OperationsVariableType end
 
 """
-energy stored in Storage technology at a timepoint
+Total energy stored in Storage technology at a timepoint
 """
 struct EnergyVariable <: OperationsVariableType end
+
+"""
+Voltage angle in each region/node
+"""
+struct VoltageAngle <: OperationsVariableType end
 
 is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
 is_operation_entry(::Type{<:OperationsVariableType}) = true
