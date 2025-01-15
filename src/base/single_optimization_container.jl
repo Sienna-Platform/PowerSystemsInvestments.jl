@@ -341,7 +341,7 @@ function _add_variable_container!(
     var_key::VariableKey{T, U},
     sparse::Bool,
     axs...,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Region}}
     if sparse
         var_container = sparse_container_spec(JuMP.VariableRef, axs...)
     else
@@ -358,7 +358,7 @@ function add_variable_container!(
     axs...;
     sparse=false,
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Region}}
     var_key = VariableKey(T, U, meta)
     return _add_variable_container!(container, var_key, sparse, axs...)
 end
@@ -370,7 +370,7 @@ function add_variable_container!(
     meta::String,
     axs...;
     sparse=false,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Region}}
     var_key = VariableKey(T, U, meta)
     return _add_variable_container!(container, var_key, sparse, axs...)
 end
@@ -385,7 +385,7 @@ function add_variable_container!(
     ::T,
     ::Type{U};
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: SparseVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: SparseVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Region}}
     var_key = VariableKey(T, U, meta)
     _assign_container!(container.variables, var_key, _get_pwl_variables_container())
     return container.variables[var_key]
@@ -410,7 +410,7 @@ function get_variable(
     ::T,
     ::Type{U},
     meta::String=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Region}}
     return get_variable(container, VariableKey(T, U, meta))
 end
 
@@ -918,10 +918,8 @@ function _make_system_expressions!(
             _make_container_array(regions, time_steps),
     )
 
-    container.variables = Dict(
-        VariableKey(VoltageAngle, PSIP.Portfolio) =>
-        _make_container_array(regions, time_steps)
-    )
+    add_variable!(container, VoltageAngle(), regions)
+
     return
 end
 
