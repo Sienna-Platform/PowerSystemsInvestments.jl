@@ -36,7 +36,7 @@ function add_to_expression!(
 } where {D <: PSIP.DemandRequirement}
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
@@ -77,7 +77,7 @@ function add_to_expression!(
 } where {D <: PSIP.DemandRequirement}
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
@@ -118,7 +118,7 @@ function add_to_expression!(
 } where {D <: PSIP.DemandRequirement}
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
@@ -159,7 +159,7 @@ function add_to_expression!(
 } where {D <: PSIP.DemandRequirement}
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
