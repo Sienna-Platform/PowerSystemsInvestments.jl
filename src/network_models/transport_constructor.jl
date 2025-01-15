@@ -26,5 +26,9 @@ function construct_transport!(
     #names::Vector{String},
     #::ArgumentConstructStage,
 )
+
     add_constraints!(container, NodalBalanceConstraint, p)
+    add_constraints!(container, AngleLimitsConstraint, p)
+    add_constraints!(container, ReferenceBusConstraint, p)
+
 end
