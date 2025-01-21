@@ -303,7 +303,7 @@ function _add_linearcurve_cost!(
         for t in consecutive_slices[op_ix]
             future_to_present_value = discount_factor^(years[t] - base_year)
             npv_proportional_term =
-                proportional_term * 
+                proportional_term *
                 #dollars_to_base_year * 
                 future_to_present_value
             _add_linearcurve_variable_term_to_model!(
