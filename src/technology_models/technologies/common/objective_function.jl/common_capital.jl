@@ -88,7 +88,7 @@ function add_fixed_om_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        fixed_cost_data = PSIP.get_om_costs_energy(d)
+        fixed_cost_data = PSIP.get_operations_costs_energy(d)
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
@@ -106,7 +106,7 @@ function add_fixed_om_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        fixed_cost_data = PSIP.get_om_costs_power(d)
+        fixed_cost_data = PSIP.get_operations_costs_power(d)
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return

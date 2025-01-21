@@ -1,6 +1,6 @@
 #! format: off
-get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_maximum_capacity(d)
-get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_minimum_required_capacity(d)
+get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_max_capacity(d)
+get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_min_capacity(d)
 get_variable_binary(::BuildCapacity, d::PSIP.SupplyTechnology, ::ContinuousInvestment) = false
 
 get_variable_lower_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::OperationsTechnologyFormulation) = 0.0
@@ -473,7 +473,7 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        max_capacity = PSIP.get_maximum_capacity(d)
+        max_capacity = PSIP.get_max_capacity(d)
         for t in time_steps
             con_ub[name, t] = JuMP.@constraint(
                 get_jump_model(container),

@@ -806,7 +806,7 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        max_capacity = PSIP.get_max_cap_power(d)
+        max_capacity = PSIP.get_max_capacity_power(d)
         for t in time_steps
             con_ub[name, t] = JuMP.@constraint(
                 get_jump_model(container),
@@ -845,7 +845,7 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        max_capacity = PSIP.get_max_cap_energy(d)
+        max_capacity = PSIP.get_max_capacity_energy(d)
         for t in time_steps
             con_ub[name, t] = JuMP.@constraint(
                 get_jump_model(container),
@@ -878,7 +878,7 @@ function add_constraints!(
     )
 
     storage_state = get_variable(container, V(), D, tech_model)
-    installed_cap = get_expression(container, CumulativeEnergyCapacity(), D, "ContinuousInvestment")
+    installed_cap = get_expression(container, CumulativeEnergyCapacity(), D, tech_model)
 
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -889,12 +889,11 @@ function add_constraints!(
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
-            target = PSIP.get_initial_state_of_charge(d) * installed_cap[name, time_step_inv]
-            initial_state_of_charge = PSIP.get_initial_state_of_charge(d)
+            #target = PSIP.get_initial_state_of_charge(d) * installed_cap[name, time_step_inv]
 
             con[name] = JuMP.@constraint(
                 get_jump_model(container),
-                storage_state[name, time_slices[1]] == target
+                storage_state[name, time_slices[1]] == 0.0
             )
         end
     end
@@ -924,7 +923,7 @@ function add_constraints!(
     )
 
     storage_state = get_variable(container, V(), D, tech_model)
-    installed_cap = get_expression(container, CumulativeEnergyCapacity(), D, "ContinuousInvestment")
+    installed_cap = get_expression(container, CumulativeEnergyCapacity(), D, tech_model)
 
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -935,10 +934,10 @@ function add_constraints!(
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
-            target = PSIP.get_initial_state_of_charge(d) * installed_cap[name, time_step_inv]
+            #target = PSIP.get_initial_state_of_charge(d) * installed_cap[name, time_step_inv]
             con[name] = JuMP.@constraint(
                 get_jump_model(container),
-                storage_state[name, time_slices[end]] == target
+                storage_state[name, time_slices[end]] == 0.0
             )
         end
     end

@@ -115,7 +115,7 @@ function add_variable_cost!(
     V <: BasicDispatch,
 }
     for d in devices
-        op_cost_data = PSIP.get_om_costs_power(d)
+        op_cost_data = PSIP.get_operations_costs_power(d)
         _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)
     end
     return

@@ -160,16 +160,16 @@ function _add_linearcurve_cost!(
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
-    interest_rate = PSIP.get_interest_rate(technology)
-    tech_base_year = PSIP.get_base_year(technology)
-    capital_recovery_period = PSIP.get_capital_recovery_period(technology)
+    interest_rate = get_interest_rate(container)
+    #tech_base_year = PSIP.get_base_year(technology)
+    capital_recovery_period = get_capital_recovery_period(container)
 
     capital_recovery_factor =
         interest_rate / (1 - (1 + interest_rate)^(-(capital_recovery_period)))
     lump_amortized_payments =
         (1 - (1 + discount_rate)^(-(capital_recovery_period))) / discount_rate
     discount_factor = 1 / (1 + discount_rate)
-    dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
+    #dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
@@ -180,7 +180,7 @@ function _add_linearcurve_cost!(
             proportional_term *
             capital_recovery_factor *
             lump_amortized_payments *
-            dollars_to_base_year *
+            #dollars_to_base_year *
             future_to_present_value
         _add_linearcurve_variable_term_to_model!(
             container,
@@ -208,12 +208,12 @@ function _add_linearcurve_cost!(
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
-    interest_rate = PSIP.get_interest_rate(technology)
-    tech_base_year = PSIP.get_base_year(technology)
+    interest_rate = get_interest_rate(container)
+    #tech_base_year = PSIP.get_base_year(technology)
     lifetime = PSIP.get_lifetime(technology)
     lump_annual_payments = (1 - (1 + discount_rate)^(-(lifetime))) / discount_rate
     discount_factor = 1 / (1 + discount_rate)
-    dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
+    #dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
@@ -223,7 +223,7 @@ function _add_linearcurve_cost!(
         npv_proportional_term =
             proportional_term *
             lump_annual_payments *
-            dollars_to_base_year *
+            #dollars_to_base_year *
             future_to_present_value
         _add_linearcurve_variable_term_to_model!(
             container,
@@ -250,12 +250,12 @@ function _add_linearcurve_cost!(
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
-    interest_rate = PSIP.get_interest_rate(technology)
-    tech_base_year = PSIP.get_base_year(technology)
-    lifetime = PSIP.get_capital_recovery_period(technology)
+    interest_rate = get_interest_rate(container)
+    #tech_base_year = PSIP.get_base_year(technology)
+    #lifetime = PSIP.get_capital_recovery_period(technology)
 
     discount_factor = 1 / (1 + discount_rate)
-    dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
+    #dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
@@ -290,12 +290,12 @@ function _add_linearcurve_cost!(
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
-    tech_base_year = PSIP.get_base_year(technology)
+    #tech_base_year = PSIP.get_base_year(technology)
     time_mapping = get_time_mapping(container)
     operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
     discount_factor = 1.0 / (1.0 + discount_rate)
-    dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
+    #dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
 
     for op_ix in get_operational_indexes(time_mapping)
@@ -303,7 +303,9 @@ function _add_linearcurve_cost!(
         for t in consecutive_slices[op_ix]
             future_to_present_value = discount_factor^(years[t] - base_year)
             npv_proportional_term =
-                proportional_term * dollars_to_base_year * future_to_present_value
+                proportional_term * 
+                #dollars_to_base_year * 
+                future_to_present_value
             _add_linearcurve_variable_term_to_model!(
                 container,
                 T(),

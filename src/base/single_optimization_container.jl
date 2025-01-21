@@ -30,8 +30,10 @@ Base.@kwdef mutable struct SingleOptimizationContainer <:
     primal_values_cache::PrimalValuesCache
     operational_weights::Union{Nothing, Vector{Float64}}
     base_year::Int
+    capital_recovery_period::Int
     discount_rate::Float64
     inflation_rate::Float64
+    interest_rate::Float64
     infeasibility_conflict::Dict{Symbol, Array}
     optimizer_stats::ISOPT.OptimizerStats
     metadata::ISOPT.OptimizationContainerMetadata
@@ -65,6 +67,8 @@ function SingleOptimizationContainer(
         PrimalValuesCache(),
         nothing,
         2020,
+        30,
+        0.0,
         0.0,
         0.0,
         Dict{Symbol, Array}(),
@@ -96,8 +100,10 @@ get_time_mapping(container::SingleOptimizationContainer) = container.time_mappin
 get_operational_weights(container::SingleOptimizationContainer) =
     container.operational_weights
 get_base_year(container::SingleOptimizationContainer) = container.base_year
+get_capital_recovery_period(container::SingleOptimizationContainer) = container.capital_recovery_period
 get_discount_rate(container::SingleOptimizationContainer) = container.discount_rate
 get_inflation_rate(container::SingleOptimizationContainer) = container.inflation_rate
+get_interest_rate(container::SingleOptimizationContainer) = container.interest_rate
 get_variables(container::SingleOptimizationContainer) = container.variables
 
 set_initial_conditions_data!(container::SingleOptimizationContainer, data) =
@@ -114,10 +120,14 @@ set_operational_weights!(
 ) = container.operational_weights = operational_weights
 set_base_year!(container::SingleOptimizationContainer, base_year::Int) =
     container.base_year = base_year
+set_capital_recovery_period!(container::SingleOptimizationContainer, capital_recovery_period::Int) =
+    container.capital_recovery_period = capital_recovery_period
 set_discount_rate!(container::SingleOptimizationContainer, discount_rate::Float64) =
     container.discount_rate = discount_rate
 set_inflation_rate!(container::SingleOptimizationContainer, inflation_rate::Float64) =
     container.inflation_rate = inflation_rate
+set_interest_rate!(container::SingleOptimizationContainer, interest_rate::Float64) =
+    container.interest_rate = interest_rate
 
 get_aux_variables(container::SingleOptimizationContainer) = container.aux_variables
 get_base_power(container::SingleOptimizationContainer) = container.base_power
@@ -204,11 +214,14 @@ function init_optimization_container!(
     )
 
     set_time_mapping!(container, time_map)
-    # TODO: Use Portfolio
-    set_base_year!(container, portfolio.base_year)
     set_operational_weights!(container, operation_model.series_weights)
-    set_discount_rate!(container, portfolio.discount_rate)
-    set_inflation_rate!(container, portfolio.inflation_rate)
+    # TODO: Temporary fix so Investments is compatible with changes to financial data in Portfolios/ Update this once the financial data structs have been finalized
+    financials = collect(PSIP.get_financials(PSIP.FinancialData, portfolio))[1]
+    set_base_year!(container, PSIP.get_base_year(financials))
+    set_capital_recovery_period!(container, PSIP.get_capital_recovery_period(financials))
+    set_discount_rate!(container, PSIP.get_discount_rate(financials))
+    set_inflation_rate!(container, PSIP.get_inflation_rate(financials))
+    set_interest_rate!(container, PSIP.get_interest_rate(financials))
 
     #=
     if T <: SingleRegionBalanceModel #|| T <: AreaBalancePowerModel
