@@ -40,27 +40,6 @@ function _add_cost_to_objective!(
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
-) where {T <: BuildCapacity, U <: AbstractTechnologyFormulation}
-    proportional_term = PSY.get_fixed(om_cost)
-    multiplier = 1.0
-    _add_linearcurve_cost!(
-        container,
-        T(),
-        technology,
-        om_cost,
-        multiplier * proportional_term,
-        tech_model,
-    )
-    return
-end
-
-function _add_cost_to_objective!(
-    container::SingleOptimizationContainer,
-    ::T,
-    technology::PSIP.Technology,
-    om_cost::PSY.StorageCost,
-    ::U,
-    tech_model::String,
 ) where {T <: InvestmentVariableType, U <: AbstractTechnologyFormulation}
     proportional_term = PSY.get_fixed(om_cost)
     multiplier = 1.0
