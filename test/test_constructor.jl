@@ -49,7 +49,6 @@ end
 
     PSINV.init_optimization_container!(container, template, p_5bus)
 
-    #transmission = get_transport_formulation(template)
     transport_model = PSINV.get_transport_model(template)
     PSINV.initialize_system_expressions!(container, transport_model, p_5bus)
 
