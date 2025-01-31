@@ -40,8 +40,7 @@ InvestmentModelTemplate() = InvestmentModelTemplate(SingleRegionPowerModel)
 get_technology_models(template::InvestmentModelTemplate) = template.technology_models
 get_branch_models(template::InvestmentModelTemplate) = template.branch_models
 get_transport_model(template::InvestmentModelTemplate) = template.transport_model
-get_transport_formulation(template::InvestmentModelTemplate) =
-    get_transport_formulation(get_transport_model(template))
+get_transport_formulation(::TransportModel{T}) where {T <: AbstractTransportAggregation} = T
 
 get_capital_model(template::InvestmentModelTemplate) = template.capital_model
 get_operation_model(template::InvestmentModelTemplate) = template.operation_model
