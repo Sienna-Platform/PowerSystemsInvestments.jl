@@ -967,7 +967,6 @@ function build_model!(
     template::InvestmentModelTemplate,
     port::PSIP.Portfolio,
 )
-    #transmission = get_transport_formulation(template)
     transport_model = get_transport_model(template)
     initialize_system_expressions!(container, transport_model, port)
 
