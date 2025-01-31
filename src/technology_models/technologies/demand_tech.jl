@@ -13,7 +13,9 @@ function get_default_attributes(
     W<:OperationsTechnologyFormulation,
     X<:FeasibilityTechnologyFormulation,
 }
-    return Dict{String,Any}()
+    return Dict{String,Any}(
+        "planning_reserve_margin" => false
+    )
 end
 
 ################### Variables ####################
@@ -188,5 +190,77 @@ function add_to_expression!(
             end
         end
     end
+    return
+end
+
+### Planning Reserve Margin Constraint ####
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    ::T,
+    devices::U,
+    tech_model::String,
+) where {
+    T<:PlanningReserveMarginConstraint,
+    U<:Union{D,Vector{D},IS.FlattenIteratorWrapper{D}},
+} where {D<:PSIP.DemandRequirement}
+    time_mapping = get_time_mapping(container)
+    regions = PSIP.get_regions(PSIP.Zone, p)
+    efc_re = get_variable(container, EFCRenewable(), PSIP.SupplyTechnology{PSY.RenewableDispatch}, "ContinuousInvestmentBasicDispatchBasicDispatchFeasibility")
+    efc_bess = get_variable(container, EFCStorage(), PSIP.StorageTechnology{PSY.EnergyReservoirStorage}, "ContinuousInvestmentSparseChrononDispatchBasicDispatchFeasibility")
+
+    efc_thermal = get_variable(container, BuildCapacity(), PSIP.SupplyTechnology{PSY.ThermalStandard}, "IntegerInvestmentBasicDispatchBasicDispatchFeasibility")
+
+    # efc_wind = [v for v in JuMP.all_variables(get_jump_model(container)) if occursin("efc_wind", JuMP.name(v))]
+    # efc_pv = [v for v in JuMP.all_variables(get_jump_model(container)) if occursin("efc_pv", JuMP.name(v))]
+    # efc_bess = [v for v in JuMP.all_variables(get_jump_model(container)) if occursin("efc_storage", JuMP.name(v))]
+
+    re_names = axes(efc_re, 1)
+    bess_names = axes(efc_bess, 1)
+    th_names = axes(efc_thermal, 1)
+    renewables = [PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p, n) for n in re_names]
+    thermals = [PSIP.get_technology(PSIP.SupplyTechnology{PSY.ThermalStandard}, p, n) for n in th_names]
+    bess = [PSIP.get_technology(PSIP.StorageTechnology{PSY.EnergyReservoirStorage}, p, n) for n in bess_names]
+    efc_renewable = 0.0
+    efc_storage = 0.0
+    efc_th = 0.0
+    for re in renewables
+        name = PSIP.get_name(re)
+
+        efc_renewable = efc_renewable + efc_re[name, 1]
+    end
+
+    for th in thermals
+        name = PSIP.get_name(th)
+
+        unit_size = PSIP.get_unit_size(th)
+
+        efc_th = efc_th + 0.91 * efc_thermal[name, 1] * unit_size
+
+    end
+
+
+    for be in bess
+        name = PSIP.get_name(be)
+
+        efc_storage = efc_storage + efc_bess[name, 1]
+
+    end
+    efc_existing = 0.0
+    peak_load = 0.0
+    pmr = 0.0
+    for (r_idx, r) in enumerate(regions)
+        efc_existing = efc_existing + PSIP.get_ext(r)["existing_efc"]
+        peak_load = peak_load + PSIP.get_ext(r)["peakload"]
+        pmr = PSIP.get_ext(r)["pmr"]
+
+
+    end
+
+    JuMP.@constraint(
+        get_jump_model(container),
+        efc_th + efc_storage + efc_renewable >= pmr * peak_load - efc_existing
+        # efc_storage + efc_renewable >= 100.0
+    )
     return
 end

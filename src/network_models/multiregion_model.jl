@@ -53,3 +53,29 @@ function add_constraints!(
 
     return
 end
+
+# ### Planning Reserve Margin Constraint ####
+# function add_constraints!(
+#     container::SingleOptimizationContainer,
+#     ::Type{T},
+#     port::U,
+# ) where {T<:PlanningReserveMarginConstraint,U<:PSIP.Portfolio}
+
+#     regions = PSIP.get_regions(PSIP.Zone, port)
+
+#     efc_wind = [v for v in JuMP.all_variables(get_jump_model(container)) if occursin("efc_wind", JuMP.name(v))]
+#     efc_pv = [v for v in JuMP.all_variables(get_jump_model(container)) if occursin("efc_pv", JuMP.name(v))]
+#     efc_bess = [v for v in JuMP.all_variables(get_jump_model(container)) if occursin("efc_storage", JuMP.name(v))]
+#     println(efc_wind, efc_pv, efc_bess)
+#     for (r_idx, r) in enumerate(regions)
+#         # efc_existing = PSIP.get_ext(r)["efc_existing"]
+#         # peak_load = PSIP.get_ext(r)["peak_load"]
+#         JuMP.@constraint(
+#             get_jump_model(container),
+#             # efc_bess[r_idx] + efc_pv[r_idx] + efc_wind[r_idx] >= 1.05 * peak_load - efc_existing
+#             efc_bess[r_idx] + efc_pv[r_idx] + efc_wind[r_idx] >= 300.0
+#         )
+#     end
+
+#     return
+# end

@@ -7,6 +7,11 @@ get_variable_upper_bound(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::Inv
 get_variable_lower_bound(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::ContinuousInvestment) = false
 
+
+get_variable_upper_bound(::EFCStorage, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = nothing
+get_variable_lower_bound(::EFCStorage, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = 0.0
+
+
 get_variable_lower_bound(::ActiveInPowerVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::ActiveInPowerVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = nothing
 
@@ -41,7 +46,9 @@ function get_default_attributes(
     W<:OperationsTechnologyFormulation,
     X<:FeasibilityTechnologyFormulation,
 }
-    return Dict{String,Any}()
+    return Dict{String,Any}(
+        "capacity_credit" => false
+    )
 end
 
 ################### Variables ####################
@@ -906,6 +913,51 @@ end
 
 function add_constraints!(
     container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    ::T,
+    ::V,
+    devices::U,
+    tech_model::String,
+) where {
+    T<:StorageCapacityCreditConstraint,
+    U<:Union{D,Vector{D},IS.FlattenIteratorWrapper{D}},
+    V<:BuildPowerCapacity,
+} where {D<:PSIP.StorageTechnology}
+    time_mapping = get_time_mapping(container)
+    regions = PSIP.get_regions(PSIP.Zone, p)
+    installed_cap = get_variable(container, V(), D, tech_model)
+    bess_cap = 0.0
+    efc = get_variable(container, EFCStorage(), D, tech_model)
+
+    for (r_idx, r) in enumerate(regions)
+        efc_region = 0.0
+        if haskey(PSIP.get_ext(r), "bess_cc")
+            for d in devices
+                name = PSIP.get_name(d)
+                zone = PSIP.get_region(d)
+                if zone == r
+                    bess_cap = bess_cap + installed_cap[name, 1]
+                    efc_region = efc_region + efc[name, 1]
+                end
+            end
+            bess_cc = PSIP.get_ext(r)["bess_cc"]
+            slope = bess_cc[:, 1]
+            intercept = bess_cc[:, 2]
+
+            for s in 1:length(slope)
+                JuMP.@constraint(
+                    get_jump_model(container),
+                    efc_region <= bess_cap * slope[s] + intercept[s]
+                )
+            end
+        end
+    end
+    return
+end
+
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -977,6 +1029,7 @@ function add_constraints!(
     for d in devices
         name = PSIP.get_name(d)
         pras_mapping = PSIP.get_ext(d)["pras_tm"]
+        # println(pras_mapping)
         num_partition = length(pras_mapping)
         net_change = JuMP.@variable(get_jump_model(container), [1:all_indexes[end]], base_name = "stor_ΔE[$(name)]") #∆e = Pt∈T pt
         net_change_low = JuMP.@variable(get_jump_model(container), [1:all_indexes[end]], base_name = "stor_ΔE_low[$(name)]") #⌊e⌋ variable def for eq1 for each representative day
@@ -1028,9 +1081,9 @@ function add_constraints!(
                     initial_state[p_idx] + nofdays * net_change[op_ix] == PSIP.get_initial_state_of_charge(d) * installed_cap[name, time_step_inv])
                 JuMP.@constraint(
                     get_jump_model(container),
-                    initial_state_feas[p_idx] + nofdays * initial_state_feas[feas_ix] == installed_cap[name, time_step_inv])
+                    initial_state_feas[p_idx] + nofdays * initial_state_feas[p_idx-1] == installed_cap[name, time_step_inv])
             end
-            ### eq 10-13 for operation index
+            ### eq 10-13 for operation index initial_state[p_idx] + 
             JuMP.@constraint(
                 get_jump_model(container),
                 initial_state[p_idx] + net_change_low[op_ix] >= 0.0) # eq 10
@@ -1043,7 +1096,7 @@ function add_constraints!(
             JuMP.@constraint(
                 get_jump_model(container),
                 initial_state[p_idx] + net_change_high[op_ix] + (nofdays - 1) * net_change[op_ix] <= installed_cap[name, time_step_inv]) # eq 13
-            ### eq 10-13 for feasibility index
+            ### eq 10-13 for feasibility index initial_state_feas[p_idx] + 
             JuMP.@constraint(
                 get_jump_model(container),
                 initial_state_feas[p_idx] + net_change_low[feas_ix] >= 0.0) # eq 10

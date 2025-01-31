@@ -15,7 +15,7 @@ function _add_cost_to_objective!(
     value_curve::IS.ValueCurve,
     ::U,
     tech_model::String,
-) where {T <: VariableType, U <: AbstractTechnologyFormulation}
+) where {T<:VariableType,U<:AbstractTechnologyFormulation}
     cost_component = PSY.get_function_data(value_curve)
     proportional_term = PSY.get_proportional_term(cost_component)
     @debug "Cost is assumed to be in natural units: \$/MWh"
@@ -40,7 +40,7 @@ function _add_cost_to_objective!(
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
-) where {T <: BuildCapacity, U <: AbstractTechnologyFormulation}
+) where {T<:BuildCapacity,U<:AbstractTechnologyFormulation}
     proportional_term = PSY.get_fixed(om_cost)
     multiplier = 1.0
     _add_linearcurve_cost!(
@@ -61,7 +61,7 @@ function _add_cost_to_objective!(
     om_cost::PSY.StorageCost,
     ::U,
     tech_model::String,
-) where {T <: InvestmentVariableType, U <: AbstractTechnologyFormulation}
+) where {T<:InvestmentVariableType,U<:AbstractTechnologyFormulation}
     proportional_term = PSY.get_fixed(om_cost)
     multiplier = 1.0
     _add_linearcurve_cost!(
@@ -83,7 +83,7 @@ function _add_cost_to_objective!(
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
-) where {T <: ActivePowerVariable, U <: AbstractTechnologyFormulation}
+) where {T<:ActivePowerVariable,U<:AbstractTechnologyFormulation}
     cost_curve = PSY.get_variable(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
@@ -107,7 +107,7 @@ function _add_cost_to_objective!(
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
-) where {T <: ActiveInPowerVariable, U <: AbstractTechnologyFormulation}
+) where {T<:ActiveInPowerVariable,U<:AbstractTechnologyFormulation}
     cost_curve = PSY.get_charge_variable_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
@@ -131,7 +131,7 @@ function _add_cost_to_objective!(
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
-) where {T <: ActiveOutPowerVariable, U <: AbstractTechnologyFormulation}
+) where {T<:ActiveOutPowerVariable,U<:AbstractTechnologyFormulation}
     cost_curve = PSY.get_discharge_variable_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
@@ -155,7 +155,7 @@ function _add_linearcurve_cost!(
     cost::IS.ValueCurve,
     proportional_term::Float64,
     tech_model::String,
-) where {T <: InvestmentVariableType}
+) where {T<:InvestmentVariableType}
     time_mapping = get_time_mapping(container)
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
@@ -187,7 +187,7 @@ function _add_linearcurve_cost!(
             T(),
             CapitalCost(),
             technology,
-            npv_proportional_term,
+            proportional_term,
             t,
             tech_model,
         )
@@ -203,7 +203,7 @@ function _add_linearcurve_cost!(
     om_cost::PSY.OperationalCost,
     proportional_term::Float64,
     tech_model::String,
-) where {T <: InvestmentVariableType}
+) where {T<:InvestmentVariableType}
     time_mapping = get_time_mapping(container)
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
@@ -238,45 +238,45 @@ function _add_linearcurve_cost!(
     return
 end
 
-function _add_linearcurve_cost!(
-    container::SingleOptimizationContainer,
-    ::T,
-    technology::PSIP.Technology,
-    om_cost::PSY.OperationalCost,
-    proportional_term::Float64,
-    tech_model::String,
-) where {T <: InvestmentExpressionType}
-    time_mapping = get_time_mapping(container)
-    base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
-    interest_rate = PSIP.get_interest_rate(technology)
-    tech_base_year = PSIP.get_base_year(technology)
-    lifetime = PSIP.get_capital_recovery_period(technology)
+# function _add_linearcurve_cost!(
+#     container::SingleOptimizationContainer,
+#     ::T,
+#     technology::PSIP.Technology,
+#     om_cost::PSY.OperationalCost,
+#     proportional_term::Float64,
+#     tech_model::String,
+# ) where {T<:InvestmentExpressionType}
+#     time_mapping = get_time_mapping(container)
+#     base_year = get_base_year(container)
+#     discount_rate = get_discount_rate(container)
+#     inflation_rate = get_inflation_rate(container)
+#     interest_rate = PSIP.get_interest_rate(technology)
+#     tech_base_year = PSIP.get_base_year(technology)
+#     lifetime = PSIP.get_capital_recovery_period(technology)
 
-    discount_factor = 1 / (1 + discount_rate)
-    dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
-    inv_tuples = get_investment_time_stamps(time_mapping)
+#     discount_factor = 1 / (1 + discount_rate)
+#     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
+#     inv_tuples = get_investment_time_stamps(time_mapping)
 
-    for t in get_investment_time_steps(time_mapping)
-        inv_tuple = inv_tuples[t]
-        year = Dates.value.(Dates.Year.(inv_tuple[1]))
-        future_to_present_value = discount_factor^(year - base_year)
-        npv_proportional_term =
-            proportional_term * dollars_to_base_year * future_to_present_value
+#     for t in get_investment_time_steps(time_mapping)
+#         inv_tuple = inv_tuples[t]
+#         year = Dates.value.(Dates.Year.(inv_tuple[1]))
+#         future_to_present_value = discount_factor^(year - base_year)
+#         npv_proportional_term =
+#             proportional_term * dollars_to_base_year * future_to_present_value
 
-        _add_linearcurve_variable_term_to_model!(
-            container,
-            T(),
-            VariableOMCost(),
-            technology,
-            npv_proportional_term,
-            t,
-            tech_model,
-        )
-    end
-    return
-end
+#         _add_linearcurve_variable_term_to_model!(
+#             container,
+#             T(),
+#             VariableOMCost(),
+#             technology,
+#             1.0,
+#             t,
+#             tech_model,
+#         )
+#     end
+#     return
+# end
 
 # Dispatch for scalar proportional terms
 function _add_linearcurve_cost!(
@@ -286,7 +286,7 @@ function _add_linearcurve_cost!(
     om_cost::PSY.OperationalCost,
     proportional_term::Float64,
     tech_model::String,
-) where {T <: OperationsVariableType}
+) where {T<:OperationsVariableType}
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
@@ -309,7 +309,7 @@ function _add_linearcurve_cost!(
                 T(),
                 VariableOMCost(),
                 technology,
-                weight * npv_proportional_term,
+                weight * proportional_term,
                 t,
                 tech_model,
             )
@@ -328,7 +328,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: ActivePowerVariable}
+) where {T<:ActivePowerVariable}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -356,7 +356,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: Union{ActiveInPowerVariable, ActiveOutPowerVariable}}
+) where {T<:Union{ActiveInPowerVariable,ActiveOutPowerVariable}}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -385,7 +385,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: InvestmentVariableType}
+) where {T<:InvestmentVariableType}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -414,7 +414,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: BuildCapacity}
+) where {T<:BuildCapacity}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -442,7 +442,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: CumulativeCapacity}
+) where {T<:CumulativeCapacity}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -470,7 +470,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: BuildEnergyCapacity}
+) where {T<:BuildEnergyCapacity}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -498,7 +498,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: BuildPowerCapacity}
+) where {T<:BuildPowerCapacity}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -526,7 +526,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: CumulativePowerCapacity}
+) where {T<:CumulativePowerCapacity}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -554,7 +554,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: CumulativeEnergyCapacity}
+) where {T<:CumulativeEnergyCapacity}
     linear_cost = _add_proportional_term!(
         container,
         T(),

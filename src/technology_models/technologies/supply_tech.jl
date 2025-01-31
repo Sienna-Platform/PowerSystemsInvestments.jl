@@ -3,6 +3,10 @@ get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::Investment
 get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_minimum_required_capacity(d)
 get_variable_binary(::BuildCapacity, d::PSIP.SupplyTechnology, ::ContinuousInvestment) = false
 
+get_variable_upper_bound(::EFCRenewable, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_maximum_capacity(d)
+get_variable_lower_bound(::EFCRenewable, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_minimum_required_capacity(d)
+get_variable_binary(::EFCRenewable, d::PSIP.SupplyTechnology, ::ContinuousInvestment) = false
+
 get_variable_lower_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::OperationsTechnologyFormulation) = nothing
 
@@ -28,7 +32,9 @@ function get_default_attributes(
     W<:OperationsTechnologyFormulation,
     X<:FeasibilityTechnologyFormulation,
 }
-    return Dict{String,Any}()
+    return Dict{String,Any}(
+        "capacity_credit" => false
+    )
 end
 
 ################### Variables ####################
@@ -510,6 +516,93 @@ function add_constraints!(
             )
         end
     end
+end
+
+
+### Capacity Credit Constraint 1d
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    ::T,
+    ::V,
+    devices::U,
+    tech_model::String,
+) where {
+    T<:CapacityCreditConstraint,
+    U<:Union{D,Vector{D},IS.FlattenIteratorWrapper{D}},
+    V<:BuildCapacity,
+} where {D<:PSIP.SupplyTechnology{PSY.RenewableDispatch}}
+    time_mapping = get_time_mapping(container)
+    regions = PSIP.get_regions(PSIP.Zone, p)
+    installed_cap = get_variable(container, V(), D, tech_model)
+    pv_cap = 0.0
+    wind_cap = 0.0
+    # efc_wind = JuMP.@variable(get_jump_model(container), [1:length(regions)], lower_bound = 0, base_name = "efc_wind")
+    # efc_pv = JuMP.@variable(get_jump_model(container), [1:length(regions)], lower_bound = 0, base_name = "efc_pv")
+    efc = get_variable(container, EFCRenewable(), D, tech_model)
+    for (r_idx, r) in enumerate(regions)
+        efc_pv = 0.0
+        efc_wind = 0.0
+        if haskey(PSIP.get_ext(r), "pv_cc")
+            for d in devices
+                name = PSIP.get_name(d)
+                zone = PSIP.get_region(d)
+                pm = PSIP.get_prime_mover_type(d)
+                if zone == r && pm == PSY.PrimeMovers.PVe
+                    pv_cap = pv_cap + installed_cap[name, 1]
+                    efc_pv = efc_pv + efc[name, 1]
+                end
+            end
+            pv_cc = PSIP.get_ext(r)["pv_cc"]
+            slope = pv_cc[:, 1]
+            intercept = pv_cc[:, 2]
+
+            for s in 1:length(slope)
+                JuMP.@constraint(
+                    get_jump_model(container),
+                    efc_pv <= pv_cap * slope[s] + intercept[s]
+                )
+            end
+        end
+        if haskey(PSIP.get_ext(r), "wind_cc")
+            for d in devices
+                name = PSIP.get_name(d)
+                zone = PSIP.get_region(d)
+                pm = PSIP.get_prime_mover_type(d)
+                if zone == r && pm == PSY.PrimeMovers.WT
+                    wind_cap = wind_cap + installed_cap[name, 1]
+                    efc_wind = efc_wind + efc[name, 1]
+                end
+            end
+            wind_cc = PSIP.get_ext(r)["wind_cc"]
+            slope = wind_cc[:, 1]
+            intercept = wind_cc[:, 2]
+            for s in 1:length(slope)
+                JuMP.@constraint(
+                    get_jump_model(container),
+                    efc_wind <= pv_cap * slope[s] + intercept[s]
+                )
+            end
+        end
+    end
+
+    return
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    ::T,
+    ::V,
+    devices::U,
+    tech_model::String,
+) where {
+    T<:CapacityCreditConstraint,
+    U<:Union{D,Vector{D},IS.FlattenIteratorWrapper{D}},
+    V<:BuildCapacity,
+} where {D<:PSIP.SupplyTechnology{PSY.ThermalStandard}}
+
+    return
 end
 
 ########################### Objective Function Calls#############################################

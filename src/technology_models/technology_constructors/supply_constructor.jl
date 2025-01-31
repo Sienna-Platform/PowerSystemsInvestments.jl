@@ -24,6 +24,9 @@ function construct_technologies!(
     # BuildCapacity variable
     add_variable!(container, BuildCapacity(), devices, B(), tech_model)
 
+    # Equivalent Firm Capacity Variables
+    add_variable!(container, EFCRenewable(), devices, B(), tech_model)
+
     # CumulativeCapacity
     add_expression!(container, CumulativeCapacity(), devices, B(), tech_model)
     return
@@ -53,10 +56,10 @@ function construct_technologies!(
 
     #convert technology model to string for container metadata
     tech_model = metadata_string(technology_model)
-
     # BuildCapacity variable
     add_variable!(container, BuildCapacity(), devices, B(), tech_model)
-
+    # Equivalent Firm Capacity Variables
+    add_variable!(container, EFCRenewable(), devices, B(), tech_model)
     # CumulativeCapacity
     add_expression!(container, CumulativeCapacity(), devices, B(), tech_model)
     return
@@ -151,7 +154,7 @@ function construct_technologies!(
 }
     #devices = PSIP.get_technologies(T, p)
     devices = [PSIP.get_technology(T, p, n) for n in names]
-
+    attributes = technology_model.attributes
     #convert technology model to string for container metadata
     tech_model = metadata_string(technology_model)
 
@@ -168,6 +171,16 @@ function construct_technologies!(
         devices,
         tech_model,
     )
+    if attributes["capacity_credit"]
+        add_constraints!(
+            container,
+            p,
+            CapacityCreditConstraint(),
+            BuildCapacity(),
+            devices,
+            tech_model
+        )
+    end
 
     return
 end

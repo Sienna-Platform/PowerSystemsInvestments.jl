@@ -82,6 +82,7 @@ function construct_technologies!(
     C<:BasicDispatch,
     D<:FeasibilityTechnologyFormulation,
 }
+
     return
 end
 
@@ -120,5 +121,17 @@ function construct_technologies!(
     C<:BasicDispatch,
     D<:FeasibilityTechnologyFormulation,
 }
+    devices = [PSIP.get_technology(T, p, n) for n in names]
+    attributes = technology_model.attributes
+    tech_model = metadata_string(technology_model)
+    if attributes["planning_reserve_margin"]
+        add_constraints!(
+            container,
+            p,
+            PlanningReserveMarginConstraint(),
+            devices,
+            tech_model
+        )
+    end
     return
 end

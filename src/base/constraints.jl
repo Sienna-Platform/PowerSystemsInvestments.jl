@@ -40,3 +40,9 @@ struct MultiRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
 struct EUEEstimateConstraint <: ISOPT.ConstraintType end
 
 struct SparseChrononConstraint <: ISOPT.ConstraintType end
+
+struct CapacityCreditConstraint <: ISOPT.ConstraintType end
+
+struct StorageCapacityCreditConstraint <: ISOPT.ConstraintType end
+
+struct PlanningReserveMarginConstraint <: ISOPT.ConstraintType end

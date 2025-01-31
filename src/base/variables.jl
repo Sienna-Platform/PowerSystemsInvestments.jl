@@ -43,6 +43,10 @@ energy stored in Storage technology at a timepoint
 """
 struct EnergyVariable <: OperationsVariableType end
 
+struct EFCRenewable <: InvestmentVariableType end
+
+struct EFCStorage <: InvestmentVariableType end
+
 is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
 is_operation_entry(::Type{<:OperationsVariableType}) = true
 is_operation_entry(::Type{<:InvestmentVariableType}) = false
