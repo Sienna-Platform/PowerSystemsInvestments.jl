@@ -70,8 +70,6 @@ export serialize_results
 #Results interfaces
 export read_variable
 export read_parameter
-export read_aux_variables
-export read_duals
 export read_optimizer_stats
 export read_expression
 export get_variable
