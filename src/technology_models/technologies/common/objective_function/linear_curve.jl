@@ -1,3 +1,19 @@
+############ FOR REFERENCE #####################
+
+# The methods for adding to the objective function are:
+# objective_function! is dispatched for technology type and formulations
+# objective_function! calls add_variable_cost!, or add_capital_cost! or add_fixed_om_cost!
+# add_variable_cost!, add_capital_cost! and add_fixed_om_cost! calls _add_cost_to_objective!
+# _add_cost_to_objective! based on the VariableType and CostType calls _add_linearcurve_cost!
+# _add_linearcurve_cost! transform cost terms, via amortized lump sums and net-present value to base year
+# _add_linearcurve_cost! calls _add_linearcurve_variable_term_to_model!
+# _add_linearcurve_variable_term_to_model! calls _add_proportional_term! to add terms to objective function
+# _add_linearcurve_variable_term_to_model! also calls add_to_expression to add terms to Cost Expressions
+# _add_proportional_term! calls add_to_objective_operations_expression! to add operation costs to objective function (using JuMP)
+# _add_proportional_term! calls add_to_objective_investment_expression! to add capital terms to objective function (using JuMP)
+
+################################################
+
 """
 Adds to the cost function cost terms for sum of variables with common factor to be used for cost expression for optimization_container model.
 
@@ -135,33 +151,20 @@ function _add_linearcurve_cost!(
     proportional_term::Float64,
     tech_model::String,
 ) where {T <: InvestmentVariableType}
-    financials = PSIP.get_financial_data(technology)
+    amortized_proportional_term, discount_factor, base_year =
+        amortize_overnight_term_to_base_year_dollars(
+            container,
+            technology,
+            proportional_term,
+        )
     time_mapping = get_time_mapping(container)
-    base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
-    interest_rate = get_interest_rate(container)
-    tech_base_year = PSIP.get_technology_base_year(financials)
-    capital_recovery_period = PSIP.get_capital_recovery_period(financials)
-
-    capital_recovery_factor =
-        interest_rate / (1 - (1 + interest_rate)^(-(capital_recovery_period)))
-    lump_amortized_payments =
-        (1 - (1 + discount_rate)^(-(capital_recovery_period))) / discount_rate
-    discount_factor = 1 / (1 + discount_rate)
-    dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
         inv_date = inv_tuples[t]
         year = Dates.value.(Dates.Year.(inv_date[1]))
         future_to_present_value = discount_factor^(year - base_year)
-        npv_proportional_term =
-            proportional_term *
-            capital_recovery_factor *
-            lump_amortized_payments *
-            dollars_to_base_year *
-            future_to_present_value
+        npv_proportional_term = amortized_proportional_term * future_to_present_value
         _add_linearcurve_variable_term_to_model!(
             container,
             T(),
@@ -184,28 +187,20 @@ function _add_linearcurve_cost!(
     proportional_term::Float64,
     tech_model::String,
 ) where {T <: InvestmentVariableType}
-    financials = PSIP.get_financial_data(technology)
+    amortized_proportional_term, discount_factor, base_year =
+        amortize_overnight_term_to_base_year_dollars(
+            container,
+            technology,
+            proportional_term,
+        )
     time_mapping = get_time_mapping(container)
-    base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
-    interest_rate = get_interest_rate(container)
-    tech_base_year = PSIP.get_technology_base_year(financials)
-    lifetime = PSIP.get_lifetime(technology)
-    lump_annual_payments = (1 - (1 + discount_rate)^(-(lifetime))) / discount_rate
-    discount_factor = 1 / (1 + discount_rate)
-    dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
         inv_date = inv_tuples[t]
         year = Dates.value.(Dates.Year.(inv_date[1]))
         future_to_present_value = discount_factor^(year - base_year)
-        npv_proportional_term =
-            proportional_term *
-            lump_annual_payments *
-            dollars_to_base_year *
-            future_to_present_value
+        npv_proportional_term = amortized_proportional_term * future_to_present_value
         _add_linearcurve_variable_term_to_model!(
             container,
             T(),
@@ -219,6 +214,7 @@ function _add_linearcurve_cost!(
     return
 end
 
+# TODO: Should this use overnight or direct to base year
 function _add_linearcurve_cost!(
     container::SingleOptimizationContainer,
     ::T,
@@ -232,7 +228,7 @@ function _add_linearcurve_cost!(
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
-    interest_rate = get_interest_rate(container)
+    interest_rate = PSIP.get_interest_rate(financials)
     tech_base_year = PSIP.get_technology_base_year(technology)
     #lifetime = PSIP.get_capital_recovery_period(technology)
 
