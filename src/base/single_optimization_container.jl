@@ -208,36 +208,12 @@ function init_optimization_container!(
 
     set_time_mapping!(container, time_map)
     set_operational_weights!(container, operation_model.series_weights)
-    # TODO: Temporary fix so Investments is compatible with changes to financial data in Portfolios. Update this once the financial data structs have been finalized
+    # Set Financial Data in Container from Portfolio
     financials = collect(PSIP.get_financials(PSIP.PortfolioFinancialData, portfolio))[1]
     set_base_year!(container, PSIP.get_base_year(financials))
     set_discount_rate!(container, PSIP.get_discount_rate(financials))
     set_inflation_rate!(container, PSIP.get_inflation_rate(financials))
     set_interest_rate!(container, PSIP.get_interest_rate(financials))
-
-    #=
-    if T <: SingleRegionBalanceModel #|| T <: AreaBalancePowerModel
-        total_number_of_devices =
-            length(get_available_technologies(PSIP.SupplyTechnology, port))
-    else
-        total_number_of_devices =
-            length(get_available_technologies(PSIP.SupplyTechnology, port))
-        total_number_of_devices +=
-            length(get_available_technologies(PSIP.TransportTechnology, port))
-    end
-
-    # The 10e6 limit is based on the sizes of the lp benchmark problems http://plato.asu.edu/ftp/lpcom.html
-    # The maximum numbers of constraints and variables in the benchmark problems is 1,918,399 and 1,259,121,
-    # respectively. See also https://prod-ng.sandia.gov/techlib-noauth/access-control.cgi/2013/138847.pdf
-    variable_count_estimate = length(container.time_steps) * total_number_of_devices
-
-    if variable_count_estimate > 10e6
-        @warn(
-            "The lower estimate of total number of variables that will be created in the model is $(variable_count_estimate). \\
-            The total number of variables might be larger than 10e6 and could lead to large build or solve times."
-        )
-    end
-    =#
 
     stats = get_optimizer_stats(container)
     stats.detailed_stats = get_detailed_optimizer_stats(settings)
@@ -321,18 +297,6 @@ function has_container_key(
     key = ParameterKey(T, U, meta)
     return haskey(container.parameters, key)
 end
-
-#=
-function has_container_key(
-    container:SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{U},
-    meta = IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: InitialConditionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    key = InitialConditionKey(T, U, meta)
-    return haskey(container.initial_conditions, key)
-end
-=#
 
 ####################################### Variable Container #################################
 function _add_variable_container!(
@@ -465,6 +429,7 @@ function get_constraint(
     return get_constraint(container, ConstraintKey(T, U, meta))
 end
 
+# TODO: Duals
 #=
 function read_duals(container::SingleOptimizationContainer)
     return Dict(k => to_dataframe(jump_value.(v), k) for (k, v) in get_duals(container))
@@ -663,7 +628,7 @@ function initialize_system_expressions!(
     return
 end
 
-###################################Initial Conditions Containers############################
+################################### Aux Variables and Duals ############################
 
 function calculate_aux_variables!(
     container::SingleOptimizationContainer,
@@ -750,11 +715,11 @@ function build_model!(
         end
     end
 
-    #TODO: 
+    # TODO: 
     # Requirements Arguments Eventually
     #=
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Services" begin
-        construct_services!(
+    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
+        construct_requirements!(
             container,
             sys,
             ArgumentConstructStage(),
