@@ -69,12 +69,10 @@ export serialize_problem
 export serialize_results
 #Results interfaces
 export read_variable
-export read_parameter
 export read_optimizer_stats
 export read_expression
 export get_variable
 export get_constraint
-export get_parameter
 export get_expression
 
 #### Imports ###
@@ -199,7 +197,6 @@ include("base/transport_model.jl")
 include("base/constraints.jl")
 include("base/variables.jl")
 include("base/expressions.jl")
-include("base/parameters.jl")
 include("base/settings.jl")
 include("base/solution_algorithms.jl")
 include("base/technology_model.jl")
@@ -236,7 +233,8 @@ include("technology_models/technology_constructors/storage_constructor.jl")
 include("technology_models/technology_constructors/branch_constructor.jl")
 include("technology_models/technology_constructors/constructor_validations.jl")
 
-include("technology_models/technologies/common/objective_function.jl/common_capital.jl")
-include("technology_models/technologies/common/objective_function.jl/common_operations.jl")
-include("technology_models/technologies/common/objective_function.jl/linear_curve.jl")
+include("technology_models/technologies/common/objective_function/common_financial.jl")
+include("technology_models/technologies/common/objective_function/common_capital.jl")
+include("technology_models/technologies/common/objective_function/common_operations.jl")
+include("technology_models/technologies/common/objective_function/linear_curve.jl")
 end

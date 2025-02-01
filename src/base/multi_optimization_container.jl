@@ -13,7 +13,6 @@ Base.@kwdef mutable struct MultiOptimizationContainer{T <: SolutionAlgorithm} <:
     constraints::Dict{ISOPT.ConstraintKey, AbstractArray}
     objective_function::ObjectiveFunction
     expressions::Dict{ISOPT.ExpressionKey, AbstractArray}
-    parameters::Dict{ISOPT.ParameterKey, ParameterContainer}
     optimizer_stats::ISOPT.OptimizerStats  # TODO: needs custom struct for decomposition
     metadata::ISOPT.OptimizationContainerMetadata
     default_time_series_type::Type{<:PSY.TimeSeriesData}  # Maybe isn't needed here
@@ -50,7 +49,6 @@ function MultiOptimizationContainer(
         constraints=Dict{ConstraintKey, AbstractArray}(),
         objective_function=ObjectiveFunction(),
         expressions=Dict{ExpressionKey, AbstractArray}(),
-        parameters=Dict{ParameterKey, ParameterContainer}(),
         base_power=PSY.get_base_power(sys),
         optimizer_stats=ISOPT.OptimizerStats(),
         built_for_recurrent_solves=false,
