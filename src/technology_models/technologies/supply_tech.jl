@@ -489,21 +489,16 @@ end
 function objective_function!(
     container::SingleOptimizationContainer,
     devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
-    #DeviceModel{T, U},
     formulation::BasicDispatch, #Type{<:PM.AbstractPowerModel},
     tech_model::String,
 ) where {T <: PSIP.SupplyTechnology}#, U <: ActivePowerVariable}
-    add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model) #U()
-    #add_start_up_cost!(container, StartVariable(), devices, U())
-    #add_shut_down_cost!(container, StopVariable(), devices, U())
-    #add_proportional_cost!(container, OnVariable(), devices, U())
+    add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model)
     return
 end
 
 function objective_function!(
     container::SingleOptimizationContainer,
     devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
-    #DeviceModel{T, U},
     formulation::InvestmentTechnologyFormulation, #Type{<:PM.AbstractPowerModel},
     tech_model::String,
 ) where {T <: PSIP.SupplyTechnology}#, U <: BuildCapacity}
@@ -514,8 +509,7 @@ end
 function objective_function!(
     container::SingleOptimizationContainer,
     devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
-    #DeviceModel{T, U},
-    formulation::InvestmentTechnologyFormulation, #Type{<:PM.AbstractPowerModel},
+    formulation::InvestmentTechnologyFormulation,
     tech_model::String,
 ) where {T <: PSIP.SupplyTechnology{PSIP.RenewableDispatch}}#, U <: BuildCapacity}
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model) #U()
