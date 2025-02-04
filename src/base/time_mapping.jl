@@ -45,7 +45,6 @@ function TimeMapping(
     # Validation of the dates to avoid gaps in the operational periods
 
     op_index_last_slice = length(operational_periods)
-    #all_operation_slices = union(operational_periods, feasibility_periods)
     all_operation_slices = [operational_periods; feasibility_periods]
     total_count = sum(length(x) for x in all_operation_slices)
     total_slice_count = length(operational_periods) + length(feasibility_periods)
