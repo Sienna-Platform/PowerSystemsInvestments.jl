@@ -83,8 +83,9 @@ function TechnologyModel(
         attributes_[k] = v
     end
 
+    # TODO: Implement check for technologies
     #_check_technology_formulation(D, A, B, C)
-    #TODO: new is only defined for inner constructors, replace for now but we might want to reorganize this file later
+    # TODO: new is only defined for inner constructors, replace for now but we might want to reorganize this file later
     #new{D, B, C}(use_slacks, duals, time_series_names, attributes_, nothing)
     return TechnologyModel{D, A, B, C}(use_slacks, duals, attributes_)
 end
