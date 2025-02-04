@@ -35,7 +35,6 @@ Base.@kwdef mutable struct SingleOptimizationContainer <:
     infeasibility_conflict::Dict{Symbol, Array}
     optimizer_stats::ISOPT.OptimizerStats
     metadata::ISOPT.OptimizationContainerMetadata
-    #default_time_series_type::Type{<:PSY.TimeSeriesData}
 end
 
 function SingleOptimizationContainer(
@@ -243,8 +242,6 @@ function _assign_container!(container::Dict, key::OptimizationContainerKey, valu
         throw(IS.InvalidValue("$key is already stored"))
     end
     container[key] = value
-    #@debug "Added container entry $(typeof(key)) $(IS.Optimization.encode_key(key))" _group =
-    #    LOG_GROUP_OPTIMZATION_CONTAINER
     return
 end
 
@@ -716,7 +713,7 @@ function build_model!(
     end
 
     # TODO: 
-    # Requirements Arguments Eventually
+    # Requirements Arguments HERE
     #=
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
         construct_requirements!(
@@ -820,9 +817,10 @@ function build_model!(
                 LOG_GROUP_OPTIMIZATION_CONTAINER
         end
     end
+    # TODO: Requirements build here
     #=
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Services" begin
-        construct_services!(
+    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
+        construct_requirements!(
             container,
             sys,
             ModelConstructStage(),
@@ -973,5 +971,6 @@ function serialize_metadata!(container::SingleOptimizationContainer, output_dir:
     end
 
     filename = IS.Optimization._make_metadata_filename(output_dir)
+    # TODO: Fix Serialization Metadata
     #Serialization.serialize(filename, container.metadata)
 end
