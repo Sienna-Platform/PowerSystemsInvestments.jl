@@ -1,8 +1,3 @@
-# Aliases used for clarity in the method dispatches so it is possible to know if writing to
-# DecisionModel data or EmulationModel data
-const DecisionModelIndexType = Dates.DateTime
-const EmulationModelIndexType = Int
-
 mutable struct InvestmentModel{S <: SolutionAlgorithm}
     name::Symbol
     template::InvestmentModelTemplate
@@ -335,28 +330,6 @@ function init_model_store_params!(model::InvestmentModel)
     IS.Optimization.set_store_params!(get_internal(model), store_params)
     return
 end
-#=
-function reset!(model::InvestmentModel)
-
-    IS.Optimization.set_container!(
-        get_internal(model),
-        OptimizationContainer(
-            get_portfolio(model),
-            get_settings(model),
-            nothing,
-            PSY.Deterministic,
-        ),
-    )
-    get_optimization_container(model).built_for_recurrent_solves =
-        was_built_for_recurrent_solves
-    internal = get_internal(model)
-    IS.Optimization.set_initial_conditions_model_container!(internal, nothing)
-    empty_time_series_cache!(model)
-    empty!(get_store(model))
-    set_status!(model, ModelBuildStatus.EMPTY)
-    return
-end
-=#
 
 function build_pre_step!(model::InvestmentModel)
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Build pre-step" begin
