@@ -1,9 +1,3 @@
-"""
-Stores results data for one InvestmentModel
-"""
-
-const InvestmentModelIndexType = Dates.DateTime
-
 mutable struct InvestmentModelStore <: ISOPT.AbstractModelStore
     # All DenseAxisArrays have axes (column names, row indexes)
     duals::Dict{ConstraintKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
@@ -33,20 +27,6 @@ struct ModelStoreParams <: ISOPT.AbstractModelStoreParams
     system_uuid::Base.UUID
     container_metadata::ISOPT.OptimizationContainerMetadata
 end
-
-#=
-function ModelStoreParams(
-    base_power::Float64,
-    system_uuid::Base.UUID,
-    container_metadata=ISOPT.OptimizationContainerMetadata(),
-)
-    return ModelStoreParams(
-        base_power,
-        system_uuid,
-        container_metadata,
-    )
-end
-=#
 
 get_base_power(params::ModelStoreParams) = params.base_power
 get_system_uuid(params::ModelStoreParams) = params.system_uuid
