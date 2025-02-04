@@ -130,7 +130,7 @@ function is_milp(container::SingleOptimizationContainer)::Bool
     !supports_milp(container) && return false
     if !isempty(
         JuMP.all_constraints(
-            PSIN.get_jump_model(container),
+            get_jump_model(container),
             JuMP.VariableRef,
             JuMP.MOI.ZeroOne,
         ),
@@ -166,10 +166,10 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
         @debug "The optimization model has no optimizer attached" _group =
             LOG_GROUP_OPTIMIZATION_CONTAINER
     else
-        JuMP.set_optimizer(PSIN.get_jump_model(container), get_optimizer(settings))
+        JuMP.set_optimizer(get_jump_model(container), get_optimizer(settings))
     end
 
-    JuMPmodel = PSIN.get_jump_model(container)
+    JuMPmodel = get_jump_model(container)
 
     JuMP.set_string_names_on_creation(JuMPmodel, get_store_variable_names(settings))
 
