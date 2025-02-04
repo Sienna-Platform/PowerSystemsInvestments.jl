@@ -68,7 +68,7 @@
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
-    @test solve!(m) == PSINV.RunStatus.SUCCESSFULLY_FINALIZED
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 end
 
 @testset "Test OptimizationProblemResults interfaces" begin
@@ -155,14 +155,14 @@ end
     @test length(IS.Optimization.list_dual_names(res)) == 0
     #@test get_model_base_power(res) == 100.0
     @test isa(IS.Optimization.get_objective_value(res), Float64)
-    @test isa(res.variable_values, Dict{PSINV.VariableKey, DataFrames.DataFrame})
+    @test isa(res.variable_values, Dict{PSIN.VariableKey, DataFrames.DataFrame})
     #@test isa(IS.Optimization.read_variables(res), Dict{String, DataFrames.DataFrame})
     @test isa(IS.Optimization.get_total_cost(res), Float64)
     @test isa(IS.Optimization.get_optimizer_stats(res), DataFrames.DataFrame)
-    @test isa(res.dual_values, Dict{PSINV.ConstraintKey, DataFrames.DataFrame})
+    @test isa(res.dual_values, Dict{PSIN.ConstraintKey, DataFrames.DataFrame})
     @test isa(IS.Optimization.read_duals(res), Dict{String, DataFrames.DataFrame})
-    #@test isa(PSINV.get_resolution(res), Dates.TimePeriod)
+    #@test isa(PSIN.get_resolution(res), Dates.TimePeriod)
     @test isa(IS.Optimization.get_source_data(res), PSIP.Portfolio)
-    @test length(PSINV.get_timestamps(res)) == 48
+    @test length(PSIN.get_timestamps(res)) == 48
     =#
 end

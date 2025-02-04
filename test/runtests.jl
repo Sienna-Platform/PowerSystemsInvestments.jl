@@ -11,7 +11,6 @@ using HiGHS
 
 const IS = InfrastructureSystems
 const PSIP = PowerSystemsInvestmentsPortfolios
-const PSINV = PowerSystemsInvestments
 const PSIN = PowerSystemsInvestments
 const PSY = PowerSystems
 
