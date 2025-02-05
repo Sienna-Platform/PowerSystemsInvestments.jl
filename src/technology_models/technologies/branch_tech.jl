@@ -41,7 +41,6 @@ function add_expression!(
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
-    binary = false
 
     var = get_variable(container, BuildCapacity(), D, tech_model)
 
@@ -54,48 +53,41 @@ function add_expression!(
         meta=tech_model,
     )
 
-    # TODO: Move to add_to_expression?
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
         init_cap = PSIP.get_existing_line_capacity(d)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-            #binary = binary
         )
-        #ub = get_variable_upper_bound(expression_type, d, formulation)
-        #ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
-
-        #lb = get_variable_lower_bound(expression_type, d, formulation)
-        #lb !== nothing && JuMP.set_lower_bound(variable[name, t], lb)
     end
 
     return
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
-    expression_type::T,
-    devices::U,
-    formulation::BasicDispatch,
-    tech_model::String,
-    transport_model::TransportModel{V},
+    ::SingleOptimizationContainer,
+    ::T,
+    ::U,
+    ::BasicDispatch,
+    ::String,
+    ::TransportModel{V},
 ) where {
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: SingleRegionBalanceModel,
 } where {D <: GenericTransportTechnology}
-    # Do nothing
+    # Do nothing for Transport Paths in SingleRegion models
     return
 end
 
 function add_to_expression!(
     container::SingleOptimizationContainer,
-    expression_type::T,
+    ::T,
     devices::U,
-    formulation::BasicDispatch,
+    ::BasicDispatch,
     tech_model::String,
-    transport_model::TransportModel{V},
+    ::TransportModel{V},
 ) where {
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
@@ -104,28 +96,24 @@ function add_to_expression!(
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    #binary = false
-    #var = get_variable(container, ActivePowerVariable(), D)
 
     variable = get_variable(container, ActivePowerVariable(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    # expression = add_expression_container!(container, expression_type, D, time_steps)
     # Assuming that energy travels from start to end, so if dispatch of Branch is positive, it is subtracted from start_region
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         start_region = PSIP.get_start_region(d)
         end_region = PSIP.get_end_region(d)
         losses = PSIP.get_line_loss(d)
-        #bus_no = PNM.get_mapped_bus_number(radial_network_reduction, PSY.get_bus(d))
         _add_to_jump_expression!(
             expression[start_region, t],
             variable[name, t],
-            -1.0, #get_variable_multiplier(U(), V, W()),
+            -1.0,
         )
         _add_to_jump_expression!(
             expression[end_region, t],
             variable[name, t],
-            (1.0 - losses), #get_variable_multiplier(U(), V, W()),
+            (1.0 - losses), # Losses are assumed in the end region
         )
     end
 
@@ -145,8 +133,6 @@ function add_constraints!(
 } where {D <: GenericTransportTechnology}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    # Hard Code Mapping #
-
     device_names = PSIP.get_name.(devices)
     con_ub = add_constraints_container!(
         container,
@@ -162,7 +148,6 @@ function add_constraints!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
     for d in devices
         name = PSIP.get_name(d)
         for op_ix in operational_indexes
@@ -186,12 +171,10 @@ function add_constraints!(
     ::V,
     devices::U,
     tech_model::String,
-    #::NetworkModel{X},
 ) where {
     T <: MaximumCumulativeCapacity,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: CumulativeCapacity,
-    #X <: PM.AbstractPowerModel,
 } where {D <: GenericTransportTechnology}
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
@@ -222,31 +205,15 @@ function add_constraints!(
 end
 
 ########################### Objective Function Calls#############################################
-# These functions are custom implementations of the cost data. In the file objective_functions.jl there are default implementations. Define these only if needed.
-#=
-function objective_function!(
-    container::SingleOptimizationContainer,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
-    #DeviceModel{T, U},
-    formulation::BasicDispatch, #Type{<:PM.AbstractPowerModel},
-    tech_model::String,
-) where {T<:GenericTransportTechnology}#, U <: ActivePowerVariable}
-    add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model) #U()
-    #add_start_up_cost!(container, StartVariable(), devices, U())
-    #add_shut_down_cost!(container, StopVariable(), devices, U())
-    #add_proportional_cost!(container, OnVariable(), devices, U())
-    return
-end
-=#
 
 function objective_function!(
     container::SingleOptimizationContainer,
     devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
-    #DeviceModel{T, U},
-    formulation::ContinuousInvestment, #Type{<:PM.AbstractPowerModel},
+    formulation::ContinuousInvestment,
     tech_model::String,
-) where {T <: GenericTransportTechnology}#, U <: BuildCapacity}
-    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model) #U()
+) where {T <: GenericTransportTechnology}
+    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    # TODO: Decide if we want to include fixed OM cost for Transport Paths
     #add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
     return
 end
