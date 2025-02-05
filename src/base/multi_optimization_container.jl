@@ -85,7 +85,6 @@ get_jump_model(container::MultiOptimizationContainer) =
     get_jump_model(container.main_problem)
 get_metadata(container::MultiOptimizationContainer) = container.metadata
 get_optimizer_stats(container::MultiOptimizationContainer) = container.optimizer_stats
-get_parameters(container::MultiOptimizationContainer) = container.parameters
 get_resolution(container::MultiOptimizationContainer) = container.resolution
 get_settings(container::MultiOptimizationContainer) = container.settings
 get_time_steps(container::MultiOptimizationContainer) = container.time_steps

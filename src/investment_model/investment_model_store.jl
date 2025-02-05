@@ -1,7 +1,6 @@
 mutable struct InvestmentModelStore <: ISOPT.AbstractModelStore
     # All DenseAxisArrays have axes (column names, row indexes)
     duals::Dict{ConstraintKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
-    parameters::Dict{ParameterKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
     variables::Dict{VariableKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
     aux_variables::Dict{AuxVarKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
     expressions::Dict{
@@ -14,7 +13,6 @@ end
 function InvestmentModelStore()
     return InvestmentModelStore(
         Dict{ConstraintKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
-        Dict{ParameterKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
         Dict{VariableKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
         Dict{AuxVarKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
         Dict{ExpressionKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),

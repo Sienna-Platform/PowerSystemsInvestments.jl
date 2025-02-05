@@ -88,7 +88,6 @@ get_initial_time(container::SingleOptimizationContainer) =
 get_jump_model(container::SingleOptimizationContainer) = container.JuMPmodel
 get_metadata(container::SingleOptimizationContainer) = container.metadata
 get_optimizer_stats(container::SingleOptimizationContainer) = container.optimizer_stats
-get_parameters(container::SingleOptimizationContainer) = container.parameters
 get_resolution(container::SingleOptimizationContainer) = get_resolution(container.settings)
 get_settings(container::SingleOptimizationContainer) = container.settings
 get_time_mapping(container::SingleOptimizationContainer) = container.time_mapping
@@ -210,14 +209,6 @@ function init_optimization_container!(
     return
 end
 
-function check_parameter_multiplier_values(multiplier_array::DenseAxisArray)
-    return !all(isnan.(multiplier_array.data))
-end
-
-function check_parameter_multiplier_values(multiplier_array::SparseAxisArray)
-    return !all(isnan.(values(multiplier_array.data)))
-end
-
 function check_optimization_container(container::SingleOptimizationContainer)
     container.settings_copy = copy_for_serialization(container.settings)
     return
@@ -272,16 +263,6 @@ function has_container_key(
 ) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     key = ConstraintKey(T, U, meta)
     return haskey(container.constraints, key)
-end
-
-function has_container_key(
-    container::SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ParameterType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    key = ParameterKey(T, U, meta)
-    return haskey(container.parameters, key)
 end
 
 ####################################### Variable Container #################################
@@ -716,7 +697,7 @@ function build_model!(
     end
     =#
 
-    # Transportation Model Arguments
+    # Branches Model Arguments
 
     branch_names = collect(values(template.branch_models))
     branch_templates = collect(keys(template.branch_models))

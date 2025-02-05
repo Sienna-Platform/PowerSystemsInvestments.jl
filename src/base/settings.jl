@@ -2,7 +2,6 @@ struct Settings
     horizon::Base.RefValue{Dates.Millisecond}
     resolution::Base.RefValue{Dates.Millisecond}
     time_series_cache_size::Int
-    warm_start::Base.RefValue{Bool}
     initial_time::Base.RefValue{Dates.DateTime}
     optimizer::Union{Nothing, MOI.OptimizerWithAttributes}
     direct_mode_optimizer::Bool
@@ -20,7 +19,6 @@ function Settings(
     portfolio;
     initial_time::Dates.DateTime=UNSET_INI_TIME,
     time_series_cache_size::Int=IS.TIME_SERIES_CACHE_SIZE_BYTES,
-    warm_start::Bool=true,
     horizon::Dates.Period=UNSET_HORIZON,
     resolution::Dates.Period=UNSET_RESOLUTION,
     optimizer=nothing,
@@ -53,7 +51,6 @@ function Settings(
         Ref(IS.time_period_conversion(horizon)),
         Ref(IS.time_period_conversion(resolution)),
         time_series_cache_size,
-        Ref(warm_start),
         Ref(initial_time),
         optimizer_,
         direct_mode_optimizer,
@@ -131,7 +128,6 @@ get_export_pwl_vars(settings::Settings) = settings.export_pwl_vars
 get_store_variable_names(settings::Settings) = settings.store_variable_names
 get_check_numerical_bounds(settings::Settings) = settings.check_numerical_bounds
 get_ext(settings::Settings) = settings.ext
-get_warm_start(settings::Settings) = settings.warm_start[]
 use_time_series_cache(settings::Settings) = settings.time_series_cache_size > 0
 
 function set_horizon!(settings::Settings, horizon::Dates.TimePeriod)
@@ -146,10 +142,5 @@ end
 
 function set_initial_time!(settings::Settings, initial_time::Dates.DateTime)
     settings.initial_time[] = initial_time
-    return
-end
-
-function set_warm_start!(settings::Settings, warm_start::Bool)
-    settings.warm_start[] = warm_start
     return
 end

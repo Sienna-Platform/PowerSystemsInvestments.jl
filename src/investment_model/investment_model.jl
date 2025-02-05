@@ -119,7 +119,7 @@ function get_timestamps(model::InvestmentModel)
 end
 
 # TODO: "Update once portfolio has base power or we decide what to do with it"
-get_problem_base_power(model::InvestmentModel) = 100.0 #PSIP.get_base_power(model.portfolio)
+get_problem_base_power(model::InvestmentModel) = 1.0
 get_settings(model::InvestmentModel) = get_optimization_container(model).settings
 get_optimizer_stats(model::InvestmentModel) =
     get_optimizer_stats(get_optimization_container(model))
@@ -134,7 +134,6 @@ get_output_dir(model::InvestmentModel) = IS.Optimization.get_output_dir(get_inte
 get_recorder_dir(model::InvestmentModel) = joinpath(get_output_dir(model), "recorder")
 
 get_variables(model::InvestmentModel) = get_variables(get_optimization_container(model))
-get_parameters(model::InvestmentModel) = get_parameters(get_optimization_container(model))
 get_duals(model::InvestmentModel) = get_duals(get_optimization_container(model))
 get_initial_conditions(model::InvestmentModel) =
     get_initial_conditions(get_optimization_container(model))
@@ -319,7 +318,7 @@ function write_model_expression_results!(
 end
 
 function init_model_store_params!(model::InvestmentModel)
-    base_power = 100.0
+    base_power = 1.0 # Investment Models should default to Natural Units
     port_uuid = IS.make_uuid()
 
     store_params = ModelStoreParams(
@@ -518,7 +517,6 @@ function set_output_dir!(model::InvestmentModel, path::AbstractString)
 end
 
 read_dual(model::InvestmentModel, key::ConstraintKey) = _read_results(model, key)
-read_parameter(model::InvestmentModel, key::ParameterKey) = _read_results(model, key)
 read_aux_variable(model::InvestmentModel, key::AuxVarKey) = _read_results(model, key)
 read_variable(model::InvestmentModel, key::VariableKey) = _read_results(model, key)
 read_expression(model::InvestmentModel, key::ExpressionKey) = _read_results(model, key)
@@ -554,9 +552,6 @@ list_aux_variable_names(x::InvestmentModel) = _list_names(x, STORE_CONTAINER_AUX
 list_variable_keys(x::InvestmentModel) =
     IS.Optimization.list_keys(get_store(x), STORE_CONTAINER_VARIABLES)
 list_variable_names(x::InvestmentModel) = _list_names(x, STORE_CONTAINER_VARIABLES)
-list_parameter_keys(x::InvestmentModel) =
-    IS.Optimization.list_keys(get_store(x), STORE_CONTAINER_PARAMETERS)
-list_parameter_names(x::InvestmentModel) = _list_names(x, STORE_CONTAINER_PARAMETERS)
 list_dual_keys(x::InvestmentModel) =
     IS.Optimization.list_keys(get_store(x), STORE_CONTAINER_DUALS)
 list_dual_names(x::InvestmentModel) = _list_names(x, STORE_CONTAINER_DUALS)

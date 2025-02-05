@@ -16,8 +16,7 @@ function OptimizationProblemResults(model::InvestmentModel)
         Dict(x => read_aux_variable(model, x) for x in list_aux_variable_keys(model))
     variable_values = Dict(x => read_variable(model, x) for x in list_variable_keys(model))
     dual_values = Dict(x => read_dual(model, x) for x in list_dual_keys(model))
-    parameter_values =
-        Dict(x => read_parameter(model, x) for x in list_parameter_keys(model))
+    parameter_values = Dict()
     expression_values =
         Dict(x => read_expression(model, x) for x in list_expression_keys(model))
 
