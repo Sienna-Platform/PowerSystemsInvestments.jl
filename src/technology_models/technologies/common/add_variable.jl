@@ -11,7 +11,6 @@ function add_variable!(
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
-    binary = false
     names = [PSIP.get_name(d) for d in devices]
     variable = add_variable_container!(
         container,
@@ -27,7 +26,6 @@ function add_variable!(
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = "$(T)_$(D)_{$(name), $(t)}",
-            binary = binary
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
         ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
@@ -52,7 +50,6 @@ function add_variable!(
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    binary = false
 
     names = [PSIP.get_name(d) for d in devices]
 
@@ -70,7 +67,6 @@ function add_variable!(
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = "$(T)_$(D)_{$(name), $(t)}",
-            binary = binary
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
         ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
@@ -95,10 +91,8 @@ function add_variable!(
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
-    binary = false
 
     names = [PSIP.get_name(d) for d in devices]
-
     variable = add_variable_container!(
         container,
         variable_type,
@@ -113,7 +107,6 @@ function add_variable!(
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = "$(T)_$(D)_{$(name), $(t)}",
-            binary = binary
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
         ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
@@ -138,8 +131,6 @@ function add_variable!(
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
-    binary = false
-
     names = [PSIP.get_name(d) for d in devices]
 
     variable = add_variable_container!(
@@ -156,7 +147,6 @@ function add_variable!(
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = "$(T)_$(D)_{$(name), $(t)}",
-            binary = binary
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
         ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
