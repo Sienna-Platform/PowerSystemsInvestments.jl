@@ -16,27 +16,6 @@ function add_variable_cost!(
     return
 end
 
-#=
-function add_proportional_cost!(
-    container::SingleOptimizationContainer,
-    ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
-    ::V,
-) where {T <: PSY.ThermalGen, U <: OnVariable, V <: AbstractCompactUnitCommitment}
-    multiplier = objective_function_multiplier(U(), V())
-    for d in devices
-        op_cost_data = PSY.get_operation_cost(d)
-        cost_term = proportional_cost(op_cost_data, U(), d, V())
-        iszero(cost_term) && continue
-        for t in get_time_steps(time_mapping)
-            exp = _add_proportional_term!(container, U(), d, cost_term * multiplier, t)
-            add_to_expression!(container, ProductionCostExpression, exp, d, t)
-        end
-    end
-    return
-end
-=#
-
 function _add_proportional_term!(
     container::SingleOptimizationContainer,
     ::T,
@@ -53,24 +32,10 @@ function _add_proportional_term!(
     return lin_cost
 end
 
-#=
-function _add_variable_cost_to_objective!(
-    container::SingleOptimizationContainer,
-    ::T,
-    technology::PSIP.Technology,
-    op_cost::PSY.ValueCurve,
-    ::U,
-) where {T <: VariableType, U <: AbstractTechnologyFormulation}
-    # Using value curves for now, so this is not needed (but might be later?)
-    #variable_cost_data = variable_cost(op_cost, T(), component, U())
-    _add_variable_cost_to_objective!(container, T(), component, variable_cost_data, U())
-    return
-end
-=#
-
-##################################
+########################################
 #### ActiveIn/OutPowerVariable Cost ####
-##################################
+########################################
+
 function _add_proportional_term!(
     container::SingleOptimizationContainer,
     ::T,
