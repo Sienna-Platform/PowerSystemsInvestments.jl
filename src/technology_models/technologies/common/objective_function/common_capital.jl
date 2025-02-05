@@ -128,9 +128,9 @@ function _add_proportional_term!(
     return lin_cost
 end
 
-##################################
+########################################
 ####### BuildEnergyCapacity Cost #######
-##################################
+########################################
 
 function add_capital_cost!(
     container::SingleOptimizationContainer,
@@ -150,9 +150,9 @@ function add_capital_cost!(
     return
 end
 
-##################################
+#######################################
 ####### BuildPowerCapacity Cost #######
-##################################
+#######################################
 
 function add_capital_cost!(
     container::SingleOptimizationContainer,
