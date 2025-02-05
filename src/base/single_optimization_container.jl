@@ -549,9 +549,9 @@ function _make_system_expressions!(
     time_steps = get_time_steps(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
-            _make_container_array(["SingleRegion"], time_steps),
+            _make_container_array([SINGLE_REGION], time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
-            _make_container_array(["SingleRegion"], time_steps),
+            _make_container_array([SINGLE_REGION], time_steps),
     )
     return
 end

@@ -220,7 +220,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         _add_to_jump_expression!(
-            expression["SingleRegion", t],
+            expression[SINGLE_REGION, t],
             variable[name, t],
             1.0, #get_variable_multiplier(U(), V, W()),
         )
@@ -288,7 +288,7 @@ function add_to_expression!(
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
                 _add_to_jump_expression!(
-                    expression["SingleRegion", t],
+                    expression[SINGLE_REGION, t],
                     installed_cap[name, time_step_inv],
                     1.0, #get_variable_multiplier(U(), V, W()),
                 )

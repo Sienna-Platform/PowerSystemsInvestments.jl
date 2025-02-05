@@ -55,7 +55,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression["SingleRegion", t], -1.0 * ts_data[ix])
+                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix])
             end
         end
     end
@@ -137,7 +137,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression["SingleRegion", t], -1.0 * ts_data[ix])
+                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix])
             end
         end
     end

@@ -9,7 +9,7 @@ function add_constraints!(
     constraint = add_constraints_container!(container, T(), U, time_steps)
     for t in time_steps
         constraint[t] =
-            JuMP.@constraint(get_jump_model(container), expressions["SingleRegion", t] == 0)
+            JuMP.@constraint(get_jump_model(container), expressions[SINGLE_REGION, t] == 0)
     end
 
     return
@@ -26,7 +26,7 @@ function add_constraints!(
     constraint = add_constraints_container!(container, T(), U, time_steps)
     for t in time_steps
         constraint[t] =
-            JuMP.@constraint(get_jump_model(container), expressions["SingleRegion", t] >= 0)
+            JuMP.@constraint(get_jump_model(container), expressions[SINGLE_REGION, t] >= 0)
     end
 
     return

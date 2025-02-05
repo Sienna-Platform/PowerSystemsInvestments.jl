@@ -303,7 +303,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         #bus_no = PNM.get_mapped_bus_number(radial_network_reduction, PSY.get_bus(d))
         _add_to_jump_expression!(
-            expression["SingleRegion", t],
+            expression[SINGLE_REGION, t],
             variable[name, t],
             1.0, #get_variable_multiplier(U(), V, W()),
         )
@@ -339,7 +339,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         #bus_no = PNM.get_mapped_bus_number(radial_network_reduction, PSY.get_bus(d))
         _add_to_jump_expression!(
-            expression["SingleRegion", t],
+            expression[SINGLE_REGION, t],
             variable[name, t],
             -1.0, #get_variable_multiplier(U(), V, W()),
         )
@@ -449,7 +449,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         #bus_no = PNM.get_mapped_bus_number(radial_network_reduction, PSY.get_bus(d))
         _add_to_jump_expression!(
-            expression["SingleRegion", t],
+            expression[SINGLE_REGION, t],
             variable[name, t],
             1.0, #get_variable_multiplier(U(), V, W()),
         )
@@ -485,7 +485,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         #bus_no = PNM.get_mapped_bus_number(radial_network_reduction, PSY.get_bus(d))
         _add_to_jump_expression!(
-            expression["SingleRegion", t],
+            expression[SINGLE_REGION, t],
             variable[name, t],
             -1.0, #get_variable_multiplier(U(), V, W()),
         )
