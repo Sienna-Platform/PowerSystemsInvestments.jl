@@ -1,13 +1,6 @@
 """
 Default implementation to add technology cost variables to VariableOMCost
 """
-#add_to_expression!(
-#    container,
-#    VariableOMCost,
-#    linear_cost,
-#    component,
-#    time_period,
-#)
 function add_to_expression!(
     container::SingleOptimizationContainer,
     ::Type{S},
