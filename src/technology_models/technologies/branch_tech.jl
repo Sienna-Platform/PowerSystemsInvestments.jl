@@ -105,11 +105,7 @@ function add_to_expression!(
         start_region = PSIP.get_start_region(d)
         end_region = PSIP.get_end_region(d)
         losses = PSIP.get_line_loss(d)
-        _add_to_jump_expression!(
-            expression[start_region, t],
-            variable[name, t],
-            -1.0,
-        )
+        _add_to_jump_expression!(expression[start_region, t], variable[name, t], -1.0)
         _add_to_jump_expression!(
             expression[end_region, t],
             variable[name, t],

@@ -127,11 +127,7 @@ get_constraints(container::SingleOptimizationContainer) = container.constraints
 function is_milp(container::SingleOptimizationContainer)::Bool
     !supports_milp(container) && return false
     if !isempty(
-        JuMP.all_constraints(
-            get_jump_model(container),
-            JuMP.VariableRef,
-            JuMP.MOI.ZeroOne,
-        ),
+        JuMP.all_constraints(get_jump_model(container), JuMP.VariableRef, JuMP.MOI.ZeroOne),
     )
         return true
     end

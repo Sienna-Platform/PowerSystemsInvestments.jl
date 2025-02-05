@@ -127,7 +127,8 @@ get_optimizer_stats(model::InvestmentModel) =
 get_status(model::InvestmentModel) = IS.Optimization.get_status(get_internal(model))
 get_portfolio(model::InvestmentModel) = model.portfolio
 get_template(model::InvestmentModel) = model.template
-get_time_stamps(model::InvestmentModel) = get_time_stamps(model.internal.container.time_mapping)
+get_time_stamps(model::InvestmentModel) =
+    get_time_stamps(model.internal.container.time_mapping)
 
 get_store_params(model::InvestmentModel) =
     IS.Optimization.get_store_params(get_internal(model))
