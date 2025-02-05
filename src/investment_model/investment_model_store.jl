@@ -43,7 +43,6 @@ function initialize_storage!(
     base_timestamp = get_base_date(time_mapping)
     op_time_steps_count = get_total_operation_period_count(time_mapping)
     cap_time_steps_count = get_total_investment_period_count(time_mapping)
-    #fes_time_steps_count = get_total_investment_period_count(time_mapping)
     for type in STORE_CONTAINERS
         field_containers = getfield(container, type)
         results_container = getfield(store, type)

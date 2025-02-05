@@ -9,8 +9,7 @@ function OptimizationProblemResults(model::InvestmentModel)
         error("Model Solved as part of a Simulation.")
     end
 
-    # TODO: Look at how timesteps are extracted from the model
-    timestamps = get_time_stamps(model.internal.container.time_mapping)
+    timestamps = get_time_stamps(model)
     optimizer_stats = IS.Optimization.to_dataframe(get_optimizer_stats(model))
     aux_variable_values =
         Dict(x => read_aux_variable(model, x) for x in list_aux_variable_keys(model))
