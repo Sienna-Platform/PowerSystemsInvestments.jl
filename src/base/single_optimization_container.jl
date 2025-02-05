@@ -144,17 +144,6 @@ function supports_milp(container::SingleOptimizationContainer)
     return supports_milp(jump_model)
 end
 
-function _validate_warm_start_support(JuMPmodel::JuMP.Model, warm_start_enabled::Bool)
-    !warm_start_enabled && return warm_start_enabled
-    solver_supports_warm_start =
-        MOI.supports(JuMP.backend(JuMPmodel), MOI.VariablePrimalStart(), MOI.VariableIndex)
-    if !solver_supports_warm_start
-        solver_name = JuMP.solver_name(JuMPmodel)
-        @warn("$(solver_name) does not support warm start")
-    end
-    return solver_supports_warm_start
-end
-
 function _finalize_jump_model!(container::SingleOptimizationContainer, settings::Settings)
     @debug "Instantiating the JuMP model" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
 

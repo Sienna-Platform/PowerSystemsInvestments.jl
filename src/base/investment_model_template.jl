@@ -5,8 +5,8 @@ mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
     operation_model::OperationCostModel
     feasibility_model::FeasibilityModel
     transport_model::TransportModel{<:AbstractTransportAggregation}
-    technology_models::Dict # Type to be refined later
-    branch_models::Dict # rename?
+    technology_models::Dict # TODO: define strict Type for this
+    branch_models::Dict # TODO: Decide name for branches: path? corridors? We are using transport for network
 
     function InvestmentModelTemplate(
         capital_model::CapitalCostModel,
