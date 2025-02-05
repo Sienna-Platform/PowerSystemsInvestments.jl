@@ -12,7 +12,7 @@ struct OperationalRepresentativeDays <: OperationCostModel
 end
 
 struct ClusteredRepresentativeDays <: OperationCostModel
-    min_consequetive_days::Int
-    clutering_parameter::Int
+    min_consecutive_days::Int
+    clustering_parameter::Int
     storage_time_aggregation::Int
 end
