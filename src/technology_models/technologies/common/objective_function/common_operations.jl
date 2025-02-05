@@ -25,7 +25,6 @@ function _add_proportional_term!(
     tech_model::String,
 ) where {T <: ActivePowerVariable, U <: PSIP.Technology}
     technology_name = PSIP.get_name(technology)
-    #@debug "Linear Variable Cost" _group = LOG_GROUP_COST_FUNCTIONS component_name
     variable = get_variable(container, T(), U, tech_model)[technology_name, time_period]
     lin_cost = variable * linear_term
     add_to_objective_operations_expression!(container, lin_cost)
@@ -45,7 +44,6 @@ function _add_proportional_term!(
     tech_model::String,
 ) where {T <: ActiveInPowerVariable, U <: PSIP.Technology}
     technology_name = PSIP.get_name(technology)
-    #@debug "Linear Variable Cost" _group = LOG_GROUP_COST_FUNCTIONS component_name
     variable = get_variable(container, T(), U, tech_model)[technology_name, time_period]
     lin_cost = variable * linear_term
     add_to_objective_operations_expression!(container, lin_cost)
@@ -61,7 +59,6 @@ function _add_proportional_term!(
     tech_model::String,
 ) where {T <: ActiveOutPowerVariable, U <: PSIP.Technology}
     technology_name = PSIP.get_name(technology)
-    #@debug "Linear Variable Cost" _group = LOG_GROUP_COST_FUNCTIONS component_name
     variable = get_variable(container, T(), U, tech_model)[technology_name, time_period]
     lin_cost = variable * linear_term
     add_to_objective_operations_expression!(container, lin_cost)
