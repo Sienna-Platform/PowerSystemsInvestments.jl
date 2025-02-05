@@ -82,6 +82,7 @@ function _add_cost_to_objective!(
     cost_curve = PSY.get_variable(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
+    # TODO: multiplier
     multiplier = 1.0 #objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
@@ -106,6 +107,7 @@ function _add_cost_to_objective!(
     cost_curve = PSY.get_charge_variable_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
+    # TODO: multiplier
     multiplier = 1.0 #objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
@@ -223,14 +225,11 @@ function _add_linearcurve_cost!(
     proportional_term::Float64,
     tech_model::String,
 ) where {T <: InvestmentExpressionType}
-    financials = PSIP.get_financial_data(technology)
     time_mapping = get_time_mapping(container)
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
-    interest_rate = PSIP.get_interest_rate(financials)
     tech_base_year = PSIP.get_technology_base_year(technology)
-    #lifetime = PSIP.get_capital_recovery_period(technology)
 
     discount_factor = 1 / (1 + discount_rate)
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
@@ -273,6 +272,7 @@ function _add_linearcurve_cost!(
     time_mapping = get_time_mapping(container)
     operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
+
     discount_factor = 1.0 / (1.0 + discount_rate)
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
@@ -298,7 +298,6 @@ function _add_linearcurve_cost!(
 end
 
 # Add proportional terms to objective function and expression
-
 function _add_linearcurve_variable_term_to_model!(
     container::SingleOptimizationContainer,
     ::T,
