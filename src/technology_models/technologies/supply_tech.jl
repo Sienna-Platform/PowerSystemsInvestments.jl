@@ -45,7 +45,7 @@ function add_variable!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: IntegerInvestment,
 } where {D <: PSIP.SupplyTechnology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
 
@@ -90,7 +90,7 @@ function add_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: ContinuousInvestment,
 } where {D <: PSIP.SupplyTechnology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
 
@@ -128,7 +128,7 @@ function add_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: IntegerInvestment,
 } where {D <: PSIP.SupplyTechnology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
 
@@ -194,7 +194,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
 
@@ -224,7 +224,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
 
@@ -255,7 +255,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
 
     installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
@@ -294,7 +294,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
-    # @assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
 
     installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)

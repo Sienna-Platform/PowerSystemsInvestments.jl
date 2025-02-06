@@ -34,7 +34,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -74,7 +74,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -114,7 +114,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -154,7 +154,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)

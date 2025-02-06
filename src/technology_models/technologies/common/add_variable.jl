@@ -8,7 +8,7 @@ function add_variable!(
     T <: InvestmentVariableType,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
 } where {D <: PSIP.Technology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     names = [PSIP.get_name(d) for d in devices]
@@ -47,7 +47,7 @@ function add_variable!(
     T <: OperationsVariableType,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
 } where {D <: PSIP.Technology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
 
@@ -88,7 +88,7 @@ function add_variable!(
     T <: OperationsVariableType,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
 } where {D <: PSIP.Technology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
 
@@ -128,7 +128,7 @@ function add_variable!(
     T <: FeasibilityVariableType,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
 } where {D <: PSIP.Technology}
-    #@assert !isempty(devices)
+    @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
     names = [PSIP.get_name(d) for d in devices]
