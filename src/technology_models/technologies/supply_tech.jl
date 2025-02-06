@@ -14,6 +14,7 @@ get_variable_multiplier(::ActivePowerVariable, ::Type{PSIP.SupplyTechnology{PSY.
 #! format: on
 
 function get_default_time_series_names(::Type{U}) where {U <: PSIP.SupplyTechnology}
+    # TODO: We need to discuss about an API for timeseries names for users
     return "ops_variable_cap_factor"
 end
 
@@ -47,7 +48,6 @@ function add_variable!(
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
-    binary = false
 
     names = [PSIP.get_name(d) for d in devices]
     check_duplicate_names(names, container, variable_type, D)
@@ -93,7 +93,6 @@ function add_expression!(
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
-    binary = false
 
     var = get_variable(container, BuildCapacity(), D, tech_model)
 
@@ -112,13 +111,7 @@ function add_expression!(
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-            #binary = binary
         )
-        #ub = get_variable_upper_bound(expression_type, d, formulation)
-        #ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
-
-        #lb = get_variable_lower_bound(expression_type, d, formulation)
-        #lb !== nothing && JuMP.set_lower_bound(variable[name, t], lb)
     end
 
     return
@@ -138,7 +131,6 @@ function add_expression!(
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
-    binary = false
 
     var = get_variable(container, BuildCapacity(), D, tech_model)
 
@@ -158,13 +150,7 @@ function add_expression!(
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] * unit_size for t_p in time_steps if t_p <= t),
-            #binary = binary
         )
-        #ub = get_variable_upper_bound(expression_type, d, formulation)
-        #ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
-
-        #lb = get_variable_lower_bound(expression_type, d, formulation)
-        #lb !== nothing && JuMP.set_lower_bound(variable[name, t], lb)
     end
 
     return
@@ -183,11 +169,8 @@ function add_expression!(
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    binary = false
 
-    var = get_variable(container, BuildCapacity(), D, tech_model)
-
-    expression = add_expression_container!(
+    add_expression_container!(
         container,
         expression_type,
         D,
@@ -211,7 +194,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
-    @assert !isempty(devices)
+    #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
 
@@ -222,7 +205,7 @@ function add_to_expression!(
         _add_to_jump_expression!(
             expression[SINGLE_REGION, t],
             variable[name, t],
-            1.0, #get_variable_multiplier(U(), V, W()),
+            1.0, #TODO: get_variable_multiplier methods
         )
     end
 
@@ -241,7 +224,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
-    @assert !isempty(devices)
+    #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
 
@@ -253,7 +236,7 @@ function add_to_expression!(
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
-            1.0, #get_variable_multiplier(U(), V, W()),
+            1.0, #TODO: get_variable_multiplier methods
         )
     end
 
@@ -272,7 +255,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
-    @assert !isempty(devices)
+    #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
 
     installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
@@ -290,7 +273,7 @@ function add_to_expression!(
                 _add_to_jump_expression!(
                     expression[SINGLE_REGION, t],
                     installed_cap[name, time_step_inv],
-                    1.0, #get_variable_multiplier(U(), V, W()),
+                    1.0, #TODO: get_variable_multiplier methods
                 )
             end
         end
@@ -311,7 +294,7 @@ function add_to_expression!(
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
-    @assert !isempty(devices)
+    # @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
 
     installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
@@ -330,7 +313,7 @@ function add_to_expression!(
                 _add_to_jump_expression!(
                     expression[region, t],
                     installed_cap[name, time_step_inv],
-                    1.0, #get_variable_multiplier(U(), V, W()),
+                    1.0, #TODO: get_variable_multiplier methods
                 )
             end
         end
@@ -340,6 +323,7 @@ function add_to_expression!(
 end
 ################### Constraints ##################
 
+# Limits for renewables #
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -396,8 +380,7 @@ function add_constraints!(
     return
 end
 
-#Essentially the same constraint as above, just removed the variable capacity factor since not needed
-#for thermal gen
+# Limits for thermals #
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
