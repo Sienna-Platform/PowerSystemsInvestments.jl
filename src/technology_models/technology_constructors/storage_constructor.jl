@@ -270,24 +270,6 @@ function construct_technologies!(
         devices,
         tech_model,
     )
-    # if PSI.get_attribute(model, "energy_target")
-    add_constraints!(
-        container,
-        StateofChargeTargetConstraint(),
-        EnergyVariable(),
-        devices,
-        tech_model,
-    )
-    # end
-
-    #State of charge constraint
-    add_constraints!(
-        container,
-        InitialStateOfChargeConstraint(),
-        EnergyVariable(),
-        devices,
-        tech_model,
-    )
 
     return
 end
