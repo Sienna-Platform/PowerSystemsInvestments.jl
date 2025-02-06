@@ -262,7 +262,7 @@ function add_to_expression!(
     S <: BasicDispatch,
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
-    V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable}, 
+    V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: SingleRegionBalanceModel,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
@@ -296,7 +296,7 @@ function add_to_expression!(
     S <: BasicDispatch,
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
-    V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable}, 
+    V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: MultiRegionBalanceModel,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
@@ -395,7 +395,10 @@ function add_constraints!(
     devices::U,
     tech_model::String,
 ) where {
-    T <: Union{OutputActivePowerVariableLimitsConstraint, InputActivePowerVariableLimitsConstraint},
+    T <: Union{
+        OutputActivePowerVariableLimitsConstraint,
+        InputActivePowerVariableLimitsConstraint,
+    },
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
 } where {D <: PSIP.StorageTechnology}
@@ -513,16 +516,19 @@ function add_constraints!(
         init_storage = 0.0
         # TODO: Figure out how to store representative day time step duration
         fraction_of_hour = 1.0
-        if t == 1            
+        if t == 1
             con_soc[name, t] = JuMP.@constraint(
                 get_jump_model(container),
-                storage_state[name, t] == init_storage + (efficiency_in * charge[name, t] - discharge[name, t] / efficiency_out) * fraction_of_hour
+                storage_state[name, t] ==
+                init_storage +
+                (efficiency_in * charge[name, t] - discharge[name, t] / efficiency_out) * fraction_of_hour
             )
         else
             con_soc[name, t] = JuMP.@constraint(
                 get_jump_model(container),
                 storage_state[name, t] ==
-                storage_state[name, t - 1] + (efficiency_in * charge[name, t] - discharge[name, t] / efficiency_out) * fraction_of_hour
+                storage_state[name, t - 1] +
+                (efficiency_in * charge[name, t] - discharge[name, t] / efficiency_out) * fraction_of_hour
             )
         end
     end
