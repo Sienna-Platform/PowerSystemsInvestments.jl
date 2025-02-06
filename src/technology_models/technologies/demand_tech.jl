@@ -1,4 +1,5 @@
 function get_default_time_series_names(::Type{U}) where {U <: PSIP.DemandRequirement}
+    # TODO: We need to discuss about an API for timeseries names for users
     return "ops_peak_load"
 end
 
@@ -28,7 +29,6 @@ function add_to_expression!(
     devices::U,
     formulation::BasicDispatch,
     transport_model::TransportModel{V},
-    #tech_model::String,
 ) where {
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
@@ -69,7 +69,6 @@ function add_to_expression!(
     devices::U,
     formulation::BasicDispatch,
     transport_model::TransportModel{V},
-    #tech_model::String,
 ) where {
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
@@ -110,7 +109,6 @@ function add_to_expression!(
     devices::U,
     formulation::BasicDispatchFeasibility,
     transport_model::TransportModel{V},
-    #tech_model::String,
 ) where {
     T <: FeasibilitySurplus,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
@@ -151,7 +149,6 @@ function add_to_expression!(
     devices::U,
     formulation::BasicDispatchFeasibility,
     transport_model::TransportModel{V},
-    #tech_model::String,
 ) where {
     T <: FeasibilitySurplus,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
