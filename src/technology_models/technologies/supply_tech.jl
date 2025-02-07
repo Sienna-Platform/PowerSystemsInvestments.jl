@@ -9,7 +9,8 @@ get_variable_upper_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::Oper
 get_variable_lower_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::BasicDispatchFeasibility) = 0.0
 get_variable_upper_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::BasicDispatchFeasibility) = nothing
 
-get_variable_multiplier(::ActivePowerVariable, ::Type{PSIP.SupplyTechnology{PSY.ThermalStandard}}) = 1.0
+get_variable_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
+get_expression_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 
 #! format: on
 
@@ -186,10 +187,11 @@ function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
-    formulation::BasicDispatch,
+    formulation::S,
     tech_model::String,
     transport_model::TransportModel{V},
 ) where {
+    S <: BasicDispatch,
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: SingleRegionBalanceModel,
@@ -198,14 +200,15 @@ function add_to_expression!(
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
 
-    variable = get_variable(container, ActivePowerVariable(), D, tech_model)
+    W = ActivePowerVariable
+    variable = get_variable(container, W(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         _add_to_jump_expression!(
             expression[SINGLE_REGION, t],
             variable[name, t],
-            1.0, #TODO: get_variable_multiplier methods
+            get_variable_multiplier(W(), D, S()),
         )
     end
 
@@ -216,10 +219,11 @@ function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
-    formulation::BasicDispatch,
+    formulation::S,
     tech_model::String,
     transport_model::TransportModel{V},
 ) where {
+    S <: BasicDispatch,
     T <: EnergyBalance,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: MultiRegionBalanceModel,
@@ -228,7 +232,8 @@ function add_to_expression!(
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
 
-    variable = get_variable(container, ActivePowerVariable(), D, tech_model)
+    W = ActivePowerVariable
+    variable = get_variable(container, W(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
@@ -236,7 +241,7 @@ function add_to_expression!(
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
-            1.0, #TODO: get_variable_multiplier methods
+            get_variable_multiplier(W(), D, S()),
         )
     end
 
@@ -247,10 +252,11 @@ function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
-    formulation::BasicDispatchFeasibility,
+    formulation::S,
     tech_model::String,
     transport_model::TransportModel{V},
 ) where {
+    S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: SingleRegionBalanceModel,
@@ -258,7 +264,8 @@ function add_to_expression!(
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
 
-    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
+    W = CumulativeCapacity
+    installed_cap = get_expression(container, W(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
 
     feasibility_indexes = get_feasibility_indexes(time_mapping)
@@ -273,7 +280,7 @@ function add_to_expression!(
                 _add_to_jump_expression!(
                     expression[SINGLE_REGION, t],
                     installed_cap[name, time_step_inv],
-                    1.0, #TODO: get_variable_multiplier methods
+                    get_expression_multiplier(W(), D, S()),
                 )
             end
         end
@@ -286,10 +293,11 @@ function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
-    formulation::BasicDispatchFeasibility,
+    formulation::S,
     tech_model::String,
     transport_model::TransportModel{V},
 ) where {
+    S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: MultiRegionBalanceModel,
@@ -297,7 +305,8 @@ function add_to_expression!(
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
 
-    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
+    W = CumulativeCapacity
+    installed_cap = get_expression(container, W(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
 
     feasibility_indexes = get_feasibility_indexes(time_mapping)
@@ -313,7 +322,7 @@ function add_to_expression!(
                 _add_to_jump_expression!(
                     expression[region, t],
                     installed_cap[name, time_step_inv],
-                    1.0, #TODO: get_variable_multiplier methods
+                    get_expression_multiplier(W(), D, S()),
                 )
             end
         end
@@ -472,9 +481,9 @@ end
 function objective_function!(
     container::SingleOptimizationContainer,
     devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
-    formulation::BasicDispatch, #Type{<:PM.AbstractPowerModel},
+    formulation::BasicDispatch,
     tech_model::String,
-) where {T <: PSIP.SupplyTechnology}#, U <: ActivePowerVariable}
+) where {T <: PSIP.SupplyTechnology}
     add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model)
     return
 end
@@ -482,10 +491,10 @@ end
 function objective_function!(
     container::SingleOptimizationContainer,
     devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
-    formulation::InvestmentTechnologyFormulation, #Type{<:PM.AbstractPowerModel},
+    formulation::InvestmentTechnologyFormulation,
     tech_model::String,
-) where {T <: PSIP.SupplyTechnology}#, U <: BuildCapacity}
-    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model) #U()
+) where {T <: PSIP.SupplyTechnology}
+    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     add_fixed_om_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     return
 end
@@ -494,8 +503,9 @@ function objective_function!(
     devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
     formulation::InvestmentTechnologyFormulation,
     tech_model::String,
-) where {T <: PSIP.SupplyTechnology{PSIP.RenewableDispatch}}#, U <: BuildCapacity}
-    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model) #U()
+) where {T <: PSIP.SupplyTechnology{PSIP.RenewableDispatch}}
+    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     #TODO: Add fixed_om costs for renewables (RenewableGenerationCost does not have fixed cost component?)
+    # add_fixed_om_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     return
 end
