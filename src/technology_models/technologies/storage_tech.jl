@@ -357,7 +357,7 @@ function add_to_expression!(
     expression_type::T,
     var::V,
     devices::U,
-    formulation::BasicDispatchFeasibility,
+    formulation::S,
     tech_model::String,
     transport_model::TransportModel{W},
 ) where {
