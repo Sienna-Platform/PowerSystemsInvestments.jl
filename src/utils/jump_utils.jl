@@ -229,39 +229,6 @@ function _calc_dimensions(
     return Dict("columns" => columns, "dims" => dims)
 end
 
-#=
-"""
-Run this function only when getting detailed solver stats
-"""
-function _summary_to_dict!(optimizer_stats::OptimizerStats, jump_model::JuMP.Model)
-    # JuMP.solution_summary uses a lot of try-catch so it has a performance hit and should be opt-in
-    jump_summary = JuMP.solution_summary(jump_model; verbose = false)
-    # Note we don't grab all the fields from the summary because not all can be encoded as Float for HDF store
-    fields = [
-        :has_values, # Bool
-        :has_duals, # Bool
-        # Candidate solution
-        :objective_bound, # Union{Missing,Float64}
-        :dual_objective_value, # Union{Missing,Float64}
-        # Work counters
-        :relative_gap, # Union{Missing,Int}
-        :barrier_iterations, # Union{Missing,Int}
-        :simplex_iterations, # Union{Missing,Int}
-        :node_count, # Union{Missing,Int}
-    ]
-
-    for field in fields
-        field_value = getfield(jump_summary, field)
-        if ismissing(field_value)
-            setfield!(optimizer_stats, field, missing)
-        else
-            setfield!(optimizer_stats, field, field_value)
-        end
-    end
-    return
-end
-=#
-
 function supports_milp(jump_model::JuMP.Model)
     optimizer_backend = JuMP.backend(jump_model)
     return MOI.supports_constraint(optimizer_backend, MOI.VariableIndex, MOI.ZeroOne)
@@ -315,39 +282,3 @@ function serialize_jump_optimization_model(jump_model::JuMP.Model, save_path::St
     MOI.write_to_file(MOF_model, save_path)
     return
 end
-#=
-# check_conflict_status functions can't be tested on CI because free solvers don't support IIS
-function check_conflict_status(
-    jump_model::JuMP.Model,
-    constraint_container::DenseAxisArray{JuMP.ConstraintRef},
-)
-    conflict_indices = Vector()
-    dims = axes(constraint_container)
-    for index in Iterators.product(dims...)
-        if isassigned(constraint_container, index...) &&
-           MOI.get(
-            jump_model,
-            MOI.ConstraintConflictStatus(),
-            constraint_container[index...],
-        ) != MOI.NOT_IN_CONFLICT
-            push!(conflict_indices, index)
-        end
-    end
-    return conflict_indices
-end
-
-function check_conflict_status(
-    jump_model::JuMP.Model,
-    constraint_container::SparseAxisArray{JuMP.ConstraintRef},
-)
-    conflict_indices = Vector()
-    for (index, constraint) in constraint_container
-        if isassigned(constraint_container, index...) &&
-           MOI.get(jump_model, MOI.ConstraintConflictStatus(), constraint) !=
-           MOI.NOT_IN_CONFLICT
-            push!(conflict_indices, index)
-        end
-    end
-    return conflict_indices
-end
-=#

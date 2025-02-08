@@ -7,14 +7,7 @@ function get_available_technologies(
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,
 }
-    #subsystem = get_subsystem(model)
-    #filter_function = get_attribute(model, "filter_function")
-    return PSIP.get_technologies(
-        PSIP.get_available,
-        D,
-        port;
-        #subsystem_name = subsystem,
-    )
+    return PSIP.get_technologies(PSIP.get_available, D, port;)
 end
 
 make_portfolio_filename(port::PSIP.Portfolio) = make_portfolio_filename(IS.get_uuid(port))
