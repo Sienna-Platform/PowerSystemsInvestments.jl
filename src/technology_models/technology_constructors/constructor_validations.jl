@@ -11,6 +11,7 @@ function validate_available_technologies(
     if isempty(technologies)
         return false
     end
+    # TODO: Implement check of technologies
     #PSY.check_components(system, devices)
     return true
 end
