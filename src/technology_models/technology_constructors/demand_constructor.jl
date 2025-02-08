@@ -12,11 +12,7 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-
-    #TODO: Port get_available_component functions from PSY
-    #devices = PSIP.get_technologies(T, p)
-    devices = [PSIP.get_technology(T, p, n) for n in names]
-
+    # Do Nothing. No Load Investment allowed.
     return
 end
 
@@ -35,8 +31,6 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-
-    #TODO: Port get_available_component functions from PSY
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # EnergyBalance
@@ -59,9 +53,6 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-
-    #TODO: Port get_available_component functions from PSY
-    #devices = PSIP.get_technologies(T, p)
     devices = [PSIP.get_technology(T, p, n) for n in names]
     add_to_expression!(container, FeasibilitySurplus(), devices, D(), transport_model)
     return
@@ -98,10 +89,7 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-
-    #power balance
-    #add_constraints!(container, SupplyDemandBalance, T)
-
+    # Do nothing for loads
     return
 end
 
@@ -119,5 +107,6 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
+    # Do nothing for loads
     return
 end
