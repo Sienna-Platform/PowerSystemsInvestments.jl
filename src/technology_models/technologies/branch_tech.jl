@@ -3,10 +3,8 @@ get_variable_upper_bound(::BuildCapacity, d::GenericTransportTechnology, ::Inves
 get_variable_lower_bound(::BuildCapacity, d::GenericTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::GenericTransportTechnology, ::ContinuousInvestment) = false
 
-get_variable_lower_bound(::ActivePowerVariable, d::GenericTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
-get_variable_upper_bound(::ActivePowerVariable, d::GenericTransportTechnology, ::OperationsTechnologyFormulation) = nothing
-
-get_variable_multiplier(::ActivePowerVariable, ::Type{GenericTransportTechnology}) = 1.0
+get_variable_lower_bound(::FlowActivePowerVariable, d::GenericTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
+get_variable_upper_bound(::FlowActivePowerVariable, d::GenericTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 
 #! format: on
 
@@ -97,7 +95,7 @@ function add_to_expression!(
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
 
-    variable = get_variable(container, ActivePowerVariable(), D, tech_model)
+    variable = get_variable(container, FlowActivePowerVariable(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
     # Assuming that energy travels from start to end, so if dispatch of Branch is positive, it is subtracted from start_region
     for d in devices, t in time_steps
@@ -125,7 +123,7 @@ function add_constraints!(
 ) where {
     T <: ActivePowerLimitsConstraint,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
-    V <: ActivePowerVariable,
+    V <: FlowActivePowerVariable,
 } where {D <: GenericTransportTechnology}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)

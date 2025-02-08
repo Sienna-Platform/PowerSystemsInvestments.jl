@@ -12,11 +12,7 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-
-    #TODO: Port get_available_component functions from PSY
-    #TODO: Review when we start working with larger models
     devices = [PSIP.get_technology(T, p, n) for n in names]
-    #PSIP.get_technologies(T, p)
 
     #convert technology model to string for container metadata
     tech_model = IS.strip_module_name(B)
@@ -26,7 +22,6 @@ function construct_technologies!(
 
     # CumulativeCapacity
     add_expression!(container, CumulativeCapacity(), devices, B(), tech_model)
-
     return
 end
 
@@ -44,18 +39,13 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-
-    #TODO: Port get_available_component functions from PSY
-    #devices = PSIP.get_technologies(T, p)
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
     tech_model = IS.strip_module_name(B)
 
-    #ActivePowerVariable
-    add_variable!(container, ActivePowerVariable(), devices, C(), tech_model)
+    add_variable!(container, FlowActivePowerVariable(), devices, C(), tech_model)
 
-    # EnergyBalance
     add_to_expression!(
         container,
         EnergyBalance(),
@@ -82,13 +72,10 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-
-    #TODO: Port get_available_component functions from PSY
     devices = [PSIP.get_technology(T, p, n) for n in names]
-
-    #convert technology model to string for container metadata
     tech_model = IS.strip_module_name(B)
 
+    # TODO: Feasibility Models
     return
 end
 
@@ -106,7 +93,6 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-    #devices = PSIP.get_technologies(T, p)
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -143,7 +129,6 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-    #devices = PSIP.get_technologies(T, p)
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -153,11 +138,10 @@ function construct_technologies!(
     add_constraints!(
         container,
         ActivePowerLimitsConstraint(),
-        ActivePowerVariable(),
+        FlowActivePowerVariable(),
         devices,
         tech_model,
     )
-
     return
 end
 
@@ -175,12 +159,11 @@ function construct_technologies!(
     C <: BasicDispatch,
     D <: FeasibilityTechnologyFormulation,
 }
-    #devices = PSIP.get_technologies(T, p)
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
-    #tech_model = IS.strip_module_name(typeof(technology_model))
     tech_model = IS.strip_module_name(B)
 
+    # TODO: Feasibility Models
     return
 end

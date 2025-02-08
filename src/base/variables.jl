@@ -43,6 +43,11 @@ energy stored in Storage technology at a timepoint
 """
 struct EnergyVariable <: OperationsVariableType end
 
+"""
+Struct to dispatch the creation of bidirectional Active Power Flow Variables
+"""
+struct FlowActivePowerVariable <: OperationsVariableType end
+
 is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
 is_operation_entry(::Type{<:OperationsVariableType}) = true
 is_operation_entry(::Type{<:InvestmentVariableType}) = false
