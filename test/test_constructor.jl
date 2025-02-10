@@ -293,24 +293,4 @@ end
     @test length(c["cheap_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
 
-    #passing same technology name with different model to constructor
-    # TODO: This tests is not failing but should fail!!!!!
-    #=
-    unit_thermal_model = PSIN.TechnologyModel(
-        PSIP.SupplyTechnology{PSY.ThermalStandard},
-        PSIN.IntegerInvestment,
-        PSIN.BasicDispatch,
-        PSIN.BasicDispatchFeasibility;
-    )
-
-    @test_throws ArgumentError PSIN.construct_technologies!(
-        container,
-        p_5bus,
-        ["cheap_thermal"],
-        PSIN.ArgumentConstructStage(),
-        capital,
-        unit_thermal_model,
-        transport_model,
-    )
-    =#
 end
