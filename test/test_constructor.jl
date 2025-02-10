@@ -292,5 +292,4 @@ end
           length(PSIN.get_investment_time_steps(container.time_mapping))
     @test length(c["cheap_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
-
 end
