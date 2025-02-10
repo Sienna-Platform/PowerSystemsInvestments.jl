@@ -118,7 +118,8 @@ function get_timestamps(model::InvestmentModel)
     return range(start_time; length=horizon_count, step=resolution)
 end
 
-# TODO: "Update once portfolio has base power or we decide what to do with it"
+# No Base Power for Portfolio models. Always in Natural Units.
+# TODO: Decide if we will remove base power
 get_problem_base_power(model::InvestmentModel) = 1.0
 get_settings(model::InvestmentModel) = get_optimization_container(model).settings
 get_optimizer_stats(model::InvestmentModel) =
@@ -381,7 +382,6 @@ function build!(
     disable_timer_outputs && TimerOutputs.disable_timer!(BUILD_PROBLEMS_TIMER)
     file_mode = "w"
 
-    # TODO: "remove recorders"
     logger = IS.configure_logging(get_internal(model), PROBLEM_LOG_FILENAME, file_mode)
     try
         Logging.with_logger(logger) do
@@ -463,7 +463,6 @@ function solve!(
                     end
                 end
                 TimerOutputs.@timeit RUN_OPERATION_MODEL_TIMER "Results processing" begin
-                    # TODO: This could be more complicated than it needs to be
                     results = OptimizationProblemResults(model)
                     serialize_results(results, get_output_dir(model))
                     export_problem_results && export_results(results)

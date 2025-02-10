@@ -1,3 +1,9 @@
+#! format: off
+
+objective_function_multiplier(::ISOPT.VariableType, ::AbstractTechnologyFormulation)=OBJECTIVE_FUNCTION_POSITIVE
+
+#! format: on
+
 ##################################
 #### ActivePowerVariable Cost ####
 ##################################

@@ -653,8 +653,6 @@ function build_model!(
 
     tech_templates = collect(keys(template.technology_models))
     # Order is required
-    # TODO: Remember to restore availability code here
-    # TODO: 
     for (i, name_list) in enumerate(tech_names)
         tech_model = tech_templates[i]
         @debug "Building Model for $(get_technology_type(tech_model)) with $(get_investment_formulation(tech_model)) investment formulation" _group =
