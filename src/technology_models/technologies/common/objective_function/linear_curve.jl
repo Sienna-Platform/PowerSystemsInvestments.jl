@@ -35,8 +35,7 @@ function _add_cost_to_objective!(
     cost_component = PSY.get_function_data(value_curve)
     proportional_term = PSY.get_proportional_term(cost_component)
     @debug "Cost is assumed to be in natural units: \$/MWh"
-    # TODO: multiplier
-    multiplier = 1.0 #objective_function_multiplier(T(), U())
+    multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
         T(),
@@ -58,7 +57,7 @@ function _add_cost_to_objective!(
     tech_model::String,
 ) where {T <: InvestmentVariableType, U <: AbstractTechnologyFormulation}
     proportional_term = PSY.get_fixed(om_cost)
-    multiplier = 1.0
+    multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
         T(),
@@ -82,8 +81,7 @@ function _add_cost_to_objective!(
     cost_curve = PSY.get_variable(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
-    # TODO: multiplier
-    multiplier = 1.0 #objective_function_multiplier(T(), U())
+    multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
         T(),
@@ -107,8 +105,7 @@ function _add_cost_to_objective!(
     cost_curve = PSY.get_charge_variable_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
-    # TODO: multiplier
-    multiplier = 1.0 #objective_function_multiplier(T(), U())
+    multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
         T(),
@@ -132,7 +129,7 @@ function _add_cost_to_objective!(
     cost_curve = PSY.get_discharge_variable_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
-    multiplier = 1.0 #objective_function_multiplier(T(), U())
+    multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
         T(),

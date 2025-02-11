@@ -46,6 +46,7 @@ export BuildPowerCapacity
 export ActiveInPowerVariable
 export ActiveOutPowerVariable
 export EnergyVariable
+export FlowActivePowerVariable
 
 ### Expressions ###
 export CumulativeCapacity
