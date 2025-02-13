@@ -44,6 +44,9 @@ function initialize_storage!(
     op_time_steps_count = get_total_operation_period_count(time_mapping)
     cap_time_steps_count = get_total_investment_period_count(time_mapping)
     for type in STORE_CONTAINERS
+        if type == :parameters
+            continue
+        end
         field_containers = getfield(container, type)
         results_container = getfield(store, type)
         for (key, field_container) in field_containers
