@@ -8,12 +8,22 @@ using Dates
 const PSIP = PowerSystemsInvestmentsPortfolios
 const IS = InfrastructureSystems
 
-function test_data()
+function test_2_zone_portfolio()
+    ########################
+    #### Financial Data ####
+    ########################
+
+    discount_rate = 0.07
+    inflation_rate = 0.05
+    interest_rate = 0.04
+    base_year = 2025
+    capital_recovery_period = 20 # years
+
     sys = build_system(PSITestSystems, "c_sys5_re")
     set_units_base_system!(sys, "NATURAL_UNITS")
 
     ###################
-    ### Zones ###
+    ###### Zones ######
     ###################
 
     z1 = Zone(name="Zone_1", id=1)
@@ -79,7 +89,7 @@ function test_data()
         base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.ST,
         capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
-        minimum_required_capacity=0.0,
+        min_capacity=0.0,
         id=1,
         available=true,
         name="cheap_thermal",
@@ -93,16 +103,22 @@ function test_data()
             start_up=0.0,
             shut_down=0.0,
         ),#LinearCurve(0.0),
-        maximum_capacity=1e8,
+        max_capacity=1e8,
         outage_factor=0.92,
         region=z1,
+        financial_data=TechnologyFinancialData(
+            name="cheap_thermal",
+            interest_rate=interest_rate,
+            capital_recovery_period=capital_recovery_period,
+            technology_base_year=base_year,
+        ),
     )
 
     t_th_mid = SupplyTechnology{ThermalStandard}(;
         base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.ST,
         capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
-        minimum_required_capacity=0.0,
+        min_capacity=0.0,
         id=1,
         available=true,
         name="mid_thermal",
@@ -116,16 +132,22 @@ function test_data()
             start_up=0.0,
             shut_down=0.0,
         ),#LinearCurve(0.0),
-        maximum_capacity=1e8,
+        max_capacity=1e8,
         outage_factor=0.92,
         region=z2,
+        financial_data=TechnologyFinancialData(
+            name="mid_thermal",
+            interest_rate=interest_rate,
+            capital_recovery_period=capital_recovery_period,
+            technology_base_year=base_year,
+        ),
     )
 
     t_th_exp = SupplyTechnology{ThermalStandard}(;
         base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.ST,
         capital_costs=LinearCurve(coal_new_capex * 1000.0),
-        minimum_required_capacity=0.0,
+        min_capacity=0.0,
         id=2,
         available=true,
         name="expensive_thermal",
@@ -139,9 +161,15 @@ function test_data()
             start_up=0.0,
             shut_down=0.0,
         ),
-        maximum_capacity=1e8,
+        max_capacity=1e8,
         outage_factor=0.95,
         region=z1,
+        financial_data=TechnologyFinancialData(
+            name="expensive_thermal",
+            interest_rate=interest_rate,
+            capital_recovery_period=capital_recovery_period,
+            technology_base_year=base_year,
+        ),
     )
 
     #####################
@@ -198,7 +226,7 @@ function test_data()
         base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.WT,
         capital_costs=LinearCurve(wind_capex * 1000.0), # to $/MW
-        minimum_required_capacity=0.0,
+        min_capacity=0.0,
         id=3,
         available=true,
         name="wind",
@@ -212,9 +240,15 @@ function test_data()
             start_up=0.0,
             shut_down=0.0,
         ),
-        maximum_capacity=1e8,
+        max_capacity=1e8,
         region=z2,
         outage_factor=0.92,
+        financial_data=TechnologyFinancialData(
+            name="wind",
+            interest_rate=interest_rate,
+            capital_recovery_period=capital_recovery_period,
+            technology_base_year=base_year,
+        ),
     )
 
     ########################
@@ -232,9 +266,15 @@ function test_data()
         available=true,
         capital_costs_power=LinearCurve(100000),
         capital_costs_energy=LinearCurve(100000),
-        om_costs_energy=StorageCost(fixed=0.0),
-        om_costs_power=StorageCost(fixed=0.0),
+        operations_costs_energy=StorageCost(fixed=0.0),
+        operations_costs_power=StorageCost(fixed=0.0),
         region=z2,
+        financial_data=TechnologyFinancialData(
+            name="test_storage",
+            interest_rate=interest_rate,
+            capital_recovery_period=capital_recovery_period,
+            technology_base_year=base_year,
+        ),
     )
 
     #####################
@@ -289,6 +329,7 @@ function test_data()
 
     line = ACTransportTechnology{ACBranch}(
         name="test_branch",
+        id=1,
         start_region=z1,
         end_region=z2,
         existing_line_capacity=100,
@@ -297,18 +338,27 @@ function test_data()
         capital_cost=LinearCurve(5000.0),
         available=true,
         power_systems_type="TransportTechnology",
-        network_id=1,
         base_power=1.0,
+        financial_data=TechnologyFinancialData(
+            name="test_branch",
+            interest_rate=interest_rate,
+            capital_recovery_period=capital_recovery_period,
+            technology_base_year=base_year,
+        ),
     )
 
     ####################
     ##### Portfolio #####
     #####################
-
-    discount_rate = 0.07
-    inflation_rate = 0.05
-    base_year = 2025
-    p_5bus = Portfolio(discount_rate, inflation_rate, base_year)
+    p_5bus = Portfolio()
+    financial = PortfolioFinancialData(
+        name="test_portfolio",
+        base_year=base_year,
+        discount_rate=discount_rate,
+        inflation_rate=inflation_rate,
+        interest_rate=interest_rate,
+    )
+    PSIP.add_financials!(p_5bus, financial)
 
     PSIP.add_region!(p_5bus, z1)
     PSIP.add_region!(p_5bus, z2)

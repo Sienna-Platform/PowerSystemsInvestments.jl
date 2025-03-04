@@ -21,7 +21,7 @@
 end
 
 @testset "Constructor" begin
-    p_5bus, op_days = test_data()
+    p_5bus, op_days = test_2_zone_portfolio()
 
     capital = DiscountedCashFlow(
         0.07, # Discount Rate
@@ -124,7 +124,7 @@ end
         container,
         PSIN.BuildCapacity(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        string(PSIN.get_investment_formulation(vre_model)),
+        PSIN.metadata_string(vre_model),
     )
     @test length(v) == 2
 
@@ -132,7 +132,7 @@ end
         container,
         PSIN.ActivePowerVariable(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        string(PSIN.get_investment_formulation(vre_model)),
+        PSIN.metadata_string(vre_model),
     )
     @test length(v["wind", :]) == length(PSIN.get_time_steps(container.time_mapping))
 
@@ -140,7 +140,7 @@ end
         container,
         PSIN.CumulativeCapacity(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        string(PSIN.get_investment_formulation(vre_model)),
+        PSIN.metadata_string(vre_model),
     )
     @test length(e["wind", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
@@ -172,7 +172,7 @@ end
         container,
         PSIN.BuildCapacity(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
-        string(PSIN.get_investment_formulation(thermal_model)),
+        PSIN.metadata_string(thermal_model),
     )
     @test length(v) == 4
 
@@ -180,7 +180,7 @@ end
         container,
         PSIN.ActivePowerVariable(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
-        string(PSIN.get_investment_formulation(thermal_model)),
+        PSIN.metadata_string(thermal_model),
     )
     @test length(v["expensive_thermal", :]) ==
           length(PSIN.get_time_steps(container.time_mapping))
@@ -191,7 +191,7 @@ end
         container,
         PSIN.CumulativeCapacity(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
-        string(PSIN.get_investment_formulation(thermal_model)),
+        PSIN.metadata_string(thermal_model),
     )
     @test length(e["expensive_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
@@ -248,7 +248,7 @@ end
         container,
         PSIN.ActivePowerLimitsConstraint(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        string(PSIN.get_investment_formulation(vre_model)),
+        PSIN.metadata_string(vre_model),
     )
     @test length(c) == length(PSIN.get_time_steps(container.time_mapping))
 
@@ -256,7 +256,7 @@ end
         container,
         PSIN.MaximumCumulativeCapacity(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        string(PSIN.get_investment_formulation(vre_model)),
+        PSIN.metadata_string(vre_model),
     )
     @test length(c) == length(PSIN.get_investment_time_steps(container.time_mapping))
 
@@ -286,7 +286,7 @@ end
         container,
         PSIN.MaximumCumulativeCapacity(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
-        string(PSIN.get_investment_formulation(thermal_model)),
+        PSIN.metadata_string(thermal_model),
     )
     @test length(c["expensive_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
