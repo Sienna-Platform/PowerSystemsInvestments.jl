@@ -643,36 +643,49 @@ function build_model!(
         error("Multiple technology models defined for the same technology")
     end
 
+    # Technology Maps #
+    type_capital_map, type_operation_map, type_feasibility_map =
+        get_type_formulation_to_names_map(template.technology_models, port)
+    names_to_model_map = names_to_technology_model_map(template.technology_models)
+    # Branch Technology Maps #
+    br_type_capital_map, br_type_operation_map, br_type_feasibility_map =
+        get_type_formulation_to_names_map(template.branch_models, port)
+    br_names_to_model_map = names_to_technology_model_map(template.branch_models)
+
     # Only build the feasibility model if there are feasibility timesteps
     if is_feasibility_empty(get_time_mapping(container))
         models = [template.capital_model, template.operation_model]
+        tech_maps = [type_capital_map, type_operation_map]
+        br_maps = [br_type_capital_map, br_type_operation_map]
     else
         models =
             [template.capital_model, template.operation_model, template.feasibility_model]
+        tech_maps = [type_capital_map, type_operation_map, type_feasibility_map]
+        br_maps = [br_type_capital_map, br_type_operation_map, br_type_feasibility_map]
     end
 
-    tech_templates = collect(keys(template.technology_models))
+    ########################
+    #### Argument Stage ####
+    ########################
+
     # Order is required
-    for (i, name_list) in enumerate(tech_names)
-        tech_model = tech_templates[i]
-        @debug "Building Model for $(get_technology_type(tech_model)) with $(get_investment_formulation(tech_model)) investment formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(get_technology_type(tech_model))" begin
-            if validate_available_technologies(tech_model, port)
-                for mod in models
-                    construct_technologies!(
-                        container,
-                        port,
-                        name_list,
-                        ArgumentConstructStage(),
-                        mod,
-                        tech_model,
-                        transport_model,
-                    )
-                end
-            end
-            @debug "Problem size:" get_problem_size(container) _group =
-                LOG_GROUP_OPTIMIZATION_CONTAINER
+    # Arguments for Technologies #
+    for (ix, type_map) in enumerate(tech_maps)
+        for (tuple, name_list) in type_map
+            tech_type, tech_formulation = tuple
+            tech_model_vector =
+                names_to_technology_model_vector(names_to_model_map, name_list)
+            construct_technologies!(
+                container,
+                port,
+                name_list,
+                ArgumentConstructStage(),
+                models[ix],
+                tech_type,
+                tech_formulation,
+                transport_model,
+                tech_model_vector,
+            )
         end
     end
 
@@ -691,109 +704,87 @@ function build_model!(
     end
     =#
 
-    # Branches Model Arguments
-
-    branch_names = collect(values(template.branch_models))
-    branch_templates = collect(keys(template.branch_models))
-    for (i, name_list) in enumerate(branch_names)
-        branch_model = branch_templates[i]
-        @debug "Building Arguments for $(get_technology_type(branch_model)) with $(get_investment_formulation(branch_model)) formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(get_technology_type(branch_model))" begin
-            if validate_available_technologies(branch_model, port)
-                for mod in models
-                    construct_technologies!(
-                        container,
-                        port,
-                        name_list,
-                        ArgumentConstructStage(),
-                        mod,
-                        branch_model,
-                        transport_model,
-                    )
-                end
-            end
-            @debug "Problem size:" get_problem_size(container) _group =
-                LOG_GROUP_OPTIMIZATION_CONTAINER
+    # Branches Model Arguments #
+    for (ix, type_map) in enumerate(br_maps)
+        for (tuple, name_list) in type_map
+            tech_type, tech_formulation = tuple
+            tech_model_vector =
+                names_to_technology_model_vector(br_names_to_model_map, name_list)
+            construct_technologies!(
+                container,
+                port,
+                name_list,
+                ArgumentConstructStage(),
+                models[ix],
+                tech_type,
+                tech_formulation,
+                transport_model,
+                tech_model_vector,
+            )
         end
     end
 
     # Constructor for transport model, adds EnergyBalanceConstraint
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(transport_model)" begin
-        @debug "Building $(transport_model) transport formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        #construct_network!(container, sys, transport_model, template)
-        construct_transport!(container, port, transport_model)
-        @debug "Problem size:" get_problem_size(container) _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-    end
+    construct_transport!(container, port, transport_model)
 
-    for (i, name_list) in enumerate(tech_names)
-        tech_model = tech_templates[i]
-        @debug "Building Model for $(get_technology_type(tech_model)) with $(get_investment_formulation(tech_model)) investment formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(get_technology_type(tech_model))" begin
-            if validate_available_technologies(tech_model, port)
-                for mod in [
-                    template.capital_model,
-                    template.operation_model,
-                    template.feasibility_model,
-                ]
-                    construct_technologies!(
-                        container,
-                        port,
-                        name_list,
-                        ModelConstructStage(),
-                        mod,
-                        tech_model,
-                        transport_model,
-                    )
-                end
-            end
-            @debug "Problem size:" get_problem_size(container) _group =
-                LOG_GROUP_OPTIMIZATION_CONTAINER
+    ########################
+    ##### Model Stage ######
+    ########################
+
+    # Model for Technologies #
+    for (ix, type_map) in enumerate(tech_maps)
+        for (tuple, name_list) in type_map
+            tech_type, tech_formulation = tuple
+            tech_model_vector =
+                names_to_technology_model_vector(names_to_model_map, name_list)
+            construct_technologies!(
+                container,
+                port,
+                name_list,
+                ModelConstructStage(),
+                models[ix],
+                tech_type,
+                tech_formulation,
+                transport_model,
+                tech_model_vector,
+            )
         end
     end
 
-    for (i, name_list) in enumerate(branch_names)
-        branch_model = branch_templates[i]
-        @debug "Building Arguments for $(get_technology_type(branch_model)) with $(get_investment_formulation(branch_model)) formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(get_technology_type(branch_model))" begin
-            if validate_available_technologies(branch_model, port)
-                for mod in [
-                    template.capital_model,
-                    template.operation_model,
-                    template.feasibility_model,
-                ]
-                    construct_technologies!(
-                        container,
-                        port,
-                        name_list,
-                        ModelConstructStage(),
-                        mod,
-                        branch_model,
-                        transport_model,
-                    )
-                end
-            end
-            @debug "Problem size:" get_problem_size(container) _group =
-                LOG_GROUP_OPTIMIZATION_CONTAINER
-        end
-    end
-    # TODO: Requirements build here
+    # TODO: 
+    # Requirements Model HERE
     #=
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
         construct_requirements!(
             container,
             sys,
-            ModelConstructStage(),
+            ArgumentConstructStage(),
             get_service_models(template),
             get_device_models(template),
             transmission_model,
         )
     end
     =#
+
+    # Branches Model Arguments #
+    for (ix, type_map) in enumerate(br_maps)
+        for (tuple, name_list) in type_map
+            tech_type, tech_formulation = tuple
+            tech_model_vector =
+                names_to_technology_model_vector(br_names_to_model_map, name_list)
+            construct_technologies!(
+                container,
+                port,
+                name_list,
+                ModelConstructStage(),
+                models[ix],
+                tech_type,
+                tech_formulation,
+                transport_model,
+                tech_model_vector,
+            )
+        end
+    end
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Objective" begin
         @debug "Building Objective" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
         update_objective_function!(container)
