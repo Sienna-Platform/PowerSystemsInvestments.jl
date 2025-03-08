@@ -4,14 +4,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     model::CapitalCostModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::Type{T},
+    tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.DemandRequirement,
-    B <: StaticLoadInvestment,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.DemandRequirement, B <: StaticLoadInvestment}
     # Do Nothing. No Load Investment allowed.
     return
 end
@@ -22,15 +19,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     model::OperationCostModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::Type{T},
+    tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    # network_model::NetworkModel{<:PM.AbstractActivePowerModel},
-) where {
-    T <: PSIP.DemandRequirement,
-    B <: StaticLoadInvestment,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.DemandRequirement, C <: BasicDispatch}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # EnergyBalance
@@ -45,14 +38,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     model::FeasibilityModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::Type{T},
+    tech_formulation::Type{D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.DemandRequirement,
-    B <: StaticLoadInvestment,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.DemandRequirement, D <: FeasibilityTechnologyFormulation}
     devices = [PSIP.get_technology(T, p, n) for n in names]
     add_to_expression!(container, FeasibilitySurplus(), devices, D(), transport_model)
     return
@@ -64,14 +54,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::CapitalCostModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::Type{T},
+    tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.DemandRequirement,
-    B <: StaticLoadInvestment,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.DemandRequirement, B <: StaticLoadInvestment}
     return
 end
 
@@ -81,14 +68,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::OperationCostModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::Type{T},
+    tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.DemandRequirement,
-    B <: StaticLoadInvestment,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.DemandRequirement, C <: BasicDispatch}
     # Do nothing for loads
     return
 end
@@ -99,14 +83,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::FeasibilityModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::Type{T},
+    tech_formulation::Type{D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.DemandRequirement,
-    B <: StaticLoadInvestment,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.DemandRequirement, D <: FeasibilityTechnologyFormulation}
     # Do nothing for loads
     return
 end

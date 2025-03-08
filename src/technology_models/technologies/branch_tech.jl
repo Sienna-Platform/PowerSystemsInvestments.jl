@@ -120,6 +120,7 @@ function add_constraints!(
     ::V,
     devices::U,
     tech_model::String,
+    tech_model_vector::Vector{TechnologyModel},
 ) where {
     T <: ActivePowerLimitsConstraint,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
@@ -137,13 +138,15 @@ function add_constraints!(
         meta=tech_model,
     )
 
-    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
     active_power = get_variable(container, V(), D, tech_model)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    for d in devices
+    for (ix, d) in enumerate(devices)
         name = PSIP.get_name(d)
+        tech_model = tech_model_vector[ix]
+        inv_model = string(get_investment_formulation(tech_model))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]

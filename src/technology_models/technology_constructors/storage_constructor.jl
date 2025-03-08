@@ -4,14 +4,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     ::CapitalCostModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::T,
+    tech_formulation::B,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.StorageTechnology,
-    B <: Union{ContinuousInvestment, IntegerInvestment},
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.StorageTechnology, B <: Union{ContinuousInvestment, IntegerInvestment}}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -33,14 +30,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     model::OperationCostModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::T,
+    tech_formulation::C,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.StorageTechnology,
-    B <: InvestmentTechnologyFormulation,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.StorageTechnology, C <: BasicDispatch}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -82,14 +76,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     model::FeasibilityModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::T,
+    tech_formulation::D,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.StorageTechnology,
-    B <: InvestmentTechnologyFormulation,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.StorageTechnology, D <: FeasibilityTechnologyFormulation}
     devices = [PSIP.get_technology(T, p, n) for n in names]
     tech_model = metadata_string(technology_model)
 
@@ -123,14 +114,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::CapitalCostModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::T,
+    tech_formulation::B,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.StorageTechnology,
-    B <: InvestmentTechnologyFormulation,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.StorageTechnology, B <: InvestmentTechnologyFormulation}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -167,14 +155,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::OperationCostModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::T,
+    tech_formulation::C,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.StorageTechnology,
-    B <: InvestmentTechnologyFormulation,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.StorageTechnology, C <: BasicDispatch}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -231,14 +216,11 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::FeasibilityModel,
-    technology_model::TechnologyModel{T, B, C, D},
+    tech_type::T,
+    tech_formulation::D,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-) where {
-    T <: PSIP.StorageTechnology,
-    B <: InvestmentTechnologyFormulation,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
+    tech_model_vector::Vector{TechnologyModel},
+) where {T <: PSIP.StorageTechnology, D <: FeasibilityTechnologyFormulation}
     devices = [PSIP.get_technology(T, p, n) for n in names]
     tech_model = metadata_string(technology_model)
 

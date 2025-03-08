@@ -339,6 +339,7 @@ function add_constraints!(
     ::V,
     devices::U,
     tech_model::String,
+    tech_model_vector::Vector{TechnologyModel},
 ) where {
     T <: ActivePowerLimitsConstraint,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
@@ -356,15 +357,17 @@ function add_constraints!(
         meta=tech_model,
     )
 
-    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
     active_power = get_variable(container, V(), D, tech_model)
     operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     time_stamps = get_time_stamps(time_mapping)
 
-    for d in devices
+    for (ix, d) in enumerate(devices)
         name = PSIP.get_name(d)
+        tech_model = tech_model_vector[ix]
+        inv_model = string(get_investment_formulation(tech_model))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
@@ -396,6 +399,7 @@ function add_constraints!(
     ::V,
     devices::U,
     tech_model::String,
+    tech_model_vector::Vector{TechnologyModel},
 ) where {
     T <: ActivePowerLimitsConstraint,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
@@ -403,7 +407,6 @@ function add_constraints!(
 } where {D <: PSIP.SupplyTechnology{PSY.ThermalStandard}}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    device_names = PSIP.get_name.(devices)
     device_names = PSIP.get_name.(devices)
     con_ub = add_constraints_container!(
         container,
@@ -413,15 +416,16 @@ function add_constraints!(
         time_steps,
         meta=tech_model,
     )
-
-    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
     active_power = get_variable(container, V(), D, tech_model)
     operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
 
-    for d in devices
+    for (ix, d) in enumerate(devices)
         name = PSIP.get_name(d)
+        tech_model = tech_model_vector[ix]
+        inv_model = string(get_investment_formulation(tech_model))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
