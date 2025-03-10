@@ -7,16 +7,17 @@ function construct_technologies!(
     tech_type::Type{T},
     tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.SupplyTechnology, B <: Union{ContinuousInvestment, IntegerInvestment}}
+    tech_model_vector::Vector{X},
+) where {
+    T <: PSIP.SupplyTechnology,
+    B <: Union{ContinuousInvestment, IntegerInvestment},
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    #convert technology model to string for container metadata
-    tech_model = string(B)
+    add_variable!(container, BuildCapacity(), devices, B())
 
-    add_variable!(container, BuildCapacity(), devices, B(), tech_model)
-
-    add_expression!(container, CumulativeCapacity(), devices, B(), tech_model)
+    add_expression!(container, CumulativeCapacity(), devices, B())
     return
 end
 
@@ -29,24 +30,14 @@ function construct_technologies!(
     tech_type::Type{T},
     tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.SupplyTechnology, C <: BasicDispatch}
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.SupplyTechnology, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    #convert technology model to string for container metadata
-    tech_model = string(C)
-
-    add_variable!(container, ActivePowerVariable(), devices, C(), tech_model)
+    add_variable!(container, ActivePowerVariable(), devices, C())
 
     # EnergyBalance
-    add_to_expression!(
-        container,
-        EnergyBalance(),
-        devices,
-        C(),
-        tech_model,
-        transport_model,
-    )
+    add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
     return
 end
 
@@ -59,22 +50,16 @@ function construct_technologies!(
     tech_type::Type{T},
     tech_formulation::Type{D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.SupplyTechnology, D <: FeasibilityTechnologyFormulation}
+    tech_model_vector::Vector{X},
+) where {
+    T <: PSIP.SupplyTechnology,
+    D <: FeasibilityTechnologyFormulation,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    #convert technology model to string for container metadata
-    tech_model = metadata_string(technology_model)
-
     # Feasibility Surplus
-    add_to_expression!(
-        container,
-        FeasibilitySurplus(),
-        devices,
-        D(),
-        tech_model,
-        transport_model,
-    )
+    add_to_expression!(container, FeasibilitySurplus(), devices, D(), transport_model)
     return
 end
 
@@ -87,15 +72,16 @@ function construct_technologies!(
     tech_type::Type{T},
     tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.SupplyTechnology, B <: InvestmentTechnologyFormulation}
+    tech_model_vector::Vector{X},
+) where {
+    T <: PSIP.SupplyTechnology,
+    B <: InvestmentTechnologyFormulation,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    #convert technology model to string for container metadata
-    tech_model = string(B)
-
     # Capital Component of objective function
-    objective_function!(container, devices, B(), tech_model)
+    objective_function!(container, devices, B())
     # Add objective function from container to JuMP model
     update_objective_function!(container)
 
@@ -105,7 +91,7 @@ function construct_technologies!(
         MaximumCumulativeCapacity(),
         CumulativeCapacity(),
         devices,
-        tech_model,
+        B(),
     )
     return
 end
@@ -119,15 +105,12 @@ function construct_technologies!(
     tech_type::Type{T},
     tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.SupplyTechnology, C <: BasicDispatch}
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.SupplyTechnology, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    #convert technology model to string for container metadata
-    tech_model = string(C)
-
     # Operations Component of objective function
-    objective_function!(container, devices, C(), tech_model)
+    objective_function!(container, devices, C())
 
     # Add objective function from container to JuMP model
     update_objective_function!(container)
@@ -138,7 +121,7 @@ function construct_technologies!(
         ActivePowerLimitsConstraint(),
         ActivePowerVariable(),
         devices,
-        tech_model,
+        C(),
         tech_model_vector,
     )
     return
@@ -153,11 +136,13 @@ function construct_technologies!(
     tech_type::Type{T},
     tech_formulation::Type{D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.SupplyTechnology, D <: FeasibilityTechnologyFormulation}
+    tech_model_vector::Vector{X},
+) where {
+    T <: PSIP.SupplyTechnology,
+    D <: FeasibilityTechnologyFormulation,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
-
-    tech_model = metadata_string(technology_model)
 
     # TODO: Feasibility models
 

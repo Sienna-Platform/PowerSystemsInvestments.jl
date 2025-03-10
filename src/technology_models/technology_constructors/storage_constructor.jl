@@ -7,8 +7,12 @@ function construct_technologies!(
     tech_type::T,
     tech_formulation::B,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.StorageTechnology, B <: Union{ContinuousInvestment, IntegerInvestment}}
+    tech_model_vector::Vector{X},
+) where {
+    T <: PSIP.StorageTechnology,
+    B <: Union{ContinuousInvestment, IntegerInvestment},
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -33,8 +37,8 @@ function construct_technologies!(
     tech_type::T,
     tech_formulation::C,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.StorageTechnology, C <: BasicDispatch}
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.StorageTechnology, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -79,8 +83,12 @@ function construct_technologies!(
     tech_type::T,
     tech_formulation::D,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.StorageTechnology, D <: FeasibilityTechnologyFormulation}
+    tech_model_vector::Vector{X},
+) where {
+    T <: PSIP.StorageTechnology,
+    D <: FeasibilityTechnologyFormulation,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
     tech_model = metadata_string(technology_model)
 
@@ -117,8 +125,12 @@ function construct_technologies!(
     tech_type::T,
     tech_formulation::B,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.StorageTechnology, B <: InvestmentTechnologyFormulation}
+    tech_model_vector::Vector{X},
+) where {
+    T <: PSIP.StorageTechnology,
+    B <: InvestmentTechnologyFormulation,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -158,8 +170,8 @@ function construct_technologies!(
     tech_type::T,
     tech_formulation::C,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.StorageTechnology, C <: BasicDispatch}
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.StorageTechnology, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #convert technology model to string for container metadata
@@ -219,8 +231,12 @@ function construct_technologies!(
     tech_type::T,
     tech_formulation::D,
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    tech_model_vector::Vector{TechnologyModel},
-) where {T <: PSIP.StorageTechnology, D <: FeasibilityTechnologyFormulation}
+    tech_model_vector::Vector{X},
+) where {
+    T <: PSIP.StorageTechnology,
+    D <: FeasibilityTechnologyFormulation,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
     tech_model = metadata_string(technology_model)
 

@@ -30,15 +30,16 @@ function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
-    formulation::AbstractTechnologyFormulation,
-    tech_model::String,
+    formulation::S,
 ) where {
     T <: CumulativeCapacity,
+    S <: AbstractTechnologyFormulation,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
 } where {D <: GenericTransportTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(S)
 
     var = get_variable(container, BuildCapacity(), D, tech_model)
 
@@ -68,7 +69,6 @@ function add_to_expression!(
     ::T,
     ::U,
     ::BasicDispatch,
-    ::String,
     ::TransportModel{V},
 ) where {
     T <: EnergyBalance,
@@ -83,17 +83,18 @@ function add_to_expression!(
     container::SingleOptimizationContainer,
     ::T,
     devices::U,
-    ::BasicDispatch,
-    tech_model::String,
+    ::S,
     ::TransportModel{V},
 ) where {
     T <: EnergyBalance,
+    S <: BasicDispatch,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: MultiRegionBalanceModel,
 } where {D <: GenericTransportTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
 
     variable = get_variable(container, FlowActivePowerVariable(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
@@ -119,15 +120,18 @@ function add_constraints!(
     ::T,
     ::V,
     devices::U,
-    tech_model::String,
-    tech_model_vector::Vector{TechnologyModel},
+    formulation::S,
+    tech_model_vector::Vector{X},
 ) where {
     T <: ActivePowerLimitsConstraint,
+    S <: BasicDispatch,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: FlowActivePowerVariable,
+    X <: TechnologyModel,
 } where {D <: GenericTransportTechnology}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
     device_names = PSIP.get_name.(devices)
     con_ub = add_constraints_container!(
         container,
@@ -167,14 +171,16 @@ function add_constraints!(
     ::T,
     ::V,
     devices::U,
-    tech_model::String,
+    formulation::S,
 ) where {
     T <: MaximumCumulativeCapacity,
+    S <: ContinuousInvestment,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
     V <: CumulativeCapacity,
 } where {D <: GenericTransportTechnology}
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(S)
 
     device_names = PSIP.get_name.(devices)
     con_ub = add_constraints_container!(
@@ -206,9 +212,9 @@ end
 function objective_function!(
     container::SingleOptimizationContainer,
     devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
-    formulation::ContinuousInvestment,
-    tech_model::String,
-) where {T <: GenericTransportTechnology}
+    formulation::S,
+) where {T <: GenericTransportTechnology, S <: ContinuousInvestment}
+    tech_model = string(S)
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     # TODO: Decide if we want to include fixed OM cost for Transport Paths
     #add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)

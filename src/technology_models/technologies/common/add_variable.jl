@@ -2,15 +2,16 @@ function add_variable!(
     container::SingleOptimizationContainer,
     variable_type::T,
     devices::U,
-    formulation::InvestmentTechnologyFormulation,
-    tech_model::String,
+    formulation::S,
 ) where {
     T <: InvestmentVariableType,
+    S <: InvestmentTechnologyFormulation,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(S)
     names = [PSIP.get_name(d) for d in devices]
     variable = add_variable_container!(
         container,
@@ -41,15 +42,16 @@ function add_variable!(
     container::SingleOptimizationContainer,
     variable_type::T,
     devices::U,
-    formulation::OperationsTechnologyFormulation,
-    tech_model::String,
+    formulation::S,
 ) where {
     T <: OperationsVariableType,
+    S <: OperationsTechnologyFormulation,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
 
     names = [PSIP.get_name(d) for d in devices]
 
@@ -82,15 +84,16 @@ function add_variable!(
     container::SingleOptimizationContainer,
     variable_type::T,
     devices::U,
-    formulation::FeasibilityTechnologyFormulation,
-    tech_model::String,
+    formulation::S,
 ) where {
     T <: OperationsVariableType,
+    S <: FeasibilityTechnologyFormulation,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
+    tech_model = string(S)
 
     names = [PSIP.get_name(d) for d in devices]
     variable = add_variable_container!(
@@ -122,15 +125,16 @@ function add_variable!(
     container::SingleOptimizationContainer,
     variable_type::T,
     devices::U,
-    formulation::AbstractTechnologyFormulation,
-    tech_model::String,
+    formulation::S,
 ) where {
     T <: FeasibilityVariableType,
+    S <: AbstractTechnologyFormulation,
     U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
+    tech_model = string(S)
     names = [PSIP.get_name(d) for d in devices]
 
     variable = add_variable_container!(
