@@ -81,8 +81,10 @@ end
         ["demand1"],
         PSIN.ArgumentConstructStage(),
         capital,
-        demand_model,
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIN.StaticLoadInvestment,
         transport_model,
+        [demand_model],
     )
     PSIN.construct_technologies!(
         container,
@@ -90,8 +92,10 @@ end
         ["demand1"],
         PSIN.ArgumentConstructStage(),
         operations,
-        demand_model,
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIN.BasicDispatch,
         transport_model,
+        [demand_model],
     )
 
     @test length(container.expressions) == 2
@@ -104,8 +108,10 @@ end
         ["wind"],
         PSIN.ArgumentConstructStage(),
         capital,
-        vre_model,
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIN.ContinuousInvestment,
         transport_model,
+        [vre_model],
     )
     PSIN.construct_technologies!(
         container,
@@ -113,8 +119,10 @@ end
         ["wind"],
         PSIN.ArgumentConstructStage(),
         operations,
-        vre_model,
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIN.BasicDispatch,
         transport_model,
+        [vre_model],
     )
 
     @test length(container.expressions) == 3
@@ -124,7 +132,7 @@ end
         container,
         PSIN.BuildCapacity(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        PSIN.metadata_string(vre_model),
+        "ContinuousInvestment",
     )
     @test length(v) == 2
 
@@ -132,7 +140,7 @@ end
         container,
         PSIN.ActivePowerVariable(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        PSIN.metadata_string(vre_model),
+        "BasicDispatch",
     )
     @test length(v["wind", :]) == length(PSIN.get_time_steps(container.time_mapping))
 
@@ -140,7 +148,7 @@ end
         container,
         PSIN.CumulativeCapacity(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        PSIN.metadata_string(vre_model),
+        "ContinuousInvestment",
     )
     @test length(e["wind", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
@@ -152,8 +160,10 @@ end
         ["cheap_thermal", "expensive_thermal"],
         PSIN.ArgumentConstructStage(),
         capital,
-        thermal_model,
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        PSIN.ContinuousInvestment,
         transport_model,
+        [thermal_model, thermal_model],
     )
     PSIN.construct_technologies!(
         container,
@@ -161,8 +171,10 @@ end
         ["cheap_thermal", "expensive_thermal"],
         PSIN.ArgumentConstructStage(),
         operations,
-        thermal_model,
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        PSIN.BasicDispatch,
         transport_model,
+        [thermal_model, thermal_model],
     )
 
     @test length(container.expressions) == 4
@@ -172,7 +184,7 @@ end
         container,
         PSIN.BuildCapacity(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
-        PSIN.metadata_string(thermal_model),
+        "ContinuousInvestment",
     )
     @test length(v) == 4
 
@@ -180,7 +192,7 @@ end
         container,
         PSIN.ActivePowerVariable(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
-        PSIN.metadata_string(thermal_model),
+        "BasicDispatch",
     )
     @test length(v["expensive_thermal", :]) ==
           length(PSIN.get_time_steps(container.time_mapping))
@@ -191,7 +203,7 @@ end
         container,
         PSIN.CumulativeCapacity(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
-        PSIN.metadata_string(thermal_model),
+        "ContinuousInvestment",
     )
     @test length(e["expensive_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
@@ -207,8 +219,10 @@ end
         ["demand1"],
         PSIN.ModelConstructStage(),
         capital,
-        demand_model,
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIN.StaticLoadInvestment,
         transport_model,
+        [demand_model],
     )
     PSIN.construct_technologies!(
         container,
@@ -216,8 +230,10 @@ end
         ["demand1"],
         PSIN.ModelConstructStage(),
         operations,
-        demand_model,
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIN.BasicDispatch,
         transport_model,
+        [demand_model],
     )
 
     @test length(container.constraints) == 0
@@ -229,8 +245,10 @@ end
         ["wind"],
         PSIN.ModelConstructStage(),
         capital,
-        vre_model,
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIN.ContinuousInvestment,
         transport_model,
+        [vre_model],
     )
     PSIN.construct_technologies!(
         container,
@@ -238,8 +256,10 @@ end
         ["wind"],
         PSIN.ModelConstructStage(),
         operations,
-        vre_model,
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIN.BasicDispatch,
         transport_model,
+        [vre_model],
     )
 
     @test length(container.constraints) == 2
@@ -248,7 +268,7 @@ end
         container,
         PSIN.ActivePowerLimitsConstraint(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        PSIN.metadata_string(vre_model),
+        "BasicDispatch",
     )
     @test length(c) == length(PSIN.get_time_steps(container.time_mapping))
 
@@ -256,7 +276,7 @@ end
         container,
         PSIN.MaximumCumulativeCapacity(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
-        PSIN.metadata_string(vre_model),
+        "ContinuousInvestment",
     )
     @test length(c) == length(PSIN.get_investment_time_steps(container.time_mapping))
 
@@ -267,8 +287,10 @@ end
         ["cheap_thermal", "expensive_thermal"],
         PSIN.ModelConstructStage(),
         capital,
-        thermal_model,
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        PSIN.ContinuousInvestment,
         transport_model,
+        [thermal_model, thermal_model],
     )
     PSIN.construct_technologies!(
         container,
@@ -276,8 +298,10 @@ end
         ["cheap_thermal", "expensive_thermal"],
         PSIN.ModelConstructStage(),
         operations,
-        thermal_model,
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        PSIN.BasicDispatch,
         transport_model,
+        [thermal_model, thermal_model],
     )
 
     @test length(container.constraints) == 4
@@ -286,7 +310,7 @@ end
         container,
         PSIN.MaximumCumulativeCapacity(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
-        PSIN.metadata_string(thermal_model),
+        "ContinuousInvestment",
     )
     @test length(c["expensive_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
