@@ -6,7 +6,7 @@ function add_variable!(
 ) where {
     T <: InvestmentVariableType,
     S <: InvestmentTechnologyFormulation,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
@@ -46,7 +46,7 @@ function add_variable!(
 ) where {
     T <: OperationsVariableType,
     S <: OperationsTechnologyFormulation,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
@@ -88,7 +88,7 @@ function add_variable!(
 ) where {
     T <: OperationsVariableType,
     S <: FeasibilityTechnologyFormulation,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
@@ -129,7 +129,7 @@ function add_variable!(
 ) where {
     T <: FeasibilityVariableType,
     S <: AbstractTechnologyFormulation,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)

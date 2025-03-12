@@ -5,7 +5,7 @@
 function add_capital_cost!(
     container::SingleOptimizationContainer,
     ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     ::V,
     tech_model::String,
 ) where {
@@ -23,7 +23,7 @@ end
 function add_capital_cost!(
     container::SingleOptimizationContainer,
     ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     ::V,
     tech_model::String,
 ) where {
@@ -61,7 +61,7 @@ end
 function add_fixed_om_cost!(
     container::SingleOptimizationContainer,
     ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     ::V,
     tech_model::String,
 ) where {
@@ -79,7 +79,7 @@ end
 function add_fixed_om_cost!(
     container::SingleOptimizationContainer,
     ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     ::V,
     tech_model::String,
 ) where {
@@ -97,7 +97,7 @@ end
 function add_fixed_om_cost!(
     container::SingleOptimizationContainer,
     ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     ::V,
     tech_model::String,
 ) where {
@@ -135,7 +135,7 @@ end
 function add_capital_cost!(
     container::SingleOptimizationContainer,
     ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     ::V,
     tech_model::String,
 ) where {
@@ -157,7 +157,7 @@ end
 function add_capital_cost!(
     container::SingleOptimizationContainer,
     ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     ::V,
     tech_model::String,
 ) where {

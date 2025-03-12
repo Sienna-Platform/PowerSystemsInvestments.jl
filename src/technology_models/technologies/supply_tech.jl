@@ -42,7 +42,7 @@ function add_variable!(
     formulation::V,
 ) where {
     T <: InvestmentVariableType,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: IntegerInvestment,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
@@ -87,7 +87,7 @@ function add_expression!(
     formulation::V,
 ) where {
     T <: CumulativeCapacity,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: ContinuousInvestment,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
@@ -125,7 +125,7 @@ function add_expression!(
     formulation::V,
 ) where {
     T <: CumulativeCapacity,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: IntegerInvestment,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
@@ -164,7 +164,7 @@ function add_expression!(
     formulation::V,
 ) where {
     T <: VariableOMCost,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: AbstractTechnologyFormulation,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
@@ -193,7 +193,7 @@ function add_to_expression!(
 ) where {
     S <: BasicDispatch,
     T <: EnergyBalance,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
@@ -225,7 +225,7 @@ function add_to_expression!(
 ) where {
     S <: BasicDispatch,
     T <: EnergyBalance,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
@@ -258,7 +258,7 @@ function add_to_expression!(
 ) where {
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
@@ -299,7 +299,7 @@ function add_to_expression!(
 ) where {
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
@@ -343,7 +343,7 @@ function add_constraints!(
     tech_model_vector::Vector{X},
 ) where {
     T <: ActivePowerLimitsConstraint,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: ActivePowerVariable,
     S <: BasicDispatch,
     X <: TechnologyModel,
@@ -406,7 +406,7 @@ function add_constraints!(
     tech_model_vector::Vector{X},
 ) where {
     T <: ActivePowerLimitsConstraint,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: ActivePowerVariable,
     S <: BasicDispatch,
     X <: TechnologyModel,
@@ -457,7 +457,7 @@ function add_constraints!(
 ) where {
     T <: MaximumCumulativeCapacity,
     S <: InvestmentTechnologyFormulation,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: CumulativeCapacity,
 } where {D <: PSIP.SupplyTechnology}
     time_mapping = get_time_mapping(container)
@@ -493,7 +493,7 @@ end
 
 function objective_function!(
     container::SingleOptimizationContainer,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.SupplyTechnology, S <: BasicDispatch}
     tech_model = string(S)
@@ -503,7 +503,7 @@ end
 
 function objective_function!(
     container::SingleOptimizationContainer,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     formulation::B,
 ) where {T <: PSIP.SupplyTechnology, B <: InvestmentTechnologyFormulation}
     tech_model = string(B)
@@ -513,7 +513,7 @@ function objective_function!(
 end
 function objective_function!(
     container::SingleOptimizationContainer,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     formulation::B,
 ) where {
     T <: PSIP.SupplyTechnology{PSIP.RenewableDispatch},

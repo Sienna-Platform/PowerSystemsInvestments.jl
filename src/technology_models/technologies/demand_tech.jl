@@ -31,7 +31,7 @@ function add_to_expression!(
     transport_model::TransportModel{V},
 ) where {
     T <: EnergyBalance,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
@@ -71,7 +71,7 @@ function add_to_expression!(
     transport_model::TransportModel{V},
 ) where {
     T <: EnergyBalance,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
@@ -111,7 +111,7 @@ function add_to_expression!(
     transport_model::TransportModel{V},
 ) where {
     T <: FeasibilitySurplus,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
@@ -151,7 +151,7 @@ function add_to_expression!(
     transport_model::TransportModel{V},
 ) where {
     T <: FeasibilitySurplus,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)

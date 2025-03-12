@@ -103,7 +103,7 @@ function add_to_expression!(
     container::SingleOptimizationContainer,
     ::Type{T},
     ::Type{U},
-    devices::IS.FlattenIteratorWrapper{V},
+    devices::Vector{T},
 ) where {T <: EnergyBalance, U <: OperationsVariableType, V <: PSIP.Technology}
     variable = get_variable(container, U(), V)
     expression = get_expression(container, T(), PSIP.Portfolio)

@@ -11,7 +11,7 @@ objective_function_multiplier(::ISOPT.VariableType, ::AbstractTechnologyFormulat
 function add_variable_cost!(
     container::SingleOptimizationContainer,
     ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     ::V,
     tech_model::String,
 ) where {T <: PSIP.SupplyTechnology, U <: ActivePowerVariable, V <: BasicDispatch}
@@ -74,7 +74,7 @@ end
 function add_variable_cost!(
     container::SingleOptimizationContainer,
     ::U,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     ::V,
     tech_model::String,
 ) where {

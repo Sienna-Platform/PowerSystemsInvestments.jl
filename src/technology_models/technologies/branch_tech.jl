@@ -34,7 +34,7 @@ function add_expression!(
 ) where {
     T <: CumulativeCapacity,
     S <: AbstractTechnologyFormulation,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
 } where {D <: GenericTransportTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
@@ -72,7 +72,7 @@ function add_to_expression!(
     ::TransportModel{V},
 ) where {
     T <: EnergyBalance,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: SingleRegionBalanceModel,
 } where {D <: GenericTransportTechnology}
     # Do nothing for Transport Paths in SingleRegion models
@@ -88,7 +88,7 @@ function add_to_expression!(
 ) where {
     T <: EnergyBalance,
     S <: BasicDispatch,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: GenericTransportTechnology}
     @assert !isempty(devices)
@@ -125,7 +125,7 @@ function add_constraints!(
 ) where {
     T <: ActivePowerLimitsConstraint,
     S <: BasicDispatch,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: FlowActivePowerVariable,
     X <: TechnologyModel,
 } where {D <: GenericTransportTechnology}
@@ -175,7 +175,7 @@ function add_constraints!(
 ) where {
     T <: MaximumCumulativeCapacity,
     S <: ContinuousInvestment,
-    U <: Union{D, Vector{D}, IS.FlattenIteratorWrapper{D}},
+    U <: Vector{D},
     V <: CumulativeCapacity,
 } where {D <: GenericTransportTechnology}
     time_mapping = get_time_mapping(container)
@@ -211,7 +211,7 @@ end
 
 function objective_function!(
     container::SingleOptimizationContainer,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Vector{T},
     formulation::S,
 ) where {T <: GenericTransportTechnology, S <: ContinuousInvestment}
     tech_model = string(S)
