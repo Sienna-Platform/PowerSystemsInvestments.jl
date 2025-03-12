@@ -181,12 +181,12 @@ import InfrastructureSystems.Optimization:
 import TimerOutputs
 
 ####
-# Order Required
+# Order Required #
 include("utils/mpi_utils.jl")
 include("utils/jump_utils.jl")
 include("base/definitions.jl")
 include("base/simulation.jl")
-
+# Base #
 include("base/abstract_formulation_types.jl")
 include("capital/technology_capital_formulations.jl")
 include("capital/capital_models.jl")
@@ -202,37 +202,39 @@ include("base/solution_algorithms.jl")
 include("base/technology_model.jl")
 include("base/investment_model_template.jl")
 include("base/time_mapping.jl")
-
 include("base/objective_function.jl")
 include("base/single_optimization_container.jl")
 include("base/multi_optimization_container.jl")
-
+# Investment Model #
 include("investment_model/investment_model_store.jl")
 include("investment_model/investment_model.jl")
 include("investment_model/investment_problem_results.jl")
-
+# Serialization #
 include("base/serialization.jl")
-
+# Solve Instance #
 include("model_build/SingleInstanceSolve.jl")
+# Utils #
 include("utils/printing.jl")
 include("utils/logging.jl")
 include("utils/psip_utils.jl")
+# Technology Models #
 include("technology_models/technologies/common/add_variable.jl")
 include("technology_models/technologies/common/add_to_expression.jl")
 include("technology_models/technologies/supply_tech.jl")
 include("technology_models/technologies/demand_tech.jl")
 include("technology_models/technologies/storage_tech.jl")
 include("technology_models/technologies/branch_tech.jl")
+# Network #
 include("network_models/singleregion_model.jl")
 include("network_models/multiregion_model.jl")
 include("network_models/transport_constructor.jl")
-
+# Constructors #
 include("technology_models/technology_constructors/supply_constructor.jl")
 include("technology_models/technology_constructors/demand_constructor.jl")
 include("technology_models/technology_constructors/storage_constructor.jl")
 include("technology_models/technology_constructors/branch_constructor.jl")
 include("technology_models/technology_constructors/constructor_validations.jl")
-
+# Objective Function #
 include("technology_models/technologies/common/objective_function/common_financial.jl")
 include("technology_models/technologies/common/objective_function/common_capital.jl")
 include("technology_models/technologies/common/objective_function/common_operations.jl")
