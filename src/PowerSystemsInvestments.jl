@@ -45,7 +45,7 @@ export BuildEnergyCapacity
 export BuildPowerCapacity
 export ActiveInPowerVariable
 export ActiveOutPowerVariable
-export EnergyVariable
+export StateOfChargeVariable
 export FlowActivePowerVariable
 
 ### Expressions ###

@@ -41,7 +41,7 @@ struct ActiveOutPowerVariable <: OperationsVariableType end
 """
 energy stored in Storage technology at a timepoint
 """
-struct EnergyVariable <: OperationsVariableType end
+struct StateOfChargeVariable <: OperationsVariableType end
 
 """
 Struct to dispatch the creation of bidirectional Active Power Flow Variables
