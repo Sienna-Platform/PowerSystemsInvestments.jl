@@ -144,21 +144,6 @@ function set_technology_model!(
     return
 end
 
-function metadata_string(
-    model::TechnologyModel{T, B, C, D},
-) where {
-    T <: PSIP.Technology,
-    B <: InvestmentTechnologyFormulation,
-    C <: BasicDispatch,
-    D <: FeasibilityTechnologyFormulation,
-}
-    inv = IS.strip_module_name(B)
-    ops = IS.strip_module_name(C)
-    fes = IS.strip_module_name(D)
-
-    return string(inv, ops, fes)
-end
-
 function get_type_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfolio)
     tech_types = Set()
     capital_formulations = Set()
