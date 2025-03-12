@@ -10,21 +10,18 @@ function construct_technologies!(
     tech_model_vector::Vector{X},
 ) where {
     T <: PSIP.StorageTechnology,
-    B <: Union{ContinuousInvestment, IntegerInvestment},
+    B <: InvestmentTechnologyFormulation,
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    #convert technology model to string for container metadata
-    tech_model = metadata_string(technology_model)
-
     # BuildCapacity variables
-    add_variable!(container, BuildEnergyCapacity(), devices, B(), tech_model)
-    add_variable!(container, BuildPowerCapacity(), devices, B(), tech_model)
+    add_variable!(container, BuildEnergyCapacity(), devices, B())
+    add_variable!(container, BuildPowerCapacity(), devices, B())
 
     # CumulativeCapacity expressions
-    add_expression!(container, CumulativePowerCapacity(), devices, B(), tech_model)
-    add_expression!(container, CumulativeEnergyCapacity(), devices, B(), tech_model)
+    add_expression!(container, CumulativePowerCapacity(), devices, B())
+    add_expression!(container, CumulativeEnergyCapacity(), devices, B())
     return
 end
 
@@ -38,18 +35,19 @@ function construct_technologies!(
     tech_formulation::C,
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: PSIP.StorageTechnology, C <: BasicDispatch, X <: TechnologyModel}
+) where {
+    T <: PSIP.StorageTechnology,
+    C <: OperationsStorageFormulation,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
-
-    #convert technology model to string for container metadata
-    tech_model = metadata_string(technology_model)
 
     #ActivePowerVariables
     add_variable!(container, ActiveInPowerVariable(), devices, C(), tech_model)
     add_variable!(container, ActiveOutPowerVariable(), devices, C(), tech_model)
 
-    # EnergyVariable
-    add_variable!(container, EnergyVariable(), devices, C(), tech_model)
+    # StateOfChargeVariable
+    add_variable!(container, StateOfChargeVariable(), devices, C(), tech_model)
 
     # EnergyBalance
     add_to_expression!(
@@ -58,7 +56,6 @@ function construct_technologies!(
         ActiveInPowerVariable(),
         devices,
         C(),
-        tech_model,
         transport_model,
     )
     add_to_expression!(
@@ -67,7 +64,6 @@ function construct_technologies!(
         ActiveOutPowerVariable(),
         devices,
         C(),
-        tech_model,
         transport_model,
     )
 
@@ -90,7 +86,6 @@ function construct_technologies!(
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
-    tech_model = metadata_string(technology_model)
 
     # TODO: Decide if we want different variables or not for feasibility
 
@@ -133,9 +128,6 @@ function construct_technologies!(
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    #convert technology model to string for container metadata
-    tech_model = metadata_string(technology_model)
-
     # Capital Component of objective function
     objective_function!(container, devices, B(), tech_model)
 
@@ -158,6 +150,8 @@ function construct_technologies!(
         devices,
         tech_model,
     )
+
+    # TODO: Implement Constraints on Ratio Energy vs Power
     return
 end
 
@@ -171,11 +165,12 @@ function construct_technologies!(
     tech_formulation::C,
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: PSIP.StorageTechnology, C <: BasicDispatch, X <: TechnologyModel}
+) where {
+    T <: PSIP.StorageTechnology,
+    C <: OperationsStorageFormulation,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
-
-    #convert technology model to string for container metadata
-    tech_model = metadata_string(technology_model)
 
     # Operations Component of objective function
     objective_function!(container, devices, C(), tech_model)
@@ -189,7 +184,8 @@ function construct_technologies!(
         InputActivePowerVariableLimitsConstraint(),
         ActiveInPowerVariable(),
         devices,
-        tech_model,
+        C(),
+        tech_model_vector,
     )
 
     # Dispatch output power constraint
@@ -198,25 +194,27 @@ function construct_technologies!(
         OutputActivePowerVariableLimitsConstraint(),
         ActiveOutPowerVariable(),
         devices,
-        tech_model,
+        C(),
+        tech_model_vector,
     )
 
     # Energy storage constraint
     add_constraints!(
         container,
         StateofChargeLimitsConstraint(),
-        EnergyVariable(),
+        StateOfChargeVariable(),
         devices,
-        tech_model,
+        C(),
+        tech_model_vector,
     )
 
     #State of charge constraint
     add_constraints!(
         container,
         EnergyBalanceConstraint(),
-        EnergyVariable(),
+        StateOfChargeVariable(),
         devices,
-        tech_model,
+        C(),
     )
 
     return
@@ -238,7 +236,6 @@ function construct_technologies!(
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
-    tech_model = metadata_string(technology_model)
 
     # TODO: Feasibility models
     return
