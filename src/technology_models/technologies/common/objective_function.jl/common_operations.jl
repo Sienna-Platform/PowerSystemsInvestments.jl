@@ -16,6 +16,20 @@ function add_variable_cost!(
     return
 end
 
+function add_variable_cost!(
+    container::SingleOptimizationContainer,
+    ::U,
+    devices::Union{Vector{T},IS.FlattenIteratorWrapper{T}},
+    ::V,
+    tech_model::String,
+) where {T<:PSIP.ACTransportTechnology,U<:ActivePowerVariable,V<:OperationsTechnologyFormulation}
+    for d in devices
+        op_cost_data = PSIP.get_ext(d)["omcost"]
+        _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)
+    end
+    return
+end
+
 #=
 function add_proportional_cost!(
     container::SingleOptimizationContainer,

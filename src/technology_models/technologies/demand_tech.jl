@@ -226,25 +226,19 @@ function add_constraints!(
     efc_th = 0.0
     for re in renewables
         name = PSIP.get_name(re)
-
         efc_renewable = efc_renewable + efc_re[name, 1]
     end
 
     for th in thermals
         name = PSIP.get_name(th)
-
         unit_size = PSIP.get_unit_size(th)
-
         efc_th = efc_th + 0.91 * efc_thermal[name, 1] * unit_size
-
     end
 
 
     for be in bess
         name = PSIP.get_name(be)
-
         efc_storage = efc_storage + efc_bess[name, 1]
-
     end
     efc_existing = 0.0
     peak_load = 0.0
@@ -253,8 +247,6 @@ function add_constraints!(
         efc_existing = efc_existing + PSIP.get_ext(r)["existing_efc"]
         peak_load = peak_load + PSIP.get_ext(r)["peakload"]
         pmr = PSIP.get_ext(r)["pmr"]
-
-
     end
 
     JuMP.@constraint(
@@ -262,5 +254,64 @@ function add_constraints!(
         efc_th + efc_storage + efc_renewable >= pmr * peak_load - efc_existing
         # efc_storage + efc_renewable >= 100.0
     )
+    return
+end
+
+### Planning Reserve Margin Constraint ####
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    ::T,
+    devices::U,
+    tech_model::String,
+) where {
+    T<:CCNDSurfaceConstraint,
+    U<:Union{D,Vector{D},IS.FlattenIteratorWrapper{D}},
+} where {D<:PSIP.DemandRequirement}
+    time_mapping = get_time_mapping(container)
+    regions = PSIP.get_regions(PSIP.Zone, p)
+    efc_re = get_variable(container, EFCRenewable(), PSIP.SupplyTechnology{PSY.RenewableDispatch}, "ContinuousInvestmentBasicDispatchBasicDispatchFeasibility")
+    efc_bess = get_variable(container, EFCStorage(), PSIP.StorageTechnology{PSY.EnergyReservoirStorage}, "ContinuousInvestmentSparseChrononDispatchBasicDispatchFeasibility")
+    bess_installed_cap = get_variable(container, BuildPowerCapacity(), PSIP.StorageTechnology{PSY.EnergyReservoirStorage}, "ContinuousInvestmentSparseChrononDispatchBasicDispatchFeasibility")
+    pv_installed_cap = get_variable(container, BuildCapacity(), PSIP.SupplyTechnology{PSY.RenewableDispatch}, "ContinuousInvestmentBasicDispatchBasicDispatchFeasibility")
+    re_names = axes(efc_re, 1)
+    bess_names = axes(efc_bess, 1)
+
+    renewables = [PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p, n) for n in re_names]
+    bess = [PSIP.get_technology(PSIP.StorageTechnology{PSY.EnergyReservoirStorage}, p, n) for n in bess_names]
+    efc_pv = 0.0
+    efc_wind = 0.0
+    efc_storage = 0.0
+    pv_cap = 0.0
+    bess_cap = 0.0
+    wind_cap = 0.0
+    for re in renewables
+        name = PSIP.get_name(re)
+        if PSIP.get_prime_mover_type(re) == PSY.PrimeMovers.PVe
+            efc_pv = efc_pv + efc_re[name, 1]
+            pv_cap = pv_cap + pv_installed_cap[name, 1]
+        end
+        if PSIP.get_prime_mover_type(re) == PSY.PrimeMovers.WT
+            efc_wind = efc_wind + efc_re[name, 1]
+            wind_cap = wind_cap + pv_installed_cap[name, 1]
+        end
+    end
+
+
+    for be in bess
+        name = PSIP.get_name(be)
+        efc_storage = efc_storage + efc_bess[name, 1]
+        bess_cap = bess_cap + bess_installed_cap[name, 1]
+    end
+
+    planes = PSIP.get_ext(collect(regions)[1])["planes"]
+
+    for p in planes
+        JuMP.@constraint(
+            get_jump_model(container),
+            efc_storage + efc_pv + efc_wind <= p[1] * pv_cap + p[2] * bess_cap + p[3] * wind_cap + p[4]
+            # efc_storage + efc_renewable >= 100.0
+        )
+    end
     return
 end

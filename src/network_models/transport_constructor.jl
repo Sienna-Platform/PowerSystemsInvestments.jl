@@ -17,7 +17,6 @@ function construct_transport!(
     #::ArgumentConstructStage,
 )
     add_constraints!(container, MultiRegionBalanceConstraint, p)
-    println(model.attributes["risk_curve"])
     if model.attributes["risk_curve"]
 
         add_constraints!(container, MultiRegionBalanceFeasibilityConstraint, p)

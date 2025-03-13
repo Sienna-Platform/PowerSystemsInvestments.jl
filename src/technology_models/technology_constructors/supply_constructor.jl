@@ -171,7 +171,7 @@ function construct_technologies!(
         devices,
         tech_model,
     )
-    if attributes["capacity_credit"]
+    if attributes["capacity_credit"] == "1d"
         add_constraints!(
             container,
             p,

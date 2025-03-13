@@ -128,11 +128,11 @@ function add_expression!(
     # TODO: Update with initial capacity once portfolios are updates
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        #init_cap = PSIP.get_initial_capacity(d)
+        init_cap = PSIP.get_existing_cap_power(d)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
-            #init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-            sum(var[name, t_p] for t_p in time_steps if t_p <= t),
+            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
+            # sum(var[name, t_p] for t_p in time_steps if t_p <= t),
             #binary = binary
         )
         #ub = get_variable_upper_bound(expression_type, d, formulation)
@@ -174,11 +174,11 @@ function add_expression!(
     # TODO: Move to add_to_expression!
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        #init_cap = PSIP.get_initial_capacity(d)
+        init_cap = PSIP.get_existing_cap_energy(d)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
-            #init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-            sum(var[name, t_p] for t_p in time_steps if t_p <= t),
+            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
+            # sum(var[name, t_p] for t_p in time_steps if t_p <= t),
             #binary = binary
         )
         #ub = get_variable_upper_bound(expression_type, d, formulation)
@@ -521,7 +521,7 @@ function add_to_expression!(
 } where {D<:PSIP.StorageTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_feasibility_time_steps(time_mapping)
+    time_steps = get_operational_time_steps(time_mapping)
     #binary = false
     #var = get_variable(container, ActivePowerVariable(), D)
 
@@ -906,6 +906,45 @@ function add_constraints!(
             con_ub[name, t] = JuMP.@constraint(
                 get_jump_model(container),
                 installed_cap[name, t] <= max_capacity
+            )
+        end
+    end
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    tech_model::String,
+) where {
+    T<:DurationConstraint,
+    U<:Union{D,Vector{D},IS.FlattenIteratorWrapper{D}},
+    V<:BuildPowerCapacity,
+    #X <: PM.AbstractPowerModel,
+} where {D<:PSIP.StorageTechnology}
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+
+    device_names = PSIP.get_name.(devices)
+    con_ub = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+
+
+    build_power_cap = get_variable(container, BuildPowerCapacity(), D, tech_model)
+    build_energy_cap = get_variable(container, BuildEnergyCapacity(), D, tech_model)
+    for d in devices
+        name = PSIP.get_name(d)
+        for t in time_steps
+            con_ub[name, t] = JuMP.@constraint(
+                get_jump_model(container),
+                build_energy_cap[name, t] == 2 * build_power_cap[name, t]
             )
         end
     end

@@ -15,7 +15,7 @@ function add_to_expression!(
     technology::T,
     time_period::Int,
     tech_model::String,
-) where {S <: OperationsExpressionType, T <: PSIP.SupplyTechnology}
+) where {S<:OperationsExpressionType,T<:PSIP.SupplyTechnology}
     if has_container_key(container, S, T)
         device_cost_expression = get_expression(container, S(), T, tech_model)
         component_name = PSY.get_name(technology)
@@ -34,7 +34,7 @@ function add_to_expression!(
     technology::T,
     time_period::Int,
     tech_model::String,
-) where {S <: InvestmentExpressionType, T <: PSIP.SupplyTechnology}
+) where {S<:InvestmentExpressionType,T<:PSIP.SupplyTechnology}
     if has_container_key(container, S, T)
         device_cost_expression = get_expression(container, S(), T, tech_model)
         component_name = PSY.get_name(technology)
@@ -54,7 +54,7 @@ function add_to_expression!(
     technology::T,
     time_period::Int,
     tech_model::String,
-) where {S <: OperationsExpressionType, T <: PSIP.StorageTechnology}
+) where {S<:OperationsExpressionType,T<:PSIP.StorageTechnology}
     if has_container_key(container, S, T)
         device_cost_expression = get_expression(container, S(), T, tech_model)
         component_name = PSY.get_name(technology)
@@ -73,7 +73,7 @@ function add_to_expression!(
     technology::T,
     time_period::Int,
     tech_model::String,
-) where {S <: InvestmentExpressionType, T <: PSIP.StorageTechnology}
+) where {S<:InvestmentExpressionType,T<:PSIP.StorageTechnology}
     if has_container_key(container, S, T)
         device_cost_expression = get_expression(container, S(), T, tech_model)
         component_name = PSY.get_name(technology)
@@ -92,7 +92,26 @@ function add_to_expression!(
     technology::T,
     time_period::Int,
     tech_model::String,
-) where {S <: InvestmentExpressionType, T <: GenericTransportTechnology}
+) where {S<:InvestmentExpressionType,T<:GenericTransportTechnology}
+    if has_container_key(container, S, T)
+        device_cost_expression = get_expression(container, S(), T, tech_model)
+        component_name = PSY.get_name(technology)
+        JuMP.add_to_expression!(
+            device_cost_expression[component_name, time_period],
+            cost_expression,
+        )
+    end
+    return
+end
+
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    ::Type{S},
+    cost_expression::JuMP.AbstractJuMPScalar,
+    technology::T,
+    time_period::Int,
+    tech_model::String,
+) where {S<:OperationsExpressionType,T<:GenericTransportTechnology}
     if has_container_key(container, S, T)
         device_cost_expression = get_expression(container, S(), T, tech_model)
         component_name = PSY.get_name(technology)
@@ -111,7 +130,7 @@ function add_to_expression!(
     ::Type{T},
     ::Type{U},
     devices::IS.FlattenIteratorWrapper{V},
-) where {T <: EnergyBalance, U <: OperationsVariableType, V <: PSIP.Technology}
+) where {T<:EnergyBalance,U<:OperationsVariableType,V<:PSIP.Technology}
     variable = get_variable(container, U(), V)
     expression = get_expression(container, T(), PSIP.Portfolio)
     multiplier = get_variable_multiplier(U(), V)

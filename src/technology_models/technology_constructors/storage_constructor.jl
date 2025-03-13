@@ -255,12 +255,20 @@ function construct_technologies!(
 
     add_constraints!(
         container,
+        DurationConstraint(),
+        BuildPowerCapacity(),
+        devices,
+        tech_model,
+    )
+
+    add_constraints!(
+        container,
         MaximumCumulativeEnergyCapacity(),
         CumulativeEnergyCapacity(),
         devices,
         tech_model,
     )
-    if attributes["capacity_credit"]
+    if attributes["capacity_credit"] == "1d"
         add_constraints!(
             container,
             p,

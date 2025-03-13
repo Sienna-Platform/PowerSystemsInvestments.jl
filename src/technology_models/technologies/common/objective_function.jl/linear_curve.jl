@@ -99,6 +99,30 @@ function _add_cost_to_objective!(
     return
 end
 
+
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::Float64,
+    ::U,
+    tech_model::String,
+) where {T<:ActivePowerVariable,U<:AbstractTechnologyFormulation}
+
+    proportional_term = om_cost
+    println(proportional_term)
+    multiplier = 1.0 #objective_function_multiplier(T(), U())
+    _add_linearcurve_cost!(
+        container,
+        T(),
+        technology,
+        multiplier * proportional_term,
+        tech_model,
+    )
+    return
+end
+
+
 #Storage Charge cost
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
@@ -317,6 +341,45 @@ function _add_linearcurve_cost!(
     end
     return
 end
+
+function _add_linearcurve_cost!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    proportional_term::Float64,
+    tech_model::String,
+) where {T<:OperationsVariableType}
+    base_year = get_base_year(container)
+    discount_rate = get_discount_rate(container)
+    inflation_rate = get_inflation_rate(container)
+    tech_base_year = PSIP.get_base_year(technology)
+    time_mapping = get_time_mapping(container)
+    operational_weights = get_operational_weights(container)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    discount_factor = 1.0 / (1.0 + discount_rate)
+    dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
+    years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
+
+    for op_ix in get_operational_indexes(time_mapping)
+        weight = operational_weights[op_ix]
+        for t in consecutive_slices[op_ix]
+            future_to_present_value = discount_factor^(years[t] - base_year)
+            npv_proportional_term =
+                proportional_term #* dollars_to_base_year * future_to_present_value
+            _add_linearcurve_variable_term_to_model!(
+                container,
+                T(),
+                VariableOMCost(),
+                technology,
+                weight * proportional_term,
+                t,
+                tech_model,
+            )
+        end
+    end
+    return
+end
+
 
 # Add proportional terms to objective function and expression
 

@@ -46,3 +46,7 @@ struct CapacityCreditConstraint <: ISOPT.ConstraintType end
 struct StorageCapacityCreditConstraint <: ISOPT.ConstraintType end
 
 struct PlanningReserveMarginConstraint <: ISOPT.ConstraintType end
+
+struct DurationConstraint <: ISOPT.ConstraintType end
+
+struct CCNDSurfaceConstraint <: ISOPT.ConstraintType end

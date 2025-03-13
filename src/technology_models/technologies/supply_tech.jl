@@ -336,7 +336,7 @@ function add_to_expression!(
 
     installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
-
+    variable = get_variable(container, ActivePowerVariable(), D, tech_model)
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -346,14 +346,14 @@ function add_to_expression!(
         region = PSIP.get_region(d)
         power_systems_type = PSIP.get_power_systems_type(d)
         for (op_ix, feas_ix) in zip(operational_indexes, feasibility_indexes)
-            time_slices = consecutive_slices[feas_ix]
-            time_step_inv = inverse_invest_mapping[feas_ix]
-
+            time_slices = consecutive_slices[op_ix]
+            time_step_inv = inverse_invest_mapping[op_ix]
             if power_systems_type == "ThermalStandard"
+                deratefactor = PSIP.get_outage_factor(d)
                 for t in time_slices
                     _add_to_jump_expression!(
                         expression[region, t],
-                        installed_cap[name, time_step_inv],
+                        installed_cap[name, time_step_inv] * deratefactor, #- variable[name, t],
                         1.0, #get_variable_multiplier(U(), V, W()),
                     )
                 end
@@ -363,7 +363,7 @@ function add_to_expression!(
                 for (ix, t) in enumerate(time_slices)
                     _add_to_jump_expression!(
                         expression[region, t],
-                        ts_data[ix] * installed_cap[name, time_step_inv],
+                        ts_data[ix] * installed_cap[name, time_step_inv],#- variable[name, t],
                         1.0, #get_variable_multiplier(U(), V, W()),
                     )
                 end
@@ -465,13 +465,14 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
+        deratefactor = PSIP.get_outage_factor(d)
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
-                    active_power[name, t] <= installed_cap[name, time_step_inv]
+                    active_power[name, t] <= installed_cap[name, time_step_inv] * deratefactor
                 )
             end
         end

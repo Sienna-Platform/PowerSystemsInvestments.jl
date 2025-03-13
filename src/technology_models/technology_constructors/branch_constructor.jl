@@ -155,7 +155,10 @@ function construct_technologies!(
 
     #convert technology model to string for container metadata
     tech_model = metadata_string(technology_model)
+    objective_function!(container, devices, C(), tech_model)
 
+    # Add objective function from container to JuMP model
+    update_objective_function!(container)
     # Dispatch constraint
     add_constraints!(
         container,

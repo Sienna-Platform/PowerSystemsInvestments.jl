@@ -33,13 +33,13 @@ function add_constraints!(
     for (op_t, feas_t) in zip(op_time_steps, feas_time_steps), (r_idx, r) in enumerate(regions)
         slope = PSIP.get_ext(r)["slope"]
         intercept = PSIP.get_ext(r)["intercept"]
-        constraint[r, feas_t] =
-            JuMP.@constraint(get_jump_model(container), expressions[r, feas_t] >= 0)
+        # constraint[r, feas_t] =
+        #     JuMP.@constraint(get_jump_model(container), expressions[r, op_t] >= 0)
 
         for s in 1:length(slope[op_t])
             JuMP.@constraint(
                 get_jump_model(container),
-                eue[r_idx, op_t] >= intercept[op_t][s] - expressions[r, feas_t] * slope[op_t][s]
+                eue[r_idx, op_t] >= intercept[op_t][s] - expressions[r, op_t] * slope[op_t][s]
             )
         end
     end
@@ -54,28 +54,3 @@ function add_constraints!(
     return
 end
 
-# ### Planning Reserve Margin Constraint ####
-# function add_constraints!(
-#     container::SingleOptimizationContainer,
-#     ::Type{T},
-#     port::U,
-# ) where {T<:PlanningReserveMarginConstraint,U<:PSIP.Portfolio}
-
-#     regions = PSIP.get_regions(PSIP.Zone, port)
-
-#     efc_wind = [v for v in JuMP.all_variables(get_jump_model(container)) if occursin("efc_wind", JuMP.name(v))]
-#     efc_pv = [v for v in JuMP.all_variables(get_jump_model(container)) if occursin("efc_pv", JuMP.name(v))]
-#     efc_bess = [v for v in JuMP.all_variables(get_jump_model(container)) if occursin("efc_storage", JuMP.name(v))]
-#     println(efc_wind, efc_pv, efc_bess)
-#     for (r_idx, r) in enumerate(regions)
-#         # efc_existing = PSIP.get_ext(r)["efc_existing"]
-#         # peak_load = PSIP.get_ext(r)["peak_load"]
-#         JuMP.@constraint(
-#             get_jump_model(container),
-#             # efc_bess[r_idx] + efc_pv[r_idx] + efc_wind[r_idx] >= 1.05 * peak_load - efc_existing
-#             efc_bess[r_idx] + efc_pv[r_idx] + efc_wind[r_idx] >= 300.0
-#         )
-#     end
-
-#     return
-# end

@@ -474,7 +474,6 @@ function solve!(
                     container = get_optimization_container(model)
                     time_mapping = get_time_mapping(container)
                     current_time = get_base_date(time_mapping)
-
                     write_results!(get_store(model), model, current_time, current_time)
                     write_optimizer_stats!(
                         get_store(model),

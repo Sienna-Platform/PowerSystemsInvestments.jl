@@ -146,7 +146,7 @@ function add_to_expression!(
 } where {D<:GenericTransportTechnology}
     #@assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_feasibility_time_steps(time_mapping)
+    time_steps = get_operational_time_steps(time_mapping)
     #binary = false
     #var = get_variable(container, ActivePowerVariable(), D)
 
@@ -158,7 +158,8 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         start_region = PSIP.get_start_region(d)
         end_region = PSIP.get_end_region(d)
-        losses = PSIP.get_line_loss(d)
+        init_cap = PSIP.get_existing_line_capacity(d)
+        # losses = PSIP.get_line_loss(d)
         #bus_no = PNM.get_mapped_bus_number(radial_network_reduction, PSY.get_bus(d))
         _add_to_jump_expression!(
             expression[start_region, t],
@@ -168,7 +169,7 @@ function add_to_expression!(
         _add_to_jump_expression!(
             expression[end_region, t],
             variable[name, t],
-            (1.0 - losses), #get_variable_multiplier(U(), V, W()),
+            1.0, #get_variable_multiplier(U(), V, W()),
         )
     end
 
@@ -316,21 +317,21 @@ end
 
 ########################### Objective Function Calls#############################################
 # These functions are custom implementations of the cost data. In the file objective_functions.jl there are default implementations. Define these only if needed.
-#=
+
 function objective_function!(
     container::SingleOptimizationContainer,
-    devices::Union{Vector{T}, IS.FlattenIteratorWrapper{T}},
+    devices::Union{Vector{T},IS.FlattenIteratorWrapper{T}},
     #DeviceModel{T, U},
     formulation::BasicDispatch, #Type{<:PM.AbstractPowerModel},
     tech_model::String,
-) where {T<:GenericTransportTechnology}#, U <: ActivePowerVariable}
+) where {T<:PSIP.ACTransportTechnology}#, U <: ActivePowerVariable}
     add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model) #U()
     #add_start_up_cost!(container, StartVariable(), devices, U())
     #add_shut_down_cost!(container, StopVariable(), devices, U())
     #add_proportional_cost!(container, OnVariable(), devices, U())
     return
 end
-=#
+
 
 function objective_function!(
     container::SingleOptimizationContainer,
