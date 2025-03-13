@@ -80,7 +80,7 @@ function add_variable_cost!(
 ) where {
     T <: PSIP.StorageTechnology,
     U <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
-    V <: BasicDispatch,
+    V <: OperationsStorageFormulation,
 }
     for d in devices
         op_cost_data = PSIP.get_operations_costs_power(d)
