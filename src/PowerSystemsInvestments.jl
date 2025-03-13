@@ -33,6 +33,8 @@ export IntegerInvestment
 ### Operation Formulations ###
 export BasicDispatch
 export BasicDispatchFeasibility
+export ChronologicalStorageDispatch
+export CyclicalStorageDispatch
 
 ### Transport Formulations ###
 export SingleRegionBalanceModel
