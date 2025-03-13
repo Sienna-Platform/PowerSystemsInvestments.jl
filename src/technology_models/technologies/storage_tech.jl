@@ -83,7 +83,7 @@ function add_expression!(
 
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_initial_capacity(d)
+        init_cap = PSIP.get_existing_capacity_power(d)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
@@ -121,7 +121,7 @@ function add_expression!(
 
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_initial_capacity(d)
+        init_cap = PSIP.get_existing_capacity_energy(d)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
@@ -563,12 +563,50 @@ function add_constraints!(
     discharge = get_variable(container, ActiveOutPowerVariable(), D, tech_model)
     storage_state = get_variable(container, V(), D, tech_model)
 
-    investment_to_operational_ixs = get_investment_map_to_operational_slices(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     time_stamps = get_time_stamps(time_mapping)
 
-    # TODO
-    error()
+    for d in devices
+        name = PSIP.get_name(d)
+        efficiency_in = PSIP.get_efficiency_in(d)
+        efficiency_out = PSIP.get_efficiency_out(d)
+        for op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            if length(time_slices) == 1
+                fraction_of_hour = 1.0
+            else
+                tstamp_first = time_stamps[time_slices[1]]
+                tstamp_second = time_stamps[time_slices[2]]
+                fraction_of_hour = Dates.Hour(tstamp_second - tstamp_first).value
+            end
+            first_time = first(time_slices)
+            last_time = last(time_slices)
+            for t in time_slices
+                if t == first_time
+                    con_soc[name, t] = JuMP.@constraint(
+                        get_jump_model(container),
+                        storage_state[name, t] ==
+                        storage_state[name, last_time] +
+                        (
+                            efficiency_in * charge[name, t] -
+                            discharge[name, t] / efficiency_out
+                        ) * fraction_of_hour
+                    )
+                else
+                    con_soc[name, t] = JuMP.@constraint(
+                        get_jump_model(container),
+                        storage_state[name, t] ==
+                        storage_state[name, t-1] +
+                        (
+                            efficiency_in * charge[name, t] -
+                            discharge[name, t] / efficiency_out
+                        ) * fraction_of_hour
+                    )
+                end
+            end
+        end
+    end
 end
 
 # Maximum cumulative capacity
@@ -577,14 +615,16 @@ function add_constraints!(
     ::T,
     ::V,
     devices::U,
-    tech_model::String,
+    formulation::S,
 ) where {
     T <: Union{MaximumCumulativePowerCapacity, MaximumCumulativeEnergyCapacity},
     U <: Vector{D},
     V <: Union{CumulativePowerCapacity, CumulativeEnergyCapacity},
+    S <: InvestmentTechnologyFormulation,
 } where {D <: PSIP.StorageTechnology}
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(S)
 
     device_names = PSIP.get_name.(devices)
     con_ub = add_constraints_container!(
@@ -616,9 +656,9 @@ end
 function objective_function!(
     container::SingleOptimizationContainer,
     devices::Vector{T},
-    formulation::BasicDispatch,
-    tech_model::String,
-) where {T <: PSIP.StorageTechnology}
+    formulation::S,
+) where {T <: PSIP.StorageTechnology, S <: OperationsStorageFormulation}
+    tech_model = string(S)
     add_variable_cost!(
         container,
         ActiveOutPowerVariable(),
@@ -633,9 +673,9 @@ end
 function objective_function!(
     container::SingleOptimizationContainer,
     devices::Vector{T},
-    formulation::InvestmentTechnologyFormulation,
-    tech_model::String,
-) where {T <: PSIP.StorageTechnology}
+    formulation::S,
+) where {T <: PSIP.StorageTechnology, S <: InvestmentTechnologyFormulation}
+    tech_model = string(S)
     add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
     add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)

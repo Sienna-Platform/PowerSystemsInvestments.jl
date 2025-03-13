@@ -4,8 +4,8 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     ::CapitalCostModel,
-    tech_type::T,
-    tech_formulation::B,
+    tech_type::Type{T},
+    tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
@@ -31,8 +31,8 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     model::OperationCostModel,
-    tech_type::T,
-    tech_formulation::C,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
@@ -43,11 +43,11 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     #ActivePowerVariables
-    add_variable!(container, ActiveInPowerVariable(), devices, C(), tech_model)
-    add_variable!(container, ActiveOutPowerVariable(), devices, C(), tech_model)
+    add_variable!(container, ActiveInPowerVariable(), devices, C())
+    add_variable!(container, ActiveOutPowerVariable(), devices, C())
 
     # StateOfChargeVariable
-    add_variable!(container, StateOfChargeVariable(), devices, C(), tech_model)
+    add_variable!(container, StateOfChargeVariable(), devices, C())
 
     # EnergyBalance
     add_to_expression!(
@@ -76,8 +76,8 @@ function construct_technologies!(
     names::Vector{String},
     ::ArgumentConstructStage,
     model::FeasibilityModel,
-    tech_type::T,
-    tech_formulation::D,
+    tech_type::Type{T},
+    tech_formulation::Type{D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
@@ -96,7 +96,6 @@ function construct_technologies!(
         ActiveInPowerVariable(),
         devices,
         D(),
-        tech_model,
         transport_model,
     )
     add_to_expression!(
@@ -105,7 +104,6 @@ function construct_technologies!(
         ActiveOutPowerVariable(),
         devices,
         D(),
-        tech_model,
         transport_model,
     )
     return
@@ -117,8 +115,8 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::CapitalCostModel,
-    tech_type::T,
-    tech_formulation::B,
+    tech_type::Type{T},
+    tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
@@ -129,7 +127,7 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Capital Component of objective function
-    objective_function!(container, devices, B(), tech_model)
+    objective_function!(container, devices, B())
 
     # Add objective function from container to JuMP model
     update_objective_function!(container)
@@ -140,7 +138,7 @@ function construct_technologies!(
         MaximumCumulativePowerCapacity(),
         CumulativePowerCapacity(),
         devices,
-        tech_model,
+        B(),
     )
 
     add_constraints!(
@@ -148,7 +146,7 @@ function construct_technologies!(
         MaximumCumulativeEnergyCapacity(),
         CumulativeEnergyCapacity(),
         devices,
-        tech_model,
+        B(),
     )
 
     # TODO: Implement Constraints on Ratio Energy vs Power
@@ -161,8 +159,8 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::OperationCostModel,
-    tech_type::T,
-    tech_formulation::C,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
@@ -173,7 +171,7 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Operations Component of objective function
-    objective_function!(container, devices, C(), tech_model)
+    objective_function!(container, devices, C())
 
     # Add objective function from container to JuMP model
     update_objective_function!(container)
@@ -226,8 +224,8 @@ function construct_technologies!(
     names::Vector{String},
     ::ModelConstructStage,
     model::FeasibilityModel,
-    tech_type::T,
-    tech_formulation::D,
+    tech_type::Type{T},
+    tech_formulation::Type{D},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
