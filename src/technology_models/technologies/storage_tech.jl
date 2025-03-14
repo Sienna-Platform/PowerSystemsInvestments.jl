@@ -521,7 +521,7 @@ function add_to_expression!(
 } where {D<:PSIP.StorageTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_operational_time_steps(time_mapping)
+    time_steps = get_feasibility_time_steps(time_mapping)
     #binary = false
     #var = get_variable(container, ActivePowerVariable(), D)
 

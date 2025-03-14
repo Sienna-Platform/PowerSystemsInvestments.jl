@@ -18,6 +18,10 @@ function _add_cost_to_objective!(
 ) where {T<:VariableType,U<:AbstractTechnologyFormulation}
     cost_component = PSY.get_function_data(value_curve)
     proportional_term = PSY.get_proportional_term(cost_component)
+
+    if PSIP.get_power_systems_type(technology) == "ThermalStandard"
+        proportional_term = proportional_term / PSIP.get_unit_size(technology)
+    end
     @debug "Cost is assumed to be in natural units: \$/MWh"
     # TODO: multiplier
     multiplier = 1.0 #objective_function_multiplier(T(), U())
@@ -110,7 +114,6 @@ function _add_cost_to_objective!(
 ) where {T<:ActivePowerVariable,U<:AbstractTechnologyFormulation}
 
     proportional_term = om_cost
-    println(proportional_term)
     multiplier = 1.0 #objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
@@ -195,7 +198,6 @@ function _add_linearcurve_cost!(
     discount_factor = 1 / (1 + discount_rate)
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     inv_tuples = get_investment_time_stamps(time_mapping)
-
     for t in get_investment_time_steps(time_mapping)
         inv_date = inv_tuples[t]
         year = Dates.value.(Dates.Year.(inv_date[1]))
