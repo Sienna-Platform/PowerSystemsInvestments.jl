@@ -34,8 +34,8 @@ function add_constraints!(
         if PSIP.get_name(r) == "PH"
             slope = PSIP.get_ext(r)["slope"]
             intercept = PSIP.get_ext(r)["intercept"]
-            # constraint[r, feas_t] =
-            #     JuMP.@constraint(get_jump_model(container), expressions[r, op_t] >= 0)
+            constraint[r, feas_t] =
+                JuMP.@constraint(get_jump_model(container), expressions[r, feas_t] >= 0)
 
             for s in 1:length(slope[op_t])
                 JuMP.@constraint(

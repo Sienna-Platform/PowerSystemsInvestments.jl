@@ -158,9 +158,6 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         start_region = PSIP.get_start_region(d)
         end_region = PSIP.get_end_region(d)
-        init_cap = PSIP.get_existing_line_capacity(d)
-        # losses = PSIP.get_line_loss(d)
-        #bus_no = PNM.get_mapped_bus_number(radial_network_reduction, PSY.get_bus(d))
         _add_to_jump_expression!(
             expression[start_region, t],
             variable[name, t],

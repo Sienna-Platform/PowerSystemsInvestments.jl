@@ -1068,7 +1068,6 @@ function add_constraints!(
     for d in devices
         name = PSIP.get_name(d)
         pras_mapping = PSIP.get_ext(d)["pras_tm"]
-        # println(pras_mapping)
         num_partition = length(pras_mapping)
         net_change = JuMP.@variable(get_jump_model(container), [1:all_indexes[end]], base_name = "stor_ΔE[$(name)]") #∆e = Pt∈T pt
         net_change_low = JuMP.@variable(get_jump_model(container), [1:all_indexes[end]], base_name = "stor_ΔE_low[$(name)]") #⌊e⌋ variable def for eq1 for each representative day

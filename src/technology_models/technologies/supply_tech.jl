@@ -336,7 +336,6 @@ function add_to_expression!(
 
     installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    variable = get_variable(container, ActivePowerVariable(), D, tech_model)
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -346,8 +345,8 @@ function add_to_expression!(
         region = PSIP.get_region(d)
         power_systems_type = PSIP.get_power_systems_type(d)
         for (op_ix, feas_ix) in zip(operational_indexes, feasibility_indexes)
-            time_slices = consecutive_slices[op_ix]
-            time_step_inv = inverse_invest_mapping[op_ix]
+            time_slices = consecutive_slices[feas_ix]
+            time_step_inv = inverse_invest_mapping[feas_ix]
             if power_systems_type == "ThermalStandard"
                 deratefactor = PSIP.get_outage_factor(d)
                 for t in time_slices
