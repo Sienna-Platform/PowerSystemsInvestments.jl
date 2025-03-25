@@ -192,11 +192,10 @@ function init_optimization_container!(
     set_time_mapping!(container, time_map)
     set_operational_weights!(container, operation_model.series_weights)
     # Set Financial Data in Container from Portfolio
-    financials = collect(PSIP.get_financials(PSIP.PortfolioFinancialData, portfolio))[1]
-    set_base_year!(container, PSIP.get_base_year(financials))
-    set_discount_rate!(container, PSIP.get_discount_rate(financials))
-    set_inflation_rate!(container, PSIP.get_inflation_rate(financials))
-    set_interest_rate!(container, PSIP.get_interest_rate(financials))
+    set_base_year!(container, PSIP.get_base_year(portfolio))
+    set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
+    set_inflation_rate!(container, PSIP.get_inflation_rate(portfolio))
+    set_interest_rate!(container, PSIP.get_interest_rate(portfolio))
 
     stats = get_optimizer_stats(container)
     stats.detailed_stats = get_detailed_optimizer_stats(settings)
@@ -561,7 +560,7 @@ function _make_system_expressions!(
     ::Type{MultiRegionBalanceModel},
     port::PSIP.Portfolio,
 )
-    regions = PSIP.get_regions(PSIP.Zone, port)
+    regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     container.expressions = Dict(
