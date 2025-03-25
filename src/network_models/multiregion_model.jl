@@ -5,7 +5,7 @@ function add_constraints!(
 ) where {T <: MultiRegionBalanceConstraint, U <: PSIP.Portfolio}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    regions = PSIP.get_regions(PSIP.Zone, port)
+    regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
     expressions = get_expression(container, EnergyBalance(), U)
     constraint = add_constraints_container!(container, T(), U, regions, time_steps)
     for t in time_steps, r in regions

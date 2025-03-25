@@ -101,8 +101,8 @@ function add_to_expression!(
     # Assuming that energy travels from start to end, so if dispatch of Branch is positive, it is subtracted from start_region
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        start_region = PSIP.get_start_region(d)
-        end_region = PSIP.get_end_region(d)
+        start_region = PSIP.get_name(PSIP.get_start_region(d))
+        end_region = PSIP.get_name(PSIP.get_end_region(d))
         losses = PSIP.get_line_loss(d)
         _add_to_jump_expression!(expression[start_region, t], variable[name, t], -1.0)
         _add_to_jump_expression!(

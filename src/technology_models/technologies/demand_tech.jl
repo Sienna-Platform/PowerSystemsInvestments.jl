@@ -82,7 +82,8 @@ function add_to_expression!(
     time_stamps = get_time_stamps(time_mapping)
 
     for d in devices
-        region = PSIP.get_region(d)
+        # Only 1 region supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
@@ -162,7 +163,8 @@ function add_to_expression!(
     time_stamps = get_time_stamps(time_mapping)
 
     for d in devices
-        region = PSIP.get_region(d)
+        # Only one region supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)

@@ -32,8 +32,8 @@ get_expression_multiplier(::EnergyBalance, ::ActiveInPowerVariable, ::PSIP.Stora
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_max_capacity_power(d)
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_max_capacity_energy(d)
+get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_power_limits(d).max
+get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_energy_limits(d).max
 
 #! format: on
 
@@ -269,7 +269,8 @@ function add_to_expression!(
 
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        region = PSIP.get_region(d)
+        # Only 1 region supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -337,7 +338,8 @@ function add_to_expression!(
 
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        region = PSIP.get_region(d)
+        # Only 1 region supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -488,8 +490,8 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        efficiency_in = PSIP.get_efficiency_in(d)
-        efficiency_out = PSIP.get_efficiency_out(d)
+        efficiency_in = PSIP.get_efficiency(d).in
+        efficiency_out = PSIP.get_efficiency(d).out
         # For each period and first representative day, the initial storage is zero
         init_storage = 0.0
         for stage in get_investment_time_steps(time_mapping)
@@ -569,8 +571,8 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        efficiency_in = PSIP.get_efficiency_in(d)
-        efficiency_out = PSIP.get_efficiency_out(d)
+        efficiency_in = PSIP.get_efficiency(d).in
+        efficiency_out = PSIP.get_efficiency(d).out
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             if length(time_slices) == 1
@@ -597,7 +599,7 @@ function add_constraints!(
                     con_soc[name, t] = JuMP.@constraint(
                         get_jump_model(container),
                         storage_state[name, t] ==
-                        storage_state[name, t-1] +
+                        storage_state[name, t - 1] +
                         (
                             efficiency_in * charge[name, t] -
                             discharge[name, t] / efficiency_out

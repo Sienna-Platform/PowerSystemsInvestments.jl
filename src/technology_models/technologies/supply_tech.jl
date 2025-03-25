@@ -1,6 +1,6 @@
 #! format: off
-get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_max_capacity(d)
-get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_min_capacity(d)
+get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
+get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).min
 get_variable_binary(::BuildCapacity, d::PSIP.SupplyTechnology, ::ContinuousInvestment) = false
 
 get_variable_lower_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::OperationsTechnologyFormulation) = 0.0
@@ -195,7 +195,8 @@ function add_to_expression!(
     expression = get_expression(container, T(), PSIP.Portfolio)
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        region = PSIP.get_region(d)
+        # Only 1 region supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -272,7 +273,8 @@ function add_to_expression!(
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     for d in devices
         name = PSIP.get_name(d)
-        region = PSIP.get_region(d)
+        # Only 1 region supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
         for op_ix in feasibility_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
@@ -435,7 +437,7 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        max_capacity = PSIP.get_max_capacity(d)
+        max_capacity = PSIP.get_capacity_limits(d).max
         for t in time_steps
             con_ub[name, t] = JuMP.@constraint(
                 get_jump_model(container),
