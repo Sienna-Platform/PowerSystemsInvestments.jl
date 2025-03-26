@@ -414,6 +414,7 @@ function test_2_zone_portfolio()
         operation_costs_inverter=LoadCost(CostCurve(LinearCurve(0.0)), 0.0),
         capital_costs_inverter=LinearCurve(inverter_capex),
         inverter_efficiency=1.0,
+        existing_capacity_inverter=0.0,
     )
 
     ####################
