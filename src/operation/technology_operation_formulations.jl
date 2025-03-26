@@ -6,6 +6,10 @@ abstract type OperationsStorageFormulation <: OperationsTechnologyFormulation en
 struct ChronologicalStorageDispatch <: OperationsStorageFormulation end
 struct CyclicalStorageDispatch <: OperationsStorageFormulation end
 
+abstract type OperationsColocatedFormulation <: OperationsTechnologyFormulation end
+struct ChronologicalColocatedDispatch <: OperationsColocatedFormulation end
+struct CyclicalColocatedDispatch <: OperationsColocatedFormulation end
+
 ### Feasibility Formulations ###
 
 struct BasicDispatchFeasibility <: FeasibilityTechnologyFormulation end
