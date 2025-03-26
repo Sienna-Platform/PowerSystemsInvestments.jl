@@ -219,12 +219,12 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{W},
 ) where {
-    S <: OperationsStorageFormulation,
+    S <: Union{OperationsStorageFormulation, OperationsColocatedFormulation},
     T <: EnergyBalance,
     U <: Vector{D},
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: SingleRegionBalanceModel,
-} where {D <: PSIP.StorageTechnology}
+} where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
@@ -253,12 +253,12 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{W},
 ) where {
-    S <: OperationsStorageFormulation,
+    S <: Union{OperationsStorageFormulation, OperationsColocatedFormulation},
     T <: EnergyBalance,
     U <: Vector{D},
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: MultiRegionBalanceModel,
-} where {D <: PSIP.StorageTechnology}
+} where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
@@ -413,7 +413,7 @@ function add_constraints!(
     formulation::S,
     tech_model_vector::Vector{X},
 ) where {
-    T <: StateofChargeLimitsConstraint,
+    T <: StateOfChargeLimitsConstraint,
     U <: Vector{D},
     V <: StateOfChargeVariable,
     S <: OperationsStorageFormulation,

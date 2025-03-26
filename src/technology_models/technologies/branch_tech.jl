@@ -1,5 +1,5 @@
 #! format: off
-get_variable_upper_bound(::BuildCapacity, d::GenericTransportTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_maximum_new_capacity(d)
+get_variable_upper_bound(::BuildCapacity, d::GenericTransportTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_max_new_capacity(d)
 get_variable_lower_bound(::BuildCapacity, d::GenericTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::GenericTransportTechnology, ::ContinuousInvestment) = false
 
@@ -196,7 +196,7 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        max_capacity = PSIP.get_maximum_new_capacity(d)
+        max_capacity = PSIP.get_max_new_capacity(d)
         init_cap = PSIP.get_existing_line_capacity(d)
         for t in time_steps
             con_ub[name, t] = JuMP.@constraint(

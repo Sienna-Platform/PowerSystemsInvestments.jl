@@ -199,7 +199,7 @@ function construct_technologies!(
     # Energy storage constraint
     add_constraints!(
         container,
-        StateofChargeLimitsConstraint(),
+        StateOfChargeLimitsConstraint(),
         StateOfChargeVariable(),
         devices,
         C(),
