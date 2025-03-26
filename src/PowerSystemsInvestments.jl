@@ -35,6 +35,8 @@ export BasicDispatch
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
 export CyclicalStorageDispatch
+export ChronologicalColocatedDispatch
+export CyclicalColocatedDispatch
 
 ### Transport Formulations ###
 export SingleRegionBalanceModel
@@ -45,9 +47,16 @@ export BuildCapacity
 export ActivePowerVariable
 export BuildEnergyCapacity
 export BuildPowerCapacity
+export BuildWindCapacity
+export BuildSolarCapacity
+export BuildInverterCapacity
 export ActiveInPowerVariable
 export ActiveOutPowerVariable
 export StateOfChargeVariable
+export ActivePowerChargeVariable
+export ActivePowerDischargeVariable
+export ActivePowerWindVariable
+export ActivePowerSolarVariable
 export FlowActivePowerVariable
 
 ### Expressions ###
@@ -59,6 +68,9 @@ export VariableOMCost
 export EnergyBalance
 export CumulativePowerCapacity
 export CumulativeEnergyCapacity
+export CumulativeSolarCapacity
+export CumulativeWindCapacity
+export CumulativeInverterCapacity
 
 ### Functions ###
 # methods
@@ -225,6 +237,7 @@ include("technology_models/technologies/common/add_to_expression.jl")
 include("technology_models/technologies/supply_tech.jl")
 include("technology_models/technologies/demand_tech.jl")
 include("technology_models/technologies/storage_tech.jl")
+include("technology_models/technologies/colocated_tech.jl")
 include("technology_models/technologies/branch_tech.jl")
 # Network #
 include("network_models/singleregion_model.jl")
@@ -234,6 +247,7 @@ include("network_models/transport_constructor.jl")
 include("technology_models/technology_constructors/supply_constructor.jl")
 include("technology_models/technology_constructors/demand_constructor.jl")
 include("technology_models/technology_constructors/storage_constructor.jl")
+include("technology_models/technology_constructors/colocated_constructor.jl")
 include("technology_models/technology_constructors/branch_constructor.jl")
 include("technology_models/technology_constructors/constructor_validations.jl")
 # Objective Function #
