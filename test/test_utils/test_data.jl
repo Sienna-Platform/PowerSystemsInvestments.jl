@@ -258,12 +258,12 @@ function test_2_zone_portfolio()
         available=true,
         capital_costs_power=LinearCurve(stor_kw_capex * 1000),
         capital_costs_energy=LinearCurve(stor_kwh_capex * 1000),
-        operations_costs_energy=StorageCost(
+        operation_costs_energy=StorageCost(
             charge_variable_cost=CostCurve(LinearCurve(0.0)),
             discharge_variable_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
         ),
-        operations_costs_power=StorageCost(
+        operation_costs_power=StorageCost(
             charge_variable_cost=CostCurve(LinearCurve(0.0)),
             discharge_variable_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
@@ -319,6 +319,103 @@ function test_2_zone_portfolio()
         value_of_lost_load=0.0,
     )
 
+    ###################################
+    ##### Colocated Storage Supply ####
+    ###################################
+
+    # From Conservative 2024-ABT CAPEX: year 2024 for Utility PV Class 4 
+    pv_capex = 1575.766 # $/kW
+    pv_capex_2035 = 1189.247 #
+    ts_solar = zeros(24)
+    ts_solar[9] = 0.1
+    ts_solar[10] = 0.4
+    ts_solar[11] = 0.45
+    ts_solar[12] = 0.8
+    ts_solar[13] = 0.95
+    ts_solar[14] = 1.0
+    ts_solar[15] = 0.95
+    ts_solar[16] = 0.8
+    ts_solar[17] = 0.45
+    ts_solar[18] = 0.4
+    ts_solar[19] = 0.1
+
+    ts_col_wind_2030 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2030_ops, ts_wind_2030_data),
+        name="ops_wind_variable_cap_factor",
+        scaling_factor_multiplier=get_existing_capacity_wind,
+    )
+    ts_col_wind_2035 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2035_ops, ts_wind_2035_data),
+        name="ops_wind_variable_cap_factor",
+        scaling_factor_multiplier=get_existing_capacity_wind,
+    )
+
+    ts_col_wind_inv_capex = SingleTimeSeries(
+        "inv_wind_capex",
+        TimeArray(tstamp_inv, [1.0, wind_capex / wind_capex_2035]),
+    )
+
+    ts_col_solar_2030 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2030_ops, ts_solar),
+        name="ops_solar_variable_cap_factor",
+        scaling_factor_multiplier=get_existing_capacity_solar,
+    )
+    ts_col_solar_2035 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2035_ops, ts_solar),
+        name="ops_solar_variable_cap_factor",
+        scaling_factor_multiplier=get_existing_capacity_solar,
+    )
+
+    ts_col_solar_inv_capex = SingleTimeSeries(
+        "inv_solar_capex",
+        TimeArray(tstamp_inv, [1.0, pv_capex / pv_capex_2035]),
+    )
+
+    inverter_capex = 1e4 # No data for now. Cheap to install inverter.
+
+    colocated_unit = ColocatedSupplyStorageTechnology{RenewableDispatch}(;
+        name="colocated_test",
+        available=true,
+        id=10,
+        power_systems_type="EnergyReservoirStorage",
+        region=[z1],
+        balancing_topology="Region",
+        base_power=1.0,
+        financial_data=tech_financials(),
+        # Solar #
+        existing_capacity_solar=0.0,
+        operation_costs_solar=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
+        capital_costs_solar=LinearCurve(pv_capex * 1000.0), # to $/MW
+        capacity_limits_solar=(min=0.0, max=1e8),
+        # Wind # 
+        existing_capacity_wind=0.0,
+        operation_costs_wind=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
+        capital_costs_wind=LinearCurve(wind_capex * 1000.0), # to $/MW
+        capacity_limits_wind=(min=0.0, max=1e8),
+        # Storage #
+        existing_capacity_energy=0.0,
+        existing_capacity_power=0.0,
+        efficiency_storage=(in=0.93, out=0.93),
+        operation_costs_power=StorageCost(
+            charge_variable_cost=CostCurve(LinearCurve(0.0)),
+            discharge_variable_cost=CostCurve(LinearCurve(0.0)),
+            fixed=0.0,
+        ),
+        operation_costs_energy=StorageCost(
+            charge_variable_cost=CostCurve(LinearCurve(0.0)),
+            discharge_variable_cost=CostCurve(LinearCurve(0.0)),
+            fixed=0.0,
+        ),
+        capital_costs_power=LinearCurve(stor_kw_capex * 1000 / 50.0), # cheaper
+        capital_costs_energy=LinearCurve(stor_kwh_capex * 1000 / 50.0), # cheaper
+        # Inverter #
+        max_inverter_capacity=1e8,
+        inverter_supply_ratio=1.0,
+        operation_costs_inverter=LoadCost(CostCurve(LinearCurve(0.0)), 0.0),
+        capital_costs_inverter=LinearCurve(inverter_capex),
+        inverter_efficiency=1.0,
+    )
+
     ####################
     ##### Transmission #####
     #####################
@@ -328,7 +425,7 @@ function test_2_zone_portfolio()
         start_region=z1,
         end_region=z2,
         existing_line_capacity=100,
-        maximum_new_capacity=900,
+        max_new_capacity=900,
         line_loss=0.05,
         capital_cost=LinearCurve(5000.0),
         available=true,
@@ -349,27 +446,35 @@ function test_2_zone_portfolio()
     )
     PSIP.set_name!(p_5bus, "test")
 
-    PSIP.add_region!(p_5bus, z1)
-    PSIP.add_region!(p_5bus, z2)
-    PSIP.add_technology!(p_5bus, t_th)
-    PSIP.add_technology!(p_5bus, t_re)
-    PSIP.add_technology!(p_5bus, t_th_exp)
-    PSIP.add_technology!(p_5bus, t_demand1)
-    PSIP.add_technology!(p_5bus, t_demand2)
-    PSIP.add_technology!(p_5bus, t_stor)
-    PSIP.add_technology!(p_5bus, t_th_mid)
-    PSIP.add_technology!(p_5bus, line)
+    add_region!(p_5bus, z1)
+    add_region!(p_5bus, z2)
+    add_technology!(p_5bus, t_th)
+    add_technology!(p_5bus, t_re)
+    add_technology!(p_5bus, t_th_exp)
+    add_technology!(p_5bus, t_demand1)
+    add_technology!(p_5bus, t_demand2)
+    add_technology!(p_5bus, t_stor)
+    add_technology!(p_5bus, t_th_mid)
+    add_technology!(p_5bus, colocated_unit)
+    add_technology!(p_5bus, line)
 
     PSIP.add_time_series!(p_5bus, t_th, ts_th_cheap_inv_capex)
     PSIP.add_time_series!(p_5bus, t_th_exp, ts_th_exp_inv_capex)
 
-    IS.add_time_series!(p_5bus.data, t_re, ts_wind_2030; year="2030", rep_day=1)
-    IS.add_time_series!(p_5bus.data, t_re, ts_wind_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p_5bus, t_re, ts_wind_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p_5bus, t_re, ts_wind_2035; year="2035", rep_day=2)
     PSIP.add_time_series!(p_5bus, t_re, ts_wind_inv_capex)
 
-    IS.add_time_series!(p_5bus.data, t_demand1, ts_demand_2030; year="2030", rep_day=1)
-    IS.add_time_series!(p_5bus.data, t_demand1, ts_demand_2035; year="2035", rep_day=2)
-    IS.add_time_series!(p_5bus.data, t_demand2, ts_demand_2030; year="2030", rep_day=1)
-    IS.add_time_series!(p_5bus.data, t_demand2, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_inv_capex)
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_inv_capex)
+
+    PSIP.add_time_series!(p_5bus, t_demand1, ts_demand_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p_5bus, t_demand1, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2035; year="2035", rep_day=2)
     return p_5bus, [tstamp_2030_ops, tstamp_2035_ops]
 end

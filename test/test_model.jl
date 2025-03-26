@@ -68,6 +68,15 @@
         BasicDispatchFeasibility,
     )
 
+    set_technology_model!(
+        template,
+        ["colocated_test"],
+        ColocatedSupplyStorageTechnology{RenewableDispatch},
+        ContinuousInvestment,
+        CyclicalColocatedDispatch,
+        BasicDispatchFeasibility,
+    )
+
     m = InvestmentModel(
         template,
         SingleInstanceSolve,
@@ -82,7 +91,7 @@
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemResults(m)
-    @test length(IS.Optimization.list_variable_names(res)) == 11
+    @test length(IS.Optimization.list_variable_names(res)) == 23
     @test length(IS.Optimization.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 
@@ -138,6 +147,15 @@
         BasicDispatchFeasibility,
     )
 
+    set_technology_model!(
+        template,
+        ["colocated_test"],
+        ColocatedSupplyStorageTechnology{RenewableDispatch},
+        ContinuousInvestment,
+        ChronologicalColocatedDispatch,
+        BasicDispatchFeasibility,
+    )
+
     m = InvestmentModel(
         template,
         SingleInstanceSolve,
@@ -152,7 +170,7 @@
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemResults(m)
-    @test length(IS.Optimization.list_variable_names(res)) == 11
+    @test length(IS.Optimization.list_variable_names(res)) == 23
     @test length(IS.Optimization.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 end
