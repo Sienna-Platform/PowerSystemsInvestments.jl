@@ -20,3 +20,19 @@ function retrieve_ops_time_series(d::PSIP.Technology, op_ix::Int, time_mapping::
     year = string(Dates.Year(get_time_stamps(time_mapping)[first_t]).value)
     return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; year=year, rep_day=op_ix)
 end
+
+function retrieve_ops_time_series(
+    d::PSIP.Technology,
+    op_ix::Int,
+    time_mapping::TimeMapping,
+    ts_name::String,
+)
+    first_t = first(get_consecutive_slices(time_mapping)[op_ix])
+    year = string(Dates.Year(get_time_stamps(time_mapping)[first_t]).value)
+    return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; year=year, rep_day=op_ix)
+end
+
+# TODO: Add Fixed Cost to RenewableGenerationCost !
+function PSY.get_fixed(cost::PSY.RenewableGenerationCost)
+    return 0.0
+end
