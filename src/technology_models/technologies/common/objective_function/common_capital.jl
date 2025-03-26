@@ -88,7 +88,7 @@ function add_fixed_om_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        fixed_cost_data = PSIP.get_operations_costs_energy(d)
+        fixed_cost_data = PSIP.get_operation_costs_energy(d)
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
@@ -106,7 +106,7 @@ function add_fixed_om_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        fixed_cost_data = PSIP.get_operations_costs_power(d)
+        fixed_cost_data = PSIP.get_operation_costs_power(d)
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
@@ -168,6 +168,46 @@ function add_capital_cost!(
     for d in devices
         capital_cost_data = PSIP.get_capital_costs_power(d)
         _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+    end
+    return
+end
+
+########################################
+############ Colocated Costs ###########
+########################################
+
+function add_capital_cost!(
+    container::SingleOptimizationContainer,
+    ::U,
+    devices::Vector{T},
+    ::V,
+    tech_model::String,
+) where {
+    T <: PSIP.ColocatedSupplyStorageTechnology,
+    U <: BuildInvestmentVariableType,
+    V <: InvestmentTechnologyFormulation,
+}
+    for d in devices
+        capital_cost_data = get_capital_cost_data(d, U())
+        _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+    end
+    return
+end
+
+function add_fixed_om_cost!(
+    container::SingleOptimizationContainer,
+    ::U,
+    devices::Vector{T},
+    ::V,
+    tech_model::String,
+) where {
+    T <: PSIP.ColocatedSupplyStorageTechnology,
+    U <: BuildInvestmentVariableType,
+    V <: InvestmentTechnologyFormulation,
+}
+    for d in devices
+        fixed_cost_data = get_operation_cost_data(d, U())
+        _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
 end

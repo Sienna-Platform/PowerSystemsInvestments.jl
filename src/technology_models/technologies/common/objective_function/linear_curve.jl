@@ -77,7 +77,7 @@ function _add_cost_to_objective!(
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
-) where {T <: ActivePowerVariable, U <: AbstractTechnologyFormulation}
+) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
     cost_curve = PSY.get_variable(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
@@ -101,7 +101,10 @@ function _add_cost_to_objective!(
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
-) where {T <: ActiveInPowerVariable, U <: AbstractTechnologyFormulation}
+) where {
+    T <: Union{ActiveInPowerVariable, ActivePowerChargeVariable},
+    U <: AbstractTechnologyFormulation,
+}
     cost_curve = PSY.get_charge_variable_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
@@ -125,7 +128,10 @@ function _add_cost_to_objective!(
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
-) where {T <: ActiveOutPowerVariable, U <: AbstractTechnologyFormulation}
+) where {
+    T <: Union{ActiveOutPowerVariable, ActivePowerDischargeVariable},
+    U <: AbstractTechnologyFormulation,
+}
     cost_curve = PSY.get_discharge_variable_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
@@ -303,35 +309,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: ActivePowerVariable}
-    linear_cost = _add_proportional_term!(
-        container,
-        T(),
-        technology,
-        proportional_term,
-        time_period,
-        tech_model,
-    )
-    add_to_expression!(
-        container,
-        VariableOMCost,
-        linear_cost,
-        technology,
-        time_period,
-        tech_model,
-    )
-    return
-end
-
-function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::VariableOMCost,
-    technology::PSIP.Technology,
-    proportional_term::Float64,
-    time_period::Int,
-    tech_model::String,
-) where {T <: Union{ActiveInPowerVariable, ActiveOutPowerVariable}}
+) where {T <: OperationsVariableType}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -389,7 +367,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: BuildCapacity}
+) where {T <: BuildInvestmentVariableType}
     linear_cost = _add_proportional_term!(
         container,
         T(),

@@ -8,7 +8,7 @@ function add_to_expression!(
     technology::T,
     time_period::Int,
     tech_model::String,
-) where {S <: OperationsExpressionType, T <: PSIP.SupplyTechnology}
+) where {S <: OperationsExpressionType, T <: PSIP.Technology}
     if has_container_key(container, S, T)
         device_cost_expression = get_expression(container, S(), T, tech_model)
         component_name = PSY.get_name(technology)
@@ -27,7 +27,7 @@ function add_to_expression!(
     technology::T,
     time_period::Int,
     tech_model::String,
-) where {S <: InvestmentExpressionType, T <: PSIP.SupplyTechnology}
+) where {S <: InvestmentExpressionType, T <: PSIP.Technology}
     if has_container_key(container, S, T)
         device_cost_expression = get_expression(container, S(), T, tech_model)
         component_name = PSY.get_name(technology)
@@ -66,7 +66,10 @@ function add_to_expression!(
     technology::T,
     time_period::Int,
     tech_model::String,
-) where {S <: InvestmentExpressionType, T <: PSIP.StorageTechnology}
+) where {
+    S <: InvestmentExpressionType,
+    T <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology},
+}
     if has_container_key(container, S, T)
         device_cost_expression = get_expression(container, S(), T, tech_model)
         component_name = PSY.get_name(technology)
