@@ -253,13 +253,13 @@ function construct_technologies!(
         tech_model,
     )
 
-    # add_constraints!(
-    #     container,
-    #     DurationConstraint(),
-    #     BuildPowerCapacity(),
-    #     devices,
-    #     tech_model,
-    # )
+    add_constraints!(
+        container,
+        DurationConstraint(),
+        BuildPowerCapacity(),
+        devices,
+        tech_model,
+    )
 
     add_constraints!(
         container,

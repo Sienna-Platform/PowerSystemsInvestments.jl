@@ -941,11 +941,22 @@ function add_constraints!(
     build_energy_cap = get_variable(container, BuildEnergyCapacity(), D, tech_model)
     for d in devices
         name = PSIP.get_name(d)
-        for t in time_steps
-            con_ub[name, t] = JuMP.@constraint(
-                get_jump_model(container),
-                build_energy_cap[name, t] == 2 * build_power_cap[name, t]
-            )
+        if PSIP.get_storage_tech(d) == PSY.StorageTech.LIB
+            for t in time_steps
+                con_ub[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    build_energy_cap[name, t] == 4 * build_power_cap[name, t]
+                )
+            
+            end
+        elseif PSIP.get_storage_tech(d) ==  PSY.StorageTech.OTHER_MECH
+            for t in time_steps
+                con_ub[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    build_energy_cap[name, t] == 10 * build_power_cap[name, t]
+                )
+            
+            end
         end
     end
 end

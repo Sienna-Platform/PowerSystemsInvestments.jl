@@ -232,7 +232,8 @@ function add_constraints!(
     for th in thermals
         name = PSIP.get_name(th)
         unit_size = PSIP.get_unit_size(th)
-        efc_th = efc_th + 0.91 * efc_thermal[name, 1] * unit_size
+        outage_rate = PSIP.get_outage_factor(th)
+        efc_th = efc_th + outage_rate * efc_thermal[name, 1] * unit_size
     end
 
 
@@ -248,7 +249,7 @@ function add_constraints!(
         peak_load = peak_load + PSIP.get_ext(r)["peakload"]
         pmr = PSIP.get_ext(r)["pmr"]
     end
-
+    println(pmr * peak_load - efc_existing)
     JuMP.@constraint(
         get_jump_model(container),
         efc_th + efc_storage + efc_renewable >= pmr * peak_load - efc_existing
@@ -273,7 +274,7 @@ function add_constraints!(
     efc_re = get_variable(container, EFCRenewable(), PSIP.SupplyTechnology{PSY.RenewableDispatch}, "ContinuousInvestmentBasicDispatchBasicDispatchFeasibility")
     efc_bess = get_variable(container, EFCStorage(), PSIP.StorageTechnology{PSY.EnergyReservoirStorage}, "ContinuousInvestmentSparseChrononDispatchBasicDispatchFeasibility")
     bess_installed_cap = get_variable(container, BuildPowerCapacity(), PSIP.StorageTechnology{PSY.EnergyReservoirStorage}, "ContinuousInvestmentSparseChrononDispatchBasicDispatchFeasibility")
-    pv_installed_cap = get_variable(container, BuildCapacity(), PSIP.SupplyTechnology{PSY.RenewableDispatch}, "ContinuousInvestmentBasicDispatchBasicDispatchFeasibility")
+    re_installed_cap = get_variable(container, BuildCapacity(), PSIP.SupplyTechnology{PSY.RenewableDispatch}, "ContinuousInvestmentBasicDispatchBasicDispatchFeasibility")
     re_names = axes(efc_re, 1)
     bess_names = axes(efc_bess, 1)
 
@@ -282,26 +283,34 @@ function add_constraints!(
     efc_pv = 0.0
     efc_wind = 0.0
     efc_storage = 0.0
+    efc_phs = 0.0
     pv_cap = 0.0
     bess_cap = 0.0
     wind_cap = 0.0
+    phs_cap = 0.0
     for re in renewables
         name = PSIP.get_name(re)
         if PSIP.get_prime_mover_type(re) == PSY.PrimeMovers.PVe
             efc_pv = efc_pv + efc_re[name, 1]
-            pv_cap = pv_cap + pv_installed_cap[name, 1]
+            pv_cap = pv_cap + re_installed_cap[name, 1]
         end
         if PSIP.get_prime_mover_type(re) == PSY.PrimeMovers.WT
             efc_wind = efc_wind + efc_re[name, 1]
-            wind_cap = wind_cap + pv_installed_cap[name, 1]
+            wind_cap = wind_cap + re_installed_cap[name, 1]
         end
     end
 
 
     for be in bess
         name = PSIP.get_name(be)
-        efc_storage = efc_storage + efc_bess[name, 1]
-        bess_cap = bess_cap + bess_installed_cap[name, 1]
+        if PSIP.get_storage_tech(be) == PSY.StorageTech.LIB
+            efc_storage = efc_storage + efc_bess[name, 1]
+            bess_cap = bess_cap + bess_installed_cap[name, 1]
+        end
+        if PSIP.get_storage_tech(be) ==  PSY.StorageTech.OTHER_MECH
+            efc_phs =  efc_phs + efc_bess[name,1]
+            phs_cap = phs_cap + bess_installed_cap[name, 1]
+        end
     end
 
     planes = PSIP.get_ext(collect(regions)[1])["planes"]
@@ -309,7 +318,7 @@ function add_constraints!(
     for p in planes
         JuMP.@constraint(
             get_jump_model(container),
-            efc_storage + efc_pv + efc_wind <= p[1] * pv_cap + p[2] * bess_cap + p[3] * wind_cap + p[4]
+            efc_phs+efc_storage + efc_pv + efc_wind <= p[1] * pv_cap + p[2] * bess_cap + p[3] * wind_cap + p[4] * phs_cap + p[5]
             # efc_storage + efc_renewable >= 100.0
         )
     end

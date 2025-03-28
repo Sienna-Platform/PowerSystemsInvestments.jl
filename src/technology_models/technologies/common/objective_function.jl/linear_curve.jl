@@ -20,7 +20,7 @@ function _add_cost_to_objective!(
     proportional_term = PSY.get_proportional_term(cost_component)
 
     if PSIP.get_power_systems_type(technology) == "ThermalStandard"
-        proportional_term = proportional_term / PSIP.get_unit_size(technology)
+        proportional_term = proportional_term * PSIP.get_unit_size(technology)
     end
     @debug "Cost is assumed to be in natural units: \$/MWh"
     # TODO: multiplier
