@@ -134,7 +134,7 @@ function set_technology_model!(
     template::InvestmentModelTemplate,
     names::Vector{String},
     model::TechnologyModel{
-        <:GenericTransportTechnology,
+        <:PSIP.AggregateTransportTechnology,
         <:InvestmentTechnologyFormulation,
         <:OperationsTechnologyFormulation,
         <:FeasibilityTechnologyFormulation,

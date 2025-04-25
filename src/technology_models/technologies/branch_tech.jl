@@ -1,10 +1,10 @@
 #! format: off
-get_variable_upper_bound(::BuildCapacity, d::GenericTransportTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_max_new_capacity(d)
-get_variable_lower_bound(::BuildCapacity, d::GenericTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
-get_variable_binary(::BuildCapacity, d::GenericTransportTechnology, ::ContinuousInvestment) = false
+get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_max_new_capacity(d)
+get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
+get_variable_binary(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::ContinuousInvestment) = false
 
-get_variable_lower_bound(::FlowActivePowerVariable, d::GenericTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
-get_variable_upper_bound(::FlowActivePowerVariable, d::GenericTransportTechnology, ::OperationsTechnologyFormulation) = nothing
+get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
+get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 
 #! format: on
 
@@ -14,7 +14,7 @@ function get_default_attributes(
     ::Type{W},
     ::Type{X},
 ) where {
-    U <: GenericTransportTechnology,
+    U <: PSIP.AggregateTransportTechnology,
     V <: InvestmentTechnologyFormulation,
     W <: OperationsTechnologyFormulation,
     X <: FeasibilityTechnologyFormulation,
@@ -35,7 +35,7 @@ function add_expression!(
     T <: CumulativeCapacity,
     S <: AbstractTechnologyFormulation,
     U <: Vector{D},
-} where {D <: GenericTransportTechnology}
+} where {D <: PSIP.AggregateTransportTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
@@ -74,7 +74,7 @@ function add_to_expression!(
     T <: EnergyBalance,
     U <: Vector{D},
     V <: SingleRegionBalanceModel,
-} where {D <: GenericTransportTechnology}
+} where {D <: PSIP.AggregateTransportTechnology}
     # Do nothing for Transport Paths in SingleRegion models
     return
 end
@@ -90,7 +90,7 @@ function add_to_expression!(
     S <: BasicDispatch,
     U <: Vector{D},
     V <: MultiRegionBalanceModel,
-} where {D <: GenericTransportTechnology}
+} where {D <: PSIP.AggregateTransportTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
@@ -128,7 +128,7 @@ function add_constraints!(
     U <: Vector{D},
     V <: FlowActivePowerVariable,
     X <: TechnologyModel,
-} where {D <: GenericTransportTechnology}
+} where {D <: PSIP.AggregateTransportTechnology}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
@@ -177,7 +177,7 @@ function add_constraints!(
     S <: ContinuousInvestment,
     U <: Vector{D},
     V <: CumulativeCapacity,
-} where {D <: GenericTransportTechnology}
+} where {D <: PSIP.AggregateTransportTechnology}
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
@@ -213,7 +213,7 @@ function objective_function!(
     container::SingleOptimizationContainer,
     devices::Vector{T},
     formulation::S,
-) where {T <: GenericTransportTechnology, S <: ContinuousInvestment}
+) where {T <: PSIP.AggregateTransportTechnology, S <: ContinuousInvestment}
     tech_model = string(S)
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     # TODO: Decide if we want to include fixed OM cost for Transport Paths

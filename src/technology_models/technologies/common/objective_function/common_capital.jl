@@ -27,7 +27,7 @@ function add_capital_cost!(
     ::V,
     tech_model::String,
 ) where {
-    T <: GenericTransportTechnology,
+    T <: PSIP.AggregateTransportTechnology,
     U <: BuildCapacity,
     V <: InvestmentTechnologyFormulation,
 }

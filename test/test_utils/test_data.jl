@@ -421,7 +421,7 @@ function test_2_zone_portfolio()
     ##### Transmission #####
     #####################
 
-    line = ACTransportTechnology{ACBranch}(
+    line = AggregateTransportTechnology{ACBranch}(
         name="test_branch",
         start_region=z1,
         end_region=z2,

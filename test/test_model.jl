@@ -53,7 +53,7 @@
     set_technology_model!(
         template,
         ["test_branch"],
-        PSIP.ACTransportTechnology{PSY.ACBranch},
+        PSIP.AggregateTransportTechnology{PSY.ACBranch},
         ContinuousInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -132,7 +132,7 @@
     set_technology_model!(
         template,
         ["test_branch"],
-        PSIP.ACTransportTechnology{PSY.ACBranch},
+        PSIP.AggregateTransportTechnology{PSY.ACBranch},
         ContinuousInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,

@@ -8,7 +8,7 @@ function construct_technologies!(
     tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: GenericTransportTechnology, B <: ContinuousInvestment, X <: TechnologyModel}
+) where {T <: PSIP.AggregateTransportTechnology, B <: ContinuousInvestment, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # BuildCapacity variable
@@ -29,7 +29,7 @@ function construct_technologies!(
     tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: GenericTransportTechnology, C <: BasicDispatch, X <: TechnologyModel}
+) where {T <: PSIP.AggregateTransportTechnology, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     add_variable!(container, FlowActivePowerVariable(), devices, C())
@@ -50,7 +50,7 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
-    T <: GenericTransportTechnology,
+    T <: PSIP.AggregateTransportTechnology,
     D <: FeasibilityTechnologyFormulation,
     X <: TechnologyModel,
 }
@@ -70,7 +70,7 @@ function construct_technologies!(
     tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: GenericTransportTechnology, B <: ContinuousInvestment, X <: TechnologyModel}
+) where {T <: PSIP.AggregateTransportTechnology, B <: ContinuousInvestment, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Capital Component of objective function
@@ -100,7 +100,7 @@ function construct_technologies!(
     tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: GenericTransportTechnology, C <: BasicDispatch, X <: TechnologyModel}
+) where {T <: PSIP.AggregateTransportTechnology, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Dispatch constraint
@@ -126,7 +126,7 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
-    T <: GenericTransportTechnology,
+    T <: PSIP.AggregateTransportTechnology,
     D <: FeasibilityTechnologyFormulation,
     X <: TechnologyModel,
 }
