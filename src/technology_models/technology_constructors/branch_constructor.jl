@@ -8,7 +8,11 @@ function construct_technologies!(
     tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: PSIP.AggregateTransportTechnology, B <: ContinuousInvestment, X <: TechnologyModel}
+) where {
+    T <: PSIP.AggregateTransportTechnology,
+    B <: ContinuousInvestment,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # BuildCapacity variable
@@ -70,7 +74,11 @@ function construct_technologies!(
     tech_formulation::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: PSIP.AggregateTransportTechnology, B <: ContinuousInvestment, X <: TechnologyModel}
+) where {
+    T <: PSIP.AggregateTransportTechnology,
+    B <: ContinuousInvestment,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Capital Component of objective function

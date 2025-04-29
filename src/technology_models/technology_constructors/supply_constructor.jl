@@ -17,7 +17,7 @@ function construct_technologies!(
 
     add_variable!(container, BuildCapacity(), devices, B())
 
-    add_expression!(container, CumulativeCapacity(), devices, B())
+    add_expression!(container, p, CumulativeCapacity(), devices, B())
     return
 end
 
