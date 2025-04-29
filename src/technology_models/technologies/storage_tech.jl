@@ -51,12 +51,21 @@ function get_default_attributes(
     return Dict{String, Any}()
 end
 
+function get_existing_capacity_power(
+    d::PSIP.StorageTechnology{X},
+    portfolio::PSIP.Portfolio,
+) where {X <: PSY.EnergyReservoirStorage}
+    # TODO: Same as before
+    return 0.0
+end
+
 ################### Variables ####################
 
 ################## Expressions ###################
 
 function add_expression!(
     container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
     formulation::V,
@@ -83,7 +92,7 @@ function add_expression!(
 
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_existing_capacity_power(d)
+        init_cap = get_existing_capacity_power(d, portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),

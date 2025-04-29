@@ -33,12 +33,28 @@ function get_default_attributes(
     return Dict{String, Any}()
 end
 
+function get_initial_capacity(d::PSIP.SupplyTechnology{X}, p::PSIP.Portfolio) where {X}
+    # TODO
+    """ 
+    Attempt to retrieve an ExistingCapacity Supplemental Attribute, if its empty, then return 0.0.
+    If there is ExistingCapacity supplemental attribute, maybe check that is unique and error if there is more than 1?
+    Now if there is only one, check the existing_technologies field. If it's empty, give a warning that there exists an existing capacity attribute but nothing is there, and return 0.0.
+    You can retrieve the base system from the portfolio doing sys = p.base_system
+    With X, you can retrieve components from the system doing PSY.get_components(X, sys)
+    If is empty the components, then a give warning, that the system does not have any component of type X and return 0.0.
+    If is not empty, then filter the components by the name in the existingcapacity attribute and return the sum of the rating of the components. Do some checks here
+    """
+
+    return 0.0
+end
+
 ################### Variables ####################
 
 ################## Expressions ###################
 
 function add_expression!(
     container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
     formulation::V,
@@ -65,7 +81,7 @@ function add_expression!(
 
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_initial_capacity(d)
+        init_cap = get_initial_capacity(d, portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
