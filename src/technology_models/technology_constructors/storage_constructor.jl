@@ -252,16 +252,17 @@ function construct_technologies!(
         devices,
         tech_model,
     )
-    if attributes["duration"] == true
-        println(attributes["duration"])
-        add_constraints!(
-            container,
-            DurationConstraint(),
-            BuildPowerCapacity(),
-            devices,
-            tech_model,
-        )
-    end
+    
+    
+    add_constraints!(
+        container,
+        DurationConstraint(),
+        BuildPowerCapacity(),
+        devices,
+        tech_model,
+        attributes
+    )
+    
 
     add_constraints!(
         container,

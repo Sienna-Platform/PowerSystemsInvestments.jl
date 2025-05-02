@@ -917,6 +917,7 @@ function add_constraints!(
     ::V,
     devices::U,
     tech_model::String,
+    attributes::Dict{String, Any},
 ) where {
     T<:DurationConstraint,
     U<:Union{D,Vector{D},IS.FlattenIteratorWrapper{D}},
@@ -935,27 +936,32 @@ function add_constraints!(
         time_steps,
         meta=tech_model,
     )
-
-
     build_power_cap = get_variable(container, BuildPowerCapacity(), D, tech_model)
     build_energy_cap = get_variable(container, BuildEnergyCapacity(), D, tech_model)
+    if attributes["duration"] == true
+        for d in devices
+            name = PSIP.get_name(d)
+            
+            if PSIP.get_storage_tech(d) == PSY.StorageTech.LIB
+                println(attributes["duration"],name,PSIP.get_storage_tech(d))
+                for t in time_steps
+                    con_ub[name, t] = JuMP.@constraint(
+                        get_jump_model(container),
+                        build_energy_cap[name, t] == 4 * build_power_cap[name, t]
+                    )
+                end
+            end
+        end
+    end
     for d in devices
         name = PSIP.get_name(d)
-        if PSIP.get_storage_tech(d) == PSY.StorageTech.LIB
-            for t in time_steps
-                con_ub[name, t] = JuMP.@constraint(
-                    get_jump_model(container),
-                    build_energy_cap[name, t] == 4 * build_power_cap[name, t]
-                )
-            
-            end
-        elseif PSIP.get_storage_tech(d) ==  PSY.StorageTech.OTHER_MECH
+        if PSIP.get_storage_tech(d) == PSY.StorageTech.OTHER_MECH
+            println(name,PSIP.get_storage_tech(d))
             for t in time_steps
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     build_energy_cap[name, t] == 10 * build_power_cap[name, t]
                 )
-            
             end
         end
     end
@@ -1240,7 +1246,7 @@ function objective_function!(
 ) where {T<:PSIP.StorageTechnology}#, U <: BuildCapacity}
     add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
+    # add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
+    # add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
     return
 end
