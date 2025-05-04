@@ -1,5 +1,5 @@
 #! format: off
-get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_max_new_capacity(d)
+get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = get_max_new_capacity(d)
 get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::ContinuousInvestment) = false
 
@@ -7,6 +7,16 @@ get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTe
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 
 #! format: on
+
+function get_max_new_capacity(d::PSIP.AggregateTransportTechnology)
+    return PSIP.get_capacity_limits(d).max
+end
+
+# TODO: Check if there is a different way we can get the existing line capacity
+function get_existing_line_capacity(d::PSIP.AggregateTransportTechnology)
+    @warn "get_existing_line_capacity is not implemented for AggregateTransportTechnology. Returning minimum limits."
+    return PSIP.get_capacity_limits(d).min
+end
 
 function get_default_attributes(
     ::Type{U},
@@ -54,7 +64,7 @@ function add_expression!(
 
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_existing_line_capacity(d)
+        init_cap = get_existing_line_capacity(d)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
