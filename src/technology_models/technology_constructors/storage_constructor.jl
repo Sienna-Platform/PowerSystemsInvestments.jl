@@ -21,7 +21,7 @@ function construct_technologies!(
 
     # CumulativeCapacity expressions
     add_expression!(container, p, CumulativePowerCapacity(), devices, B())
-    add_expression!(container, CumulativeEnergyCapacity(), devices, B())
+    add_expression!(container, p, CumulativeEnergyCapacity(), devices, B())
     return
 end
 

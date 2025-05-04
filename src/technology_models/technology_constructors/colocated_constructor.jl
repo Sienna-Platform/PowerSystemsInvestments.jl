@@ -26,6 +26,7 @@ function construct_technologies!(
     # CumulativeCapacity expressions
     add_expression!(
         container,
+        p,
         CumulativePowerCapacity(),
         BuildPowerCapacity(),
         devices,
@@ -33,14 +34,16 @@ function construct_technologies!(
     )
     add_expression!(
         container,
+        p,
         CumulativeEnergyCapacity(),
         BuildEnergyCapacity(),
         devices,
         B(),
     )
-    add_expression!(container, CumulativeWindCapacity(), BuildWindCapacity(), devices, B())
+    add_expression!(container, p, CumulativeWindCapacity(), BuildWindCapacity(), devices, B())
     add_expression!(
         container,
+        p,
         CumulativeSolarCapacity(),
         BuildSolarCapacity(),
         devices,
@@ -48,6 +51,7 @@ function construct_technologies!(
     )
     add_expression!(
         container,
+        p,
         CumulativeInverterCapacity(),
         BuildInverterCapacity(),
         devices,

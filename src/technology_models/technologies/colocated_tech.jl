@@ -48,11 +48,11 @@ get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity) 
 get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity) = PSIP.get_capacity_limits_solar(d).max
 get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = PSIP.get_max_inverter_capacity(d)
 
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity) = PSIP.get_existing_capacity_power(d)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_existing_capacity_energy(d)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity) = PSIP.get_existing_capacity_wind(d)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity) = PSIP.get_existing_capacity_solar(d)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = PSIP.get_existing_capacity_inverter(d)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = get_existing_capacity_power(d, p)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeEnergyCapacity, p::PSIP.Portfolio) = get_existing_capacity_energy(d, p)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity, p::PSIP.Portfolio) = get_existing_capacity_renewable(d, p)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity, p::PSIP.Portfolio) = get_existing_capacity_renewable(d, p)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity, p::PSIP.Portfolio) = get_existing_capacity_inverter(d, p)
 
 get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCapacity) = PSIP.get_capital_costs_power(d)
 get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = PSIP.get_capital_costs_energy(d)
@@ -71,6 +71,195 @@ get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerD
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerWindVariable) = PSIP.get_operation_costs_wind(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerSolarVariable) = PSIP.get_operation_costs_solar(d)
 #! format: on
+
+function get_existing_capacity_inverter(
+    d::PSIP.ColocatedSupplyStorageTechnology{X},
+    p::PSIP.Portfolio,
+) where {X}
+    # TODO: Rodrigo needs to review how to construct this one.
+    return 0.0
+end
+
+function get_existing_capacity_renewable(d::PSIP.ColocatedSupplyStorageTechnology{X}, p::PSIP.Portfolio) where {X}
+    """ 
+    Attempt to retrieve an ExistingCapacity Supplemental Attribute, if its empty, then return 0.0.
+    If there is ExistingCapacity supplemental attribute, maybe check that is unique and error if there is more than 1?
+    Now if there is only one, check the existing_technologies field. If it's empty, give a warning that there exists an existing capacity attribute but nothing is there, and return 0.0.
+    You can retrieve the base system from the portfolio doing sys = p.base_system
+    With X, you can retrieve components from the system doing PSY.get_components(X, sys)
+    If is empty the components, then a give warning, that the system does not have any component of type X and return 0.0.
+    If is not empty, then filter the components by the name in the existingcapacity attribute and return the sum of the rating of the components. Do some checks here
+    """
+
+    try 
+        # pull out any ExistingCapacity attributes
+        attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+    catch e
+        @error(
+            "ExistingCapacity attribute not found. Please check the attribute name."
+        )
+        return 0.0
+    end
+
+    attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+
+    
+    if length(attrs) != 1
+        @warn length(attrs) > 1 ? 
+            "Multiple ExistingCapacity attributes – returning 0.0" :
+            "No ExistingCapacity attribute – returning 0.0"
+        return 0.0
+    end
+
+    techs = attrs[1].existing_technologies
+    isempty(techs) && (
+        @warn "ExistingCapacity has no listed technologies – returning 0.0"; 
+        return 0.0
+    )
+
+    comps = PSY.get_components(X, p.base_system)
+    isempty(comps) && (
+        @warn "No components of type $X in system – returning 0.0"; 
+        return 0.0
+    )
+
+    # TODO: Rodrigo review whether building a Set for fast name‐membership tests is the direction we want
+    tech_set = Set(techs)
+
+    # filter out just the components whose name is declared
+    matched = [c for c in comps if c.name in tech_set]
+
+    # Check 1) if nothing matched at all, warn & exit
+    if isempty(matched)
+        @warn "No components matching any of $(collect(tech_set)) in the system – returning 0.0"
+        return 0.0
+    end
+
+    # Check 2) if some declared names didn't correspond to any component, warn about the missing ones
+    found_names = Set(c.name for c in matched)
+    missing     = setdiff(tech_set, found_names)
+    if !isempty(missing)
+        @warn "Declared technologies not found in system components: $(collect(missing))"
+    end
+
+    # return sum up the ratings of all matched components
+    return sum(PSY.get_rating(c) for c in matched)
+end
+
+
+function get_existing_capacity_power(
+    d::PSIP.ColocatedSupplyStorageTechnology{X},
+    p::PSIP.Portfolio,
+) where {X}
+    try
+        # pull out any ExistingCapacity attributes
+        attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+    catch e
+        @warn "ExistingCapacity attribute not found – returning 0.0"
+        return 0.0
+    end
+
+    attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+
+    if length(attrs) != 1
+        @warn length(attrs) > 1 ? 
+            "Multiple ExistingCapacity attributes – returning 0.0" :
+            "No ExistingCapacity attribute – returning 0.0"
+        return 0.0
+    end
+
+    techs = attrs[1].existing_technologies
+    isempty(techs) && (
+        @warn "ExistingCapacity has no listed technologies – returning 0.0"; 
+        return 0.0
+    )
+
+    comps = PSY.get_components(X, p.base_system)
+    isempty(comps) && (
+        @warn "No components of type $X in system – returning 0.0"; 
+        return 0.0
+    )
+
+    # TODO: Rodrigo review whether building a Set for fast name‐membership tests is the direction we want
+    tech_set = Set(techs)
+
+    # filter out just the components whose name is declared
+    matched = [c for c in comps if c.name in tech_set]
+
+    # Check 1) if nothing matched at all, warn & exit
+    if isempty(matched)
+        @warn "No components matching any of $(collect(tech_set)) in the system – returning 0.0"
+        return 0.0
+    end
+
+    # Check 2) if some declared names didn't correspond to any component, warn about the missing ones
+    found_names = Set(c.name for c in matched)
+    missing     = setdiff(tech_set, found_names)
+    if !isempty(missing)
+        @warn "Declared technologies not found in system components: $(collect(missing))"
+    end
+
+    # return sum up the ratings of all matched components
+    return sum(PSY.get_rating(c) for c in matched)
+end
+
+
+function get_existing_capacity_energy(
+    d::PSIP.ColocatedSupplyStorageTechnology{X},
+    p::PSIP.Portfolio,
+) where {X}
+    try
+        # pull out any ExistingCapacity attributes
+        attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+    catch e
+        @warn "ExistingCapacity attribute not found – returning 0.0"
+        return 0.0
+    end
+
+    attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+
+    if length(attrs) != 1
+        @warn length(attrs) > 1 ? 
+            "Multiple ExistingCapacity attributes – returning 0.0" :
+            "No ExistingCapacity attribute – returning 0.0"
+        return 0.0
+    end
+
+    techs = attrs[1].existing_technologies
+    isempty(techs) && (
+        @warn "ExistingCapacity has no listed technologies – returning 0.0"; 
+        return 0.0
+    )
+
+    comps = PSY.get_components(X, p.base_system)
+    isempty(comps) && (
+        @warn "No components of type $X in system – returning 0.0"; 
+        return 0.0
+    )
+
+    # TODO: Rodrigo review whether building a Set for fast name‐membership tests is the direction we want
+    tech_set = Set(techs)
+
+    # filter out just the components whose name is declared
+    matched = [c for c in comps if c.name in tech_set]
+
+    # Check 1) if nothing matched at all, warn & exit
+    if isempty(matched)
+        @warn "No components matching any of $(collect(tech_set)) in the system – returning 0.0"
+        return 0.0
+    end
+
+    # Check 2) if some declared names didn't correspond to any component, warn about the missing ones
+    found_names = Set(c.name for c in matched)
+    missing     = setdiff(tech_set, found_names)
+    if !isempty(missing)
+        @warn "Declared technologies not found in system components: $(collect(missing))"
+    end
+
+    # return sum up the ratings of all matched components
+    return sum(PSY.get_storage_capacity(c) for c in matched)
+end
+
 
 function get_default_time_series_names(
     ::Type{U},
@@ -106,6 +295,7 @@ end
 
 function add_expression!(
     container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
     expression_type::T,
     ::S, # variable type
     devices::U,
@@ -134,7 +324,7 @@ function add_expression!(
 
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        init_cap = get_init_cap(d, T())
+        init_cap = get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),

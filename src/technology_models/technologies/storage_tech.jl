@@ -53,10 +53,115 @@ end
 
 function get_existing_capacity_power(
     d::PSIP.StorageTechnology{X},
-    portfolio::PSIP.Portfolio,
+    p::PSIP.Portfolio,
 ) where {X <: PSY.EnergyReservoirStorage}
-    # TODO: Same as before
-    return 0.0
+    try
+        # pull out any ExistingCapacity attributes
+        attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+    catch e
+        @warn "ExistingCapacity attribute not found – returning 0.0"
+        return 0.0
+    end
+
+    attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+
+    if length(attrs) != 1
+        @warn length(attrs) > 1 ? 
+            "Multiple ExistingCapacity attributes – returning 0.0" :
+            "No ExistingCapacity attribute – returning 0.0"
+        return 0.0
+    end
+
+    techs = attrs[1].existing_technologies
+    isempty(techs) && (
+        @warn "ExistingCapacity has no listed technologies – returning 0.0"; 
+        return 0.0
+    )
+
+    comps = PSY.get_components(X, p.base_system)
+    isempty(comps) && (
+        @warn "No components of type $X in system – returning 0.0"; 
+        return 0.0
+    )
+
+    # TODO: Rodrigo review whether building a Set for fast name‐membership tests is the direction we want
+    tech_set = Set(techs)
+
+    # filter out just the components whose name is declared
+    matched = [c for c in comps if c.name in tech_set]
+
+    # Check 1) if nothing matched at all, warn & exit
+    if isempty(matched)
+        @warn "No components matching any of $(collect(tech_set)) in the system – returning 0.0"
+        return 0.0
+    end
+
+    # Check 2) if some declared names didn't correspond to any component, warn about the missing ones
+    found_names = Set(c.name for c in matched)
+    missing     = setdiff(tech_set, found_names)
+    if !isempty(missing)
+        @warn "Declared technologies not found in system components: $(collect(missing))"
+    end
+
+    # return sum up the ratings of all matched components
+    return sum(PSY.get_rating(c) for c in matched)
+end
+
+function get_existing_capacity_energy(
+    d::PSIP.StorageTechnology{X},
+    p::PSIP.Portfolio,
+) where {X <: PSY.EnergyReservoirStorage}
+    try
+        # TODO: Review why the ExistingCapacity attribute is not being found
+        # pull out any ExistingCapacity attributes
+        attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+    catch e
+        @warn "ExistingCapacity attribute not found – returning 0.0"
+        return 0.0
+    end
+
+    attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+
+    if length(attrs) != 1
+        @warn length(attrs) > 1 ? 
+            "Multiple ExistingCapacity attributes – returning 0.0" :
+            "No ExistingCapacity attribute – returning 0.0"
+        return 0.0
+    end
+
+    techs = attrs[1].existing_technologies
+    isempty(techs) && (
+        @warn "ExistingCapacity has no listed technologies – returning 0.0"; 
+        return 0.0
+    )
+
+    comps = PSY.get_components(X, p.base_system)
+    isempty(comps) && (
+        @warn "No components of type $X in system – returning 0.0"; 
+        return 0.0
+    )
+
+    # TODO: Rodrigo review whether building a Set for fast name‐membership tests is the direction we want
+    tech_set = Set(techs)
+
+    # filter out just the components whose name is declared
+    matched = [c for c in comps if c.name in tech_set]
+
+    # Check 1) if nothing matched at all, warn & exit
+    if isempty(matched)
+        @warn "No components matching any of $(collect(tech_set)) in the system – returning 0.0"
+        return 0.0
+    end
+
+    # Check 2) if some declared names didn't correspond to any component, warn about the missing ones
+    found_names = Set(c.name for c in matched)
+    missing     = setdiff(tech_set, found_names)
+    if !isempty(missing)
+        @warn "Declared technologies not found in system components: $(collect(missing))"
+    end
+
+    # return sum up the ratings of all matched components
+    return sum(PSY.get_storage_capacity(c) for c in matched)
 end
 
 ################### Variables ####################
@@ -104,6 +209,7 @@ end
 
 function add_expression!(
     container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
     formulation::V,
@@ -130,7 +236,7 @@ function add_expression!(
 
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_existing_capacity_energy(d)
+        init_cap = get_existing_capacity_energy(d, portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
