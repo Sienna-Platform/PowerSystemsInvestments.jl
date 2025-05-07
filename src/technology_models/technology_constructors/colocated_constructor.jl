@@ -170,7 +170,7 @@ function construct_technologies!(
     add_constraints!(
         container,
         MaximumCumulativeWindCapacity(),
-        CumulativePowerCapacity(),
+        CumulativeWindCapacity(),
         devices,
         B(),
     )
@@ -178,7 +178,7 @@ function construct_technologies!(
     add_constraints!(
         container,
         MaximumCumulativeSolarCapacity(),
-        CumulativeEnergyCapacity(),
+        CumulativeSolarCapacity(),
         devices,
         B(),
     )
@@ -186,7 +186,7 @@ function construct_technologies!(
     add_constraints!(
         container,
         MaximumCumulativeInverterCapacity(),
-        CumulativeEnergyCapacity(),
+        CumulativeInverterCapacity(),
         devices,
         B(),
     )
