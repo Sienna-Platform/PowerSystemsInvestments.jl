@@ -53,7 +53,7 @@ function add_variable_cost!(
     V <: OperationsStorageFormulation,
 }
     for d in devices
-        op_cost_data = PSIP.get_operation_costs_power(d)
+        op_cost_data = PSIP.get_operation_costs(d)
         _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)
     end
     return
