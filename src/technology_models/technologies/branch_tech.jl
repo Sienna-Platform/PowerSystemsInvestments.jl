@@ -9,7 +9,7 @@ get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTe
 get_max_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
 get_min_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).min
 
-get_init_cap(d::PSIP.TransmissionTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_existing_capacity_mw(d)
+get_init_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 
 #! format: on
 
