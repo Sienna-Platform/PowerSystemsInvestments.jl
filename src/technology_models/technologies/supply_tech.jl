@@ -12,7 +12,7 @@ get_variable_upper_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::Basi
 get_variable_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 get_expression_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 
-get_init_cap(d::PSIP.SupplyTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+get_init_cap(d::PSIP.SupplyTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 
 #! format: on
 
@@ -33,90 +33,6 @@ function get_default_attributes(
     X <: FeasibilityTechnologyFormulation,
 }
     return Dict{String, Any}()
-end
-
-
-"""
-    get_initial_capacity(d::PSIP.SupplyTechnology{X}, p::PSIP.Portfolio) where {X}
-
-Compute the total nameplate capacity of all existing components of type `X` in the portfolio.
-
-# Arguments
-- `d::SupplyTechnology{X}`  
-  A supply‐technology descriptor which may carry an `ExistingCapacity` supplemental attribute listing technology names.
-- `p::Portfolio`  
-  The portfolio whose `base_system` holds the actual component instances.
-
-# Returns
-- `Float64`  
-  The sum of `PSY.get_rating(component)` over every component of type `X` whose `name` appears in the technology list.  
-
-# Notes
-- If there is not exactly one `ExistingCapacity` attribute, or if it lists no technologies, or if the system has no `X` components, the function issues a warning and returns `0.0`.  
-"""
-function get_initial_capacity(d::PSIP.SupplyTechnology{X}, p::PSIP.Portfolio) where {X}
-    """ 
-    Attempt to retrieve an ExistingCapacity Supplemental Attribute, if its empty, then return 0.0.
-    If there is ExistingCapacity supplemental attribute, maybe check that is unique and error if there is more than 1?
-    Now if there is only one, check the existing_technologies field. If it's empty, give a warning that there exists an existing capacity attribute but nothing is there, and return 0.0.
-    You can retrieve the base system from the portfolio doing sys = p.base_system
-    With X, you can retrieve components from the system doing PSY.get_components(X, sys)
-    If is empty the components, then a give warning, that the system does not have any component of type X and return 0.0.
-    If is not empty, then filter the components by the name in the existingcapacity attribute and return the sum of the rating of the components. Do some checks here
-    """
-
-    try 
-        # pull out any ExistingCapacity attributes
-        attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
-    catch e
-        @error(
-            "ExistingCapacity attribute not found. Please check the attribute name."
-        )
-        return 0.0
-    end
-
-    attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
-    
-    if length(attrs) != 1
-        @warn length(attrs) > 1 ? 
-            "Multiple ExistingCapacity attributes – returning 0.0" :
-            "No ExistingCapacity attribute – returning 0.0"
-        return 0.0
-    end
-
-    techs = attrs[1].existing_technologies
-    isempty(techs) && (
-        @warn "ExistingCapacity has no listed technologies – returning 0.0"; 
-        return 0.0
-    )
-
-    comps = PSY.get_components(X, p.base_system)
-    isempty(comps) && (
-        @warn "No components of type $X in system – returning 0.0"; 
-        return 0.0
-    )
-
-    # TODO: Rodrigo review whether building a Set for fast name‐membership tests is the direction we want
-    tech_set = Set(techs)
-
-    # filter out just the components whose name is declared
-    matched = [c for c in comps if c.name in tech_set]
-
-    # Check 1) if nothing matched at all, warn & exit
-    if isempty(matched)
-        @warn "No components matching any of $(collect(tech_set)) in the system – returning 0.0"
-        return 0.0
-    end
-
-    # Check 2) if some declared names didn't correspond to any component, warn about the missing ones
-    found_names = Set(c.name for c in matched)
-    missing     = setdiff(tech_set, found_names)
-    if !isempty(missing)
-        @warn "Declared technologies not found in system components: $(collect(missing))"
-    end
-
-    # return sum up the ratings of all matched components
-    return sum(PSY.get_rating(c) for c in matched)
 end
 
 
@@ -153,7 +69,8 @@ function add_expression!(
 
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        init_cap = get_initial_capacity(d, portfolio)
+        @show d
+        init_cap = get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
@@ -193,7 +110,7 @@ function add_expression!(
     for t in time_steps, d in devices
         unit_size = PSIP.get_unit_size(d)
         name = PSIP.get_name(d)
-        init_cap = get_initial_capacity(d, portfolio)
+        init_cap = get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] * unit_size for t_p in time_steps if t_p <= t),

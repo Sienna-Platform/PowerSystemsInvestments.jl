@@ -43,6 +43,7 @@ end
 
 function add_expression!(
     container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
     formulation::S,
@@ -69,7 +70,7 @@ function add_expression!(
 
     for t in time_steps, d in devices
         name = PSIP.get_name(d)
-        init_cap = get_existing_line_capacity(d)
+        init_cap = get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
@@ -211,12 +212,11 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        max_capacity = PSIP.get_max_new_capacity(d)
-        init_cap = PSIP.get_existing_line_capacity(d)
+        max_capacity = get_max_cap(d, CumulativeCapacity())
         for t in time_steps
             con_ub[name, t] = JuMP.@constraint(
                 get_jump_model(container),
-                installed_cap[name, t] <= max_capacity + init_cap
+                installed_cap[name, t] <= max_capacity
             )
         end
     end

@@ -253,6 +253,7 @@ end
 # PowerCap for IntegerInvestment
 function add_expression!(
     container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
     formulation::V,
@@ -280,7 +281,7 @@ function add_expression!(
     for t in time_steps, d in devices
         unit_size = PSIP.get_unit_size_energy(d)
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_initial_capacity(d)
+        init_cap = PSIP.get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] * unit_size for t_p in time_steps if t_p <= t),
@@ -293,6 +294,7 @@ end
 # EnergyCap for Integer decisions in Storage
 function add_expression!(
     container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
     formulation::V,
@@ -320,7 +322,7 @@ function add_expression!(
     for t in time_steps, d in devices
         unit_size = PSIP.get_unit_size_energy(d)
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_initial_capacity(d)
+        init_cap = PSIP.get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
             init_cap + sum(var[name, t_p] * unit_size for t_p in time_steps if t_p <= t),
