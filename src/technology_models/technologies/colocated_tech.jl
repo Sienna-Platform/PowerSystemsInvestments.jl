@@ -72,7 +72,6 @@ get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerW
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerSolarVariable) = PSIP.get_operation_costs_solar(d)
 #! format: on
 
-
 function get_default_time_series_names(
     ::Type{U},
     ::ActivePowerWindVariable,

@@ -70,23 +70,18 @@ function get_existing_capacity_power(
     attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
 
     if length(attrs) != 1
-        @warn length(attrs) > 1 ? 
-            "Multiple ExistingCapacity attributes – returning 0.0" :
-            "No ExistingCapacity attribute – returning 0.0"
+        @warn length(attrs) > 1 ? "Multiple ExistingCapacity attributes – returning 0.0" :
+              "No ExistingCapacity attribute – returning 0.0"
         return 0.0
     end
 
     techs = attrs[1].existing_technologies
-    isempty(techs) && (
-        @warn "ExistingCapacity has no listed technologies – returning 0.0"; 
-        return 0.0
-    )
+    isempty(techs) && (@warn "ExistingCapacity has no listed technologies – returning 0.0";
+    return 0.0)
 
     comps = PSY.get_components(X, p.base_system)
-    isempty(comps) && (
-        @warn "No components of type $X in system – returning 0.0"; 
-        return 0.0
-    )
+    isempty(comps) && (@warn "No components of type $X in system – returning 0.0";
+    return 0.0)
 
     # TODO: Rodrigo review whether building a Set for fast name‐membership tests is the direction we want
     tech_set = Set(techs)
@@ -102,7 +97,7 @@ function get_existing_capacity_power(
 
     # Check 2) if some declared names didn't correspond to any component, warn about the missing ones
     found_names = Set(c.name for c in matched)
-    missing     = setdiff(tech_set, found_names)
+    missing = setdiff(tech_set, found_names)
     if !isempty(missing)
         @warn "Declared technologies not found in system components: $(collect(missing))"
     end
@@ -127,23 +122,18 @@ function get_existing_capacity_energy(
     attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
 
     if length(attrs) != 1
-        @warn length(attrs) > 1 ? 
-            "Multiple ExistingCapacity attributes – returning 0.0" :
-            "No ExistingCapacity attribute – returning 0.0"
+        @warn length(attrs) > 1 ? "Multiple ExistingCapacity attributes – returning 0.0" :
+              "No ExistingCapacity attribute – returning 0.0"
         return 0.0
     end
 
     techs = attrs[1].existing_technologies
-    isempty(techs) && (
-        @warn "ExistingCapacity has no listed technologies – returning 0.0"; 
-        return 0.0
-    )
+    isempty(techs) && (@warn "ExistingCapacity has no listed technologies – returning 0.0";
+    return 0.0)
 
     comps = PSY.get_components(X, p.base_system)
-    isempty(comps) && (
-        @warn "No components of type $X in system – returning 0.0"; 
-        return 0.0
-    )
+    isempty(comps) && (@warn "No components of type $X in system – returning 0.0";
+    return 0.0)
 
     # TODO: Rodrigo review whether building a Set for fast name‐membership tests is the direction we want
     tech_set = Set(techs)
@@ -159,7 +149,7 @@ function get_existing_capacity_energy(
 
     # Check 2) if some declared names didn't correspond to any component, warn about the missing ones
     found_names = Set(c.name for c in matched)
-    missing     = setdiff(tech_set, found_names)
+    missing = setdiff(tech_set, found_names)
     if !isempty(missing)
         @warn "Declared technologies not found in system components: $(collect(missing))"
     end

@@ -40,7 +40,14 @@ function construct_technologies!(
         devices,
         B(),
     )
-    add_expression!(container, p, CumulativeWindCapacity(), BuildWindCapacity(), devices, B())
+    add_expression!(
+        container,
+        p,
+        CumulativeWindCapacity(),
+        BuildWindCapacity(),
+        devices,
+        B(),
+    )
     add_expression!(
         container,
         p,

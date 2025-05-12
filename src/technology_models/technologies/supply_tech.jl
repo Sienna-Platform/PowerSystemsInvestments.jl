@@ -35,7 +35,6 @@ function get_default_attributes(
     return Dict{String, Any}()
 end
 
-
 ################### Variables ####################
 
 ################## Expressions ###################
