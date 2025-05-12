@@ -48,11 +48,11 @@ get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity) 
 get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity) = PSIP.get_capacity_limits_solar(d).max
 get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = PSIP.get_max_inverter_capacity(d)
 
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = get_existing_capacity_power(d, p)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeEnergyCapacity, p::PSIP.Portfolio) = get_existing_capacity_energy(d, p)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity, p::PSIP.Portfolio) = get_existing_capacity_renewable(d, p)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity, p::PSIP.Portfolio) = get_existing_capacity_renewable(d, p)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity, p::PSIP.Portfolio) = get_existing_capacity_inverter(d, p)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeEnergyCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 
 get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCapacity) = PSIP.get_capital_costs_power(d)
 get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = PSIP.get_capital_costs_energy(d)

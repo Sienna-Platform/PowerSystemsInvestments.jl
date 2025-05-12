@@ -12,6 +12,8 @@ get_variable_upper_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::Basi
 get_variable_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 get_expression_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 
+get_init_cap(d::PSIP.SupplyTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+
 #! format: on
 
 function get_default_time_series_names(::Type{U}) where {U <: PSIP.SupplyTechnology}

@@ -32,8 +32,12 @@ get_expression_multiplier(::EnergyBalance, ::ActiveInPowerVariable, ::PSIP.Stora
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_power_limits(d).max
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_energy_limits(d).max
+# TODO: Defaulting to using discharge values for symmetric storage, but we need to be careful if we implement asymmetric storage investments
+get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d).max
+get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_limits_energy(d).max
+
+get_init_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+get_init_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mwh(p, d)
 
 #! format: on
 

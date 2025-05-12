@@ -6,6 +6,11 @@ get_variable_binary(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::Con
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 
+get_max_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
+get_min_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).min
+
+get_init_cap(d::PSIP.TransmissionTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_existing_capacity_mw(d)
+
 #! format: on
 
 function get_max_new_capacity(d::PSIP.AggregateTransportTechnology)
