@@ -13,7 +13,6 @@ Base.@kwdef mutable struct MultiOptimizationContainer{T <: SolutionAlgorithm} <:
     constraints::Dict{ISOPT.ConstraintKey, AbstractArray}
     objective_function::ObjectiveFunction
     expressions::Dict{ISOPT.ExpressionKey, AbstractArray}
-    parameters::Dict{ISOPT.ParameterKey, ParameterContainer}
     optimizer_stats::ISOPT.OptimizerStats  # TODO: needs custom struct for decomposition
     metadata::ISOPT.OptimizationContainerMetadata
     default_time_series_type::Type{<:PSY.TimeSeriesData}  # Maybe isn't needed here
@@ -50,7 +49,6 @@ function MultiOptimizationContainer(
         constraints=Dict{ConstraintKey, AbstractArray}(),
         objective_function=ObjectiveFunction(),
         expressions=Dict{ExpressionKey, AbstractArray}(),
-        parameters=Dict{ParameterKey, ParameterContainer}(),
         base_power=PSY.get_base_power(sys),
         optimizer_stats=ISOPT.OptimizerStats(),
         built_for_recurrent_solves=false,
@@ -87,7 +85,6 @@ get_jump_model(container::MultiOptimizationContainer) =
     get_jump_model(container.main_problem)
 get_metadata(container::MultiOptimizationContainer) = container.metadata
 get_optimizer_stats(container::MultiOptimizationContainer) = container.optimizer_stats
-get_parameters(container::MultiOptimizationContainer) = container.parameters
 get_resolution(container::MultiOptimizationContainer) = container.resolution
 get_settings(container::MultiOptimizationContainer) = container.settings
 get_time_steps(container::MultiOptimizationContainer) = container.time_steps
@@ -168,9 +165,13 @@ function init_optimization_container!(
     return
 end
 
+"""
+Exports the OpModel JuMP object in MathOptFormat
+"""
 function serialize_optimization_model(
     container::MultiOptimizationContainer,
     save_path::String,
 )
+    serialize_jump_optimization_model(get_jump_model(container), save_path)
     return
 end

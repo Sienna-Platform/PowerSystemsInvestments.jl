@@ -144,8 +144,3 @@ function set_initial_time!(settings::Settings, initial_time::Dates.DateTime)
     settings.initial_time[] = initial_time
     return
 end
-
-function set_warm_start!(settings::Settings, warm_start::Bool)
-    settings.warm_start[] = warm_start
-    return
-end

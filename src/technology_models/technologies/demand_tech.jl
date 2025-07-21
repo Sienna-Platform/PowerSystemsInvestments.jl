@@ -1,23 +1,18 @@
-function get_default_time_series_names(
-    ::Type{U},
-    ::Type{V},
-    ::Type{W},
-) where {
-    U <: PSIP.DemandRequirement,
-    V <: InvestmentTechnologyFormulation,
-    W <: OperationsTechnologyFormulation,
-}
-    return Dict{Type{<:TimeSeriesParameter}, String}()
+function get_default_time_series_names(::Type{U}) where {U <: PSIP.DemandRequirement}
+    # TODO: We need to discuss about an API for timeseries names for users
+    return "ops_peak_load"
 end
 
 function get_default_attributes(
     ::Type{U},
     ::Type{V},
     ::Type{W},
+    ::Type{X},
 ) where {
     U <: PSIP.DemandRequirement,
     V <: InvestmentTechnologyFormulation,
     W <: OperationsTechnologyFormulation,
+    X <: FeasibilityTechnologyFormulation,
 }
     return Dict{String, Any}()
 end
@@ -28,58 +23,39 @@ get_variable_multiplier(::ActivePowerVariable, ::Type{PSIP.DemandRequirement}) =
 
 ################## Expressions ###################
 
-# TODO: SupplyTotal and DemandTotal should probably be defined for each zone/region/etc. later on
-
-function add_expression!(
+function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::BasicDispatch,
+    transport_model::TransportModel{V},
 ) where {
-    T <: DemandTotal,
-    U <: Union{Vector{D}, IS.FlattenIteratorWrapper{D}},
+    T <: EnergyBalance,
+    U <: Vector{D},
+    V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_steps = get_time_steps(container)
-    #binary = false
-    #var = get_variable(container, ActivePowerVariable(), D)
-
-    #expression = get_expression(container, T(), PSIP.Portfolio)
-
-    #TODO: Handle the timeseries in an actual generic way
-
-    # Hard Code Mapping #
-    @warn("creating hard code mapping. Remove it later")
-    mapping_ops = Dict("2030" => 1:24, "2035" => 25:48)
-    mapping_inv = Dict("2030" => 1, "2035" => 2)
-
-    time_steps = get_time_steps(container)
-
-    expression = add_expression_container!(container, expression_type, D, time_steps)
-
-    #TODO: move to separate add_to_expression! function, could not figure out ExpressionKey
+    time_mapping = get_time_mapping(container)
+    operational_indexes = get_operational_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    time_stamps = get_time_stamps(time_mapping)
 
     for d in devices
-        name = PSIP.get_name(d)
-        peak_load = PSIP.get_peak_load(d)
-        ts_name = "ops_peak_load"
-        ts_keys = filter(x -> x.name == ts_name, IS.get_time_series_keys(d))
-        for ts_key in ts_keys
-            ts_type = ts_key.time_series_type
-            features = ts_key.features
-            year = features["year"]
-            #rep_day = features["rep_day"]
-            ts_data = TimeSeries.values(
-                #IS.get_time_series(ts_type, d, ts_name; year=year, rep_day=rep_day).data,
-                IS.get_time_series(ts_type, d, ts_name; year=year).data,
-            )
-            time_steps_ix = mapping_ops[year]
-            multiplier = 1.0
-            for (ix, t) in enumerate(time_steps_ix)
-                _add_to_jump_expression!(
-                    expression[t],
-                    ts_data[ix] * multiplier,
+        for op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+            # Load Data is in MW
+            ts_data = TimeSeries.values(time_series.data)
+            first_tstamp = time_stamps[first(time_slices)]
+            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            if first_tstamp != first_ts_tstamp
+                @error(
+                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
                 )
+            end
+            for (ix, t) in enumerate(time_slices)
+                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix])
             end
         end
     end
@@ -87,49 +63,124 @@ function add_expression!(
     return
 end
 
-function add_expression!(
+function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::BasicDispatch,
+    transport_model::TransportModel{V},
 ) where {
-    T <: SupplyTotal,
-    U <: Union{Vector{D}, IS.FlattenIteratorWrapper{D}},
+    T <: EnergyBalance,
+    U <: Vector{D},
+    V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_steps = get_time_steps(container)
-    #binary = false
-    #var = get_variable(container, ActivePowerVariable(), D)
+    time_mapping = get_time_mapping(container)
+    operational_indexes = get_operational_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    time_stamps = get_time_stamps(time_mapping)
 
-    expression = add_expression_container!(container, expression_type, D, time_steps)
+    for d in devices
+        # Only 1 region supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
+        for op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+            # Load Data is in MW
+            ts_data = TimeSeries.values(time_series.data)
+            first_tstamp = time_stamps[first(time_slices)]
+            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            if first_tstamp != first_ts_tstamp
+                @error(
+                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
+                )
+            end
+            for (ix, t) in enumerate(time_slices)
+                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix])
+            end
+        end
+    end
+    return
+end
+
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    devices::U,
+    formulation::BasicDispatchFeasibility,
+    transport_model::TransportModel{V},
+) where {
+    T <: FeasibilitySurplus,
+    U <: Vector{D},
+    V <: SingleRegionBalanceModel,
+} where {D <: PSIP.DemandRequirement}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    operational_indexes = get_operational_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    time_stamps = get_time_stamps(time_mapping)
+
+    for d in devices
+        for op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+            # Load Data is in MW
+            ts_data = TimeSeries.values(time_series.data)
+            first_tstamp = time_stamps[first(time_slices)]
+            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            if first_tstamp != first_ts_tstamp
+                @error(
+                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
+                )
+            end
+            for (ix, t) in enumerate(time_slices)
+                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix])
+            end
+        end
+    end
 
     return
 end
 
-################### Constraints ##################
-
-function add_constraints!(
+function add_to_expression!(
     container::SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{U},
-    #model,
-    #::NetworkModel{X},
+    expression_type::T,
+    devices::U,
+    formulation::BasicDispatchFeasibility,
+    transport_model::TransportModel{V},
 ) where {
-    T <: SupplyDemandBalance,
-    U <: PSIP.DemandRequirement{PSY.PowerLoad},
-    #X <: PM.AbstractPowerModel,
-}
-    # TODO: Remove technologies from the expression definition for these and add corresponding get_expression functions
-    time_steps = get_time_steps(container)
+    T <: FeasibilitySurplus,
+    U <: Vector{D},
+    V <: MultiRegionBalanceModel,
+} where {D <: PSIP.DemandRequirement}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    operational_indexes = get_operational_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    time_stamps = get_time_stamps(time_mapping)
 
-    energy_balance = add_constraints_container!(container, T(), U, time_steps)
-
-    for t in time_steps
-        #TODO: Make this generic
-        supply = get_expression(container, SupplyTotal(), U)
-        demand = get_expression(container, DemandTotal(), U)
-
-        energy_balance[t] =
-            JuMP.@constraint(get_jump_model(container), supply - demand >= 0)
+    for d in devices
+        # Only one region supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
+        for op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+            # Load Data is in MW
+            ts_data = TimeSeries.values(time_series.data)
+            first_tstamp = time_stamps[first(time_slices)]
+            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            if first_tstamp != first_ts_tstamp
+                @error(
+                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
+                )
+            end
+            for (ix, t) in enumerate(time_slices)
+                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix])
+            end
+        end
     end
+    return
 end
