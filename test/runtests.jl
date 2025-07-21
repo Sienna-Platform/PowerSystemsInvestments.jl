@@ -1,18 +1,21 @@
 using Test
 import InfrastructureSystems
+import InfrastructureSystems.Optimization
 using JuMP
 using Logging
 using PowerSystemsInvestments
 using PowerSystemsInvestmentsPortfolios
 using PowerSystems
+using DataFrames
 using HiGHS
 
 const IS = InfrastructureSystems
 const PSIP = PowerSystemsInvestmentsPortfolios
-const PSINV = PowerSystemsInvestments
+const PSIN = PowerSystemsInvestments
 const PSY = PowerSystems
 
 include("test_utils/test_data.jl")
+include("test_utils/model_checks.jl")
 
 import Aqua
 Aqua.test_unbound_args(PowerSystemsInvestments)

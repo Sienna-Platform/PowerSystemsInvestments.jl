@@ -1,8 +1,23 @@
+struct PrimalValuesCache
+    variables_cache::Dict{VariableKey, AbstractArray}
+    expressions_cache::Dict{ExpressionKey, AbstractArray}
+end
+
+function PrimalValuesCache()
+    return PrimalValuesCache(
+        Dict{VariableKey, AbstractArray}(),
+        Dict{ExpressionKey, AbstractArray}(),
+    )
+end
+
+function Base.isempty(pvc::PrimalValuesCache)
+    return isempty(pvc.variables_cache) && isempty(pvc.expressions_cache)
+end
+
 Base.@kwdef mutable struct SingleOptimizationContainer <:
                            ISOPT.AbstractOptimizationContainer
     JuMPmodel::JuMP.Model
-    time_steps::UnitRange{Int}
-    time_steps_investments::UnitRange{Int}
+    time_mapping::TimeMapping
     settings::Settings
     settings_copy::Settings
     variables::Dict{ISOPT.VariableKey, AbstractArray}
@@ -11,7 +26,12 @@ Base.@kwdef mutable struct SingleOptimizationContainer <:
     constraints::Dict{ISOPT.ConstraintKey, AbstractArray}
     objective_function::ObjectiveFunction
     expressions::Dict{ISOPT.ExpressionKey, AbstractArray}
-    parameters::Dict{ISOPT.ParameterKey, ParameterContainer}
+    primal_values_cache::PrimalValuesCache
+    operational_weights::Union{Nothing, Vector{Float64}}
+    base_year::Int
+    discount_rate::Float64
+    inflation_rate::Float64
+    interest_rate::Float64
     infeasibility_conflict::Dict{Symbol, Array}
     optimizer_stats::ISOPT.OptimizerStats
     metadata::ISOPT.OptimizationContainerMetadata
@@ -31,8 +51,7 @@ function SingleOptimizationContainer(
 
     return SingleOptimizationContainer(
         jump_model === nothing ? JuMP.Model() : jump_model,
-        1:1,
-        1:1,
+        TimeMapping(nothing),
         settings,
         copy_for_serialization(settings),
         Dict{VariableKey, AbstractArray}(),
@@ -41,7 +60,12 @@ function SingleOptimizationContainer(
         Dict{ConstraintKey, AbstractArray}(),
         ObjectiveFunction(),
         Dict{ExpressionKey, AbstractArray}(),
-        Dict{ParameterKey, ParameterContainer}(),
+        PrimalValuesCache(),
+        nothing,
+        2020,
+        0.0,
+        0.0,
+        0.0,
         Dict{Symbol, Array}(),
         ISOPT.OptimizerStats(),
         ISOPT.OptimizationContainerMetadata(),
@@ -64,12 +88,15 @@ get_initial_time(container::SingleOptimizationContainer) =
 get_jump_model(container::SingleOptimizationContainer) = container.JuMPmodel
 get_metadata(container::SingleOptimizationContainer) = container.metadata
 get_optimizer_stats(container::SingleOptimizationContainer) = container.optimizer_stats
-get_parameters(container::SingleOptimizationContainer) = container.parameters
 get_resolution(container::SingleOptimizationContainer) = get_resolution(container.settings)
 get_settings(container::SingleOptimizationContainer) = container.settings
-get_time_steps(container::SingleOptimizationContainer) = container.time_steps
-get_time_steps_investments(container::SingleOptimizationContainer) =
-    container.time_steps_investments
+get_time_mapping(container::SingleOptimizationContainer) = container.time_mapping
+get_operational_weights(container::SingleOptimizationContainer) =
+    container.operational_weights
+get_base_year(container::SingleOptimizationContainer) = container.base_year
+get_discount_rate(container::SingleOptimizationContainer) = container.discount_rate
+get_inflation_rate(container::SingleOptimizationContainer) = container.inflation_rate
+get_interest_rate(container::SingleOptimizationContainer) = container.interest_rate
 get_variables(container::SingleOptimizationContainer) = container.variables
 
 set_initial_conditions_data!(container::SingleOptimizationContainer, data) =
@@ -78,16 +105,109 @@ get_objective_expression(container::SingleOptimizationContainer) =
     container.objective_function
 is_synchronized(container::SingleOptimizationContainer) =
     container.objective_function.synchronized
-set_time_steps!(container::SingleOptimizationContainer, time_steps::UnitRange{Int64}) =
-    container.time_steps = time_steps
-set_time_steps_investments!(
+set_time_mapping!(container::SingleOptimizationContainer, time_mapping::TimeMapping) =
+    container.time_mapping = time_mapping
+set_operational_weights!(
     container::SingleOptimizationContainer,
-    time_steps::UnitRange{Int64},
-) = container.time_steps_investments = time_steps
+    operational_weights::Union{Nothing, Vector{Float64}},
+) = container.operational_weights = operational_weights
+set_base_year!(container::SingleOptimizationContainer, base_year::Int) =
+    container.base_year = base_year
+set_discount_rate!(container::SingleOptimizationContainer, discount_rate::Float64) =
+    container.discount_rate = discount_rate
+set_inflation_rate!(container::SingleOptimizationContainer, inflation_rate::Float64) =
+    container.inflation_rate = inflation_rate
+set_interest_rate!(container::SingleOptimizationContainer, interest_rate::Float64) =
+    container.interest_rate = interest_rate
 
 get_aux_variables(container::SingleOptimizationContainer) = container.aux_variables
 get_base_power(container::SingleOptimizationContainer) = container.base_power
 get_constraints(container::SingleOptimizationContainer) = container.constraints
+
+function is_milp(container::SingleOptimizationContainer)::Bool
+    !supports_milp(container) && return false
+    if !isempty(
+        JuMP.all_constraints(get_jump_model(container), JuMP.VariableRef, JuMP.MOI.ZeroOne),
+    )
+        return true
+    end
+    return false
+end
+
+function supports_milp(container::SingleOptimizationContainer)
+    jump_model = get_jump_model(container)
+    return supports_milp(jump_model)
+end
+
+function _finalize_jump_model!(container::SingleOptimizationContainer, settings::Settings)
+    @debug "Instantiating the JuMP model" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
+
+    if get_direct_mode_optimizer(settings)
+        optimizer = () -> MOI.instantiate(get_optimizer(settings))
+        container.JuMPmodel = JuMP.direct_model(optimizer())
+    elseif get_optimizer(settings) === nothing
+        @debug "The optimization model has no optimizer attached" _group =
+            LOG_GROUP_OPTIMIZATION_CONTAINER
+    else
+        JuMP.set_optimizer(get_jump_model(container), get_optimizer(settings))
+    end
+
+    JuMPmodel = get_jump_model(container)
+
+    JuMP.set_string_names_on_creation(JuMPmodel, get_store_variable_names(settings))
+
+    @debug begin
+        JuMP.set_string_names_on_creation(JuMPmodel, true)
+    end
+    if get_optimizer_solve_log_print(settings)
+        JuMP.unset_silent(JuMPmodel)
+        @debug "optimizer unset to silent" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
+    else
+        JuMP.set_silent(JuMPmodel)
+        @debug "optimizer set to silent" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
+    end
+    return
+end
+
+function init_optimization_container!(
+    container::SingleOptimizationContainer,
+    template::InvestmentModelTemplate,
+    portfolio::PSIP.Portfolio,
+)
+    # The order of operations matter
+    transport_model = get_transport_model(template)
+    settings = get_settings(container)
+
+    # Update Time Mapping
+    capital_model = get_capital_model(template)
+    operation_model = get_operation_model(template)
+    feasibility_model = get_feasibility_model(template)
+
+    time_map = TimeMapping(
+        capital_model.investment_years,
+        operation_model.representative_series,
+        feasibility_model.sample_periods,
+    )
+
+    set_time_mapping!(container, time_map)
+    set_operational_weights!(container, operation_model.series_weights)
+    # Set Financial Data in Container from Portfolio
+    set_base_year!(container, PSIP.get_base_year(portfolio))
+    set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
+    set_inflation_rate!(container, PSIP.get_inflation_rate(portfolio))
+    set_interest_rate!(container, PSIP.get_interest_rate(portfolio))
+
+    stats = get_optimizer_stats(container)
+    stats.detailed_stats = get_detailed_optimizer_stats(settings)
+
+    _finalize_jump_model!(container, settings)
+    return
+end
+
+function check_optimization_container(container::SingleOptimizationContainer)
+    container.settings_copy = copy_for_serialization(container.settings)
+    return
+end
 
 function _assign_container!(container::Dict, key::OptimizationContainerKey, value)
     if haskey(container, key)
@@ -97,8 +217,6 @@ function _assign_container!(container::Dict, key::OptimizationContainerKey, valu
         throw(IS.InvalidValue("$key is already stored"))
     end
     container[key] = value
-    #@debug "Added container entry $(typeof(key)) $(IS.Optimization.encode_key(key))" _group =
-    #    LOG_GROUP_OPTIMZATION_CONTAINER
     return
 end
 
@@ -141,28 +259,6 @@ function has_container_key(
     key = ConstraintKey(T, U, meta)
     return haskey(container.constraints, key)
 end
-
-function has_container_key(
-    container::SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ParameterType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    key = ParameterKey(T, U, meta)
-    return haskey(container.parameters, key)
-end
-
-#=
-function has_container_key(
-    container:SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{U},
-    meta = IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: InitialConditionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    key = InitialConditionKey(T, U, meta)
-    return haskey(container.initial_conditions, key)
-end
-=#
 
 ####################################### Variable Container #################################
 function _add_variable_container!(
@@ -295,266 +391,12 @@ function get_constraint(
     return get_constraint(container, ConstraintKey(T, U, meta))
 end
 
+# TODO: Duals
 #=
 function read_duals(container::SingleOptimizationContainer)
     return Dict(k => to_dataframe(jump_value.(v), k) for (k, v) in get_duals(container))
 end
 =#
-
-##################################### Parameter Container ##################################
-function _add_param_container!(
-    container::SingleOptimizationContainer,
-    key::ParameterKey{T, U},
-    attribute::VariableValueAttributes{<:OptimizationContainerKey},
-    param_type::DataType,
-    axs...;
-    sparse=false,
-) where {T <: VariableValueParameter, U <: PSY.Component}
-    if sparse
-        param_array = sparse_container_spec(param_type, axs...)
-        multiplier_array = sparse_container_spec(Float64, axs...)
-    else
-        param_array = DenseAxisArray{param_type}(undef, axs...)
-        multiplier_array = fill!(DenseAxisArray{Float64}(undef, axs...), NaN)
-    end
-    param_container = ParameterContainer(attribute, param_array, multiplier_array)
-    _assign_container!(container.parameters, key, param_container)
-    return param_container
-end
-
-function _add_param_container!(
-    container::SingleOptimizationContainer,
-    key::ParameterKey{T, U},
-    attribute::VariableValueAttributes{<:OptimizationContainerKey},
-    axs...;
-    sparse=false,
-) where {T <: VariableValueParameter, U <: PSY.Component}
-    if built_for_recurrent_solves(container) && !get_rebuild_model(get_settings(container))
-        param_type = JuMP.VariableRef
-    else
-        param_type = Float64
-    end
-    return _add_param_container!(
-        container,
-        key,
-        attribute,
-        param_type,
-        axs...;
-        sparse=sparse,
-    )
-end
-
-function _add_param_container!(
-    container::SingleOptimizationContainer,
-    key::ParameterKey{T, U},
-    attribute::TimeSeriesAttributes{V},
-    param_axs,
-    multiplier_axs,
-    time_steps;
-    sparse=false,
-) where {T <: TimeSeriesParameter, U <: PSY.Component, V <: PSY.TimeSeriesData}
-    if built_for_recurrent_solves(container) && !get_rebuild_model(get_settings(container))
-        param_type = JuMP.VariableRef
-    else
-        param_type = Float64
-    end
-
-    if sparse
-        param_array = sparse_container_spec(param_type, param_axs, time_steps)
-        multiplier_array = sparse_container_spec(Float64, multiplier_axs, time_steps)
-    else
-        param_array = DenseAxisArray{param_type}(undef, param_axs, time_steps)
-        multiplier_array =
-            fill!(DenseAxisArray{Float64}(undef, multiplier_axs, time_steps), NaN)
-    end
-    param_container = ParameterContainer(attribute, param_array, multiplier_array)
-    _assign_container!(container.parameters, key, param_container)
-    return param_container
-end
-
-function _add_param_container!(
-    container::SingleOptimizationContainer,
-    key::ParameterKey{T, U},
-    attributes::CostFunctionAttributes{R},
-    axs...;
-    sparse=false,
-) where {R, T <: ObjectiveFunctionParameter, U <: PSY.Component}
-    if sparse
-        param_array = sparse_container_spec(R, axs...)
-        multiplier_array = sparse_container_spec(Float64, axs...)
-    else
-        param_array = DenseAxisArray{R}(undef, axs...)
-        multiplier_array = fill!(DenseAxisArray{Float64}(undef, axs...), NaN)
-    end
-    param_container = ParameterContainer(attributes, param_array, multiplier_array)
-    _assign_container!(container.parameters, key, param_container)
-    return param_container
-end
-
-function add_param_container!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::Type{U},
-    ::Type{V},
-    name::String,
-    param_axs,
-    multiplier_axs,
-    time_steps;
-    sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: TimeSeriesParameter, U <: PSY.Component, V <: PSY.TimeSeriesData}
-    param_key = ParameterKey(T, U, meta)
-    if isabstracttype(V)
-        error("$V can't be abstract: $param_key")
-    end
-    attributes = TimeSeriesAttributes(V, name)
-    return _add_param_container!(
-        container,
-        param_key,
-        attributes,
-        param_axs,
-        multiplier_axs,
-        time_steps;
-        sparse=sparse,
-    )
-end
-
-function add_param_container!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::Type{U},
-    variable_type::Type{W},
-    sos_variable::SOSStatusVariable=NO_VARIABLE,
-    uses_compact_power::Bool=false,
-    data_type::DataType=Float64,
-    axs...;
-    sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ObjectiveFunctionParameter, U <: PSY.Component, W <: VariableType}
-    param_key = ParameterKey(T, U, meta)
-    attributes =
-        CostFunctionAttributes{data_type}(variable_type, sos_variable, uses_compact_power)
-    return _add_param_container!(container, param_key, attributes, axs...; sparse=sparse)
-end
-
-function add_param_container!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::Type{U},
-    source_key::V,
-    axs...;
-    sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: VariableValueParameter, U <: PSY.Component, V <: OptimizationContainerKey}
-    param_key = ParameterKey(T, U, meta)
-    attributes = VariableValueAttributes(source_key)
-    return _add_param_container!(container, param_key, attributes, axs...; sparse=sparse)
-end
-
-# FixValue parameters are created using Float64 since we employ JuMP.fix to fix the downstream
-# variables.
-
-function add_param_container!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::Type{U},
-    source_key::V,
-    axs...;
-    sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: FixValueParameter, U <: PSY.Component, V <: OptimizationContainerKey}
-    if meta == IS.Optimization.CONTAINER_KEY_EMPTY_META
-        error("$T parameters require passing the VariableType to the meta field")
-    end
-    param_key = ParameterKey(T, U, meta)
-    attributes = VariableValueAttributes(source_key)
-    return _add_param_container!(
-        container,
-        param_key,
-        attributes,
-        Float64,
-        axs...;
-        sparse=sparse,
-    )
-end
-
-function get_parameter_keys(container::SingleOptimizationContainer)
-    return collect(keys(container.parameters))
-end
-
-function get_parameter(container::SingleOptimizationContainer, key::ParameterKey)
-    param_container = get(container.parameters, key, nothing)
-    if param_container === nothing
-        name = IS.Optimization.encode_key(key)
-        throw(
-            IS.InvalidValue(
-                "parameter $name is not stored. $(collect(keys(container.parameters)))",
-            ),
-        )
-    end
-    return param_container
-end
-
-function get_parameter(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ParameterType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    return get_parameter(container, ParameterKey(T, U, meta))
-end
-
-function get_parameter_array(container::SingleOptimizationContainer, key)
-    return get_parameter_array(get_parameter(container, key))
-end
-
-function get_parameter_array(
-    container::SingleOptimizationContainer,
-    key::ParameterKey{T, U},
-) where {T <: ParameterType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    return get_parameter_array(get_parameter(container, key))
-end
-
-function get_parameter_multiplier_array(
-    container::SingleOptimizationContainer,
-    key::ParameterKey{T, U},
-) where {T <: ParameterType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    return get_multiplier_array(get_parameter(container, key))
-end
-
-function get_parameter_attributes(
-    container::SingleOptimizationContainer,
-    key::ParameterKey{T, U},
-) where {T <: ParameterType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    return get_attributes(get_parameter(container, key))
-end
-
-function get_parameter_array(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ParameterType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    return get_parameter_array(container, ParameterKey(T, U, meta))
-end
-
-function get_parameter_multiplier_array(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ParameterType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    return get_multiplier_array(get_parameter(container, ParameterKey(T, U, meta)))
-end
-
-function get_parameter_attributes(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ParameterType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    return get_attributes(get_parameter(container, ParameterKey(T, U, meta)))
-end
 
 ##################################### Expression Container #################################
 
@@ -578,6 +420,15 @@ end
 function _add_to_jump_expression!(
     expression::T,
     var::JuMP.VariableRef,
+    multiplier::Float64,
+) where {T <: JuMP.AbstractJuMPScalar}
+    JuMP.add_to_expression!(expression, multiplier, var)
+    return
+end
+
+function _add_to_jump_expression!(
+    expression::T,
+    var::JuMP.AffExpr,
     multiplier::Float64,
 ) where {T <: JuMP.AbstractJuMPScalar}
     JuMP.add_to_expression!(expression, multiplier, var)
@@ -683,42 +534,165 @@ function add_to_objective_investment_expression!(
     return
 end
 
+##### Initialize Expressions #####
+
+function _make_container_array(ax...)
+    return remove_undef!(DenseAxisArray{GAE}(undef, ax...))
+end
+
+function _make_system_expressions!(
+    container::SingleOptimizationContainer,
+    ::Type{SingleRegionBalanceModel},
+)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    container.expressions = Dict(
+        ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
+            _make_container_array([SINGLE_REGION], time_steps),
+        ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
+            _make_container_array([SINGLE_REGION], time_steps),
+    )
+    return
+end
+
+function _make_system_expressions!(
+    container::SingleOptimizationContainer,
+    ::Type{MultiRegionBalanceModel},
+    port::PSIP.Portfolio,
+)
+    regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    container.expressions = Dict(
+        ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
+            _make_container_array(regions, time_steps),
+        ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
+            _make_container_array(regions, time_steps),
+    )
+    return
+end
+
+function initialize_system_expressions!(
+    container::SingleOptimizationContainer,
+    transport_model::TransportModel{T},
+    port::PSIP.Portfolio,
+) where {T <: SingleRegionBalanceModel}
+    _make_system_expressions!(container, T)
+    return
+end
+
+function initialize_system_expressions!(
+    container::SingleOptimizationContainer,
+    transport_model::TransportModel{T},
+    port::PSIP.Portfolio,
+) where {T <: MultiRegionBalanceModel}
+    _make_system_expressions!(container, T, port)
+    return
+end
+
+################################### Aux Variables and Duals ############################
+
+function calculate_aux_variables!(
+    container::SingleOptimizationContainer,
+    port::PSIP.Portfolio,
+)
+    aux_vars = get_aux_variables(container)
+    for key in keys(aux_vars)
+        calculate_aux_variable_value!(container, key, port)
+    end
+    return RunStatus.SUCCESSFULLY_FINALIZED
+end
+
+function _calculate_dual_variables_discrete_model!(
+    container::SingleOptimizationContainer,
+    ::PSIP.Portfolio,
+)
+    return _process_duals(container, container.settings.optimizer)
+end
+
+function calculate_dual_variables!(
+    container::SingleOptimizationContainer,
+    port::PSIP.Portfolio,
+    is_milp::Bool,
+)
+    isempty(get_duals(container)) && return RunStatus.SUCCESSFULLY_FINALIZED
+    if is_milp
+        status = _calculate_dual_variables_discrete_model!(container, port)
+    else
+        status = _calculate_dual_variables_continous_model!(container, port)
+    end
+    return
+end
+
+##### Build Models #######
+
 function build_model!(
     container::SingleOptimizationContainer,
     template::InvestmentModelTemplate,
     port::PSIP.Portfolio,
 )
-    transmission = get_network_formulation(template)
-    transmission_model = get_network_model(template)
-    initialize_system_expressions!(
-        container,
-        get_network_model(template),
-        transmission_model.subnetworks,
-        sys,
-        transmission_model.radial_network_reduction.bus_reduction_map,
-    )
+    transport_model = get_transport_model(template)
+    initialize_system_expressions!(container, transport_model, port)
+
+    tech_names = collect(values(template.technology_models))
+
+    # Check for duplicate technologies
+    flattened_list = collect(Iterators.flatten(tech_names))
+    if !allunique(flattened_list)
+        error("Multiple technology models defined for the same technology")
+    end
+
+    # Technology Maps #
+    type_capital_map, type_operation_map, type_feasibility_map =
+        get_type_formulation_to_names_map(template.technology_models, port)
+    names_to_model_map = names_to_technology_model_map(template.technology_models)
+    # Branch Technology Maps #
+    br_type_capital_map, br_type_operation_map, br_type_feasibility_map =
+        get_type_formulation_to_names_map(template.branch_models, port)
+    br_names_to_model_map = names_to_technology_model_map(template.branch_models)
+
+    # Only build the feasibility model if there are feasibility timesteps
+    if is_feasibility_empty(get_time_mapping(container))
+        models = [template.capital_model, template.operation_model]
+        tech_maps = [type_capital_map, type_operation_map]
+        br_maps = [br_type_capital_map, br_type_operation_map]
+    else
+        models =
+            [template.capital_model, template.operation_model, template.feasibility_model]
+        tech_maps = [type_capital_map, type_operation_map, type_feasibility_map]
+        br_maps = [br_type_capital_map, br_type_operation_map, br_type_feasibility_map]
+    end
+
+    ########################
+    #### Argument Stage ####
+    ########################
 
     # Order is required
-    for device_model in values(template.devices)
-        @debug "Building Arguments for $(get_component_type(device_model)) with $(get_formulation(device_model)) formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(get_component_type(device_model))" begin
-            if validate_available_devices(device_model, sys)
-                construct_device!(
-                    container,
-                    sys,
-                    ArgumentConstructStage(),
-                    device_model,
-                    transmission_model,
-                )
-            end
-            @debug "Problem size:" get_problem_size(container) _group =
-                LOG_GROUP_OPTIMIZATION_CONTAINER
+    # Arguments for Technologies #
+    for (ix, type_map) in enumerate(tech_maps)
+        for (tuple, name_list) in type_map
+            tech_type, tech_formulation = tuple
+            tech_model_vector =
+                names_to_technology_model_vector(names_to_model_map, name_list)
+            construct_technologies!(
+                container,
+                port,
+                name_list,
+                ArgumentConstructStage(),
+                models[ix],
+                tech_type,
+                tech_formulation,
+                transport_model,
+                tech_model_vector,
+            )
         end
     end
 
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Services" begin
-        construct_services!(
+    # TODO: 
+    # Requirements Arguments HERE
+    #=
+    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
+        construct_requirements!(
             container,
             sys,
             ArgumentConstructStage(),
@@ -727,81 +701,89 @@ function build_model!(
             transmission_model,
         )
     end
+    =#
 
-    for branch_model in values(template.branches)
-        @debug "Building Arguments for $(get_component_type(branch_model)) with $(get_formulation(branch_model)) formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(get_component_type(branch_model))" begin
-            if validate_available_devices(branch_model, sys)
-                construct_device!(
-                    container,
-                    sys,
-                    ArgumentConstructStage(),
-                    branch_model,
-                    transmission_model,
-                )
-            end
-            @debug "Problem size:" get_problem_size(container) _group =
-                LOG_GROUP_OPTIMIZATION_CONTAINER
+    # Branches Model Arguments #
+    for (ix, type_map) in enumerate(br_maps)
+        for (tuple, name_list) in type_map
+            tech_type, tech_formulation = tuple
+            tech_model_vector =
+                names_to_technology_model_vector(br_names_to_model_map, name_list)
+            construct_technologies!(
+                container,
+                port,
+                name_list,
+                ArgumentConstructStage(),
+                models[ix],
+                tech_type,
+                tech_formulation,
+                transport_model,
+                tech_model_vector,
+            )
         end
     end
 
-    for device_model in values(template.devices)
-        @debug "Building Model for $(get_component_type(device_model)) with $(get_formulation(device_model)) formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(get_component_type(device_model))" begin
-            if validate_available_devices(device_model, sys)
-                construct_device!(
-                    container,
-                    sys,
-                    ModelConstructStage(),
-                    device_model,
-                    transmission_model,
-                )
-            end
-            @debug "Problem size:" get_problem_size(container) _group =
-                LOG_GROUP_OPTIMIZATION_CONTAINER
+    # Constructor for transport model, adds EnergyBalanceConstraint
+    construct_transport!(container, port, transport_model)
+
+    ########################
+    ##### Model Stage ######
+    ########################
+
+    # Model for Technologies #
+    for (ix, type_map) in enumerate(tech_maps)
+        for (tuple, name_list) in type_map
+            tech_type, tech_formulation = tuple
+            tech_model_vector =
+                names_to_technology_model_vector(names_to_model_map, name_list)
+            construct_technologies!(
+                container,
+                port,
+                name_list,
+                ModelConstructStage(),
+                models[ix],
+                tech_type,
+                tech_formulation,
+                transport_model,
+                tech_model_vector,
+            )
         end
     end
 
-    # This function should be called after construct_device ModelConstructStage
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(transmission)" begin
-        @debug "Building $(transmission) network formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        construct_network!(container, sys, transmission_model, template)
-        @debug "Problem size:" get_problem_size(container) _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-    end
-
-    for branch_model in values(template.branches)
-        @debug "Building Model for $(get_component_type(branch_model)) with $(get_formulation(branch_model)) formulation" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-        TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "$(get_component_type(branch_model))" begin
-            if validate_available_devices(branch_model, sys)
-                construct_device!(
-                    container,
-                    sys,
-                    ModelConstructStage(),
-                    branch_model,
-                    transmission_model,
-                )
-            end
-            @debug "Problem size:" get_problem_size(container) _group =
-                LOG_GROUP_OPTIMIZATION_CONTAINER
-        end
-    end
-
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Services" begin
-        construct_services!(
+    # TODO: 
+    # Requirements Model HERE
+    #=
+    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
+        construct_requirements!(
             container,
             sys,
-            ModelConstructStage(),
+            ArgumentConstructStage(),
             get_service_models(template),
             get_device_models(template),
             transmission_model,
         )
     end
+    =#
 
+    # Branches Model Arguments #
+    for (ix, type_map) in enumerate(br_maps)
+        for (tuple, name_list) in type_map
+            tech_type, tech_formulation = tuple
+            tech_model_vector =
+                names_to_technology_model_vector(br_names_to_model_map, name_list)
+            construct_technologies!(
+                container,
+                port,
+                name_list,
+                ModelConstructStage(),
+                models[ix],
+                tech_type,
+                tech_formulation,
+                transport_model,
+                tech_model_vector,
+            )
+        end
+    end
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Objective" begin
         @debug "Building Objective" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
         update_objective_function!(container)
@@ -811,4 +793,138 @@ function build_model!(
 
     check_optimization_container(container)
     return
+end
+
+"""
+Default solve method for OptimizationContainer
+"""
+function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfolio)
+    optimizer_stats = get_optimizer_stats(container)
+
+    jump_model = get_jump_model(container)
+
+    model_status = MOI.NO_SOLUTION::MOI.ResultStatusCode
+    conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
+
+    try_count = 0
+    while model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
+        _,
+        optimizer_stats.timed_solve_time,
+        optimizer_stats.solve_bytes_alloc,
+        optimizer_stats.sec_in_gc = @timed JuMP.optimize!(jump_model)
+        model_status = JuMP.primal_status(jump_model)
+
+        if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
+            if get_calculate_conflict(get_settings(container))
+                @warn "Optimizer returned $model_status computing conflict"
+                conflict_status = compute_conflict!(container)
+                if conflict_status == MOI.CONFLICT_FOUND
+                    return RunStatus.FAILED
+                end
+            else
+                @warn "Optimizer returned $model_status trying optimize! again"
+            end
+
+            try_count += 1
+            if try_count > MAX_OPTIMIZE_TRIES
+                @error "Optimizer returned $model_status after $MAX_OPTIMIZE_TRIES optimize! attempts"
+                return RunStatus.FAILED
+            end
+        end
+    end
+
+    _, optimizer_stats.timed_calculate_aux_variables =
+        @timed calculate_aux_variables!(container, port)
+
+    # Needs to be called here to avoid issues when getting duals from MILPs
+    write_optimizer_stats!(container)
+
+    _, optimizer_stats.timed_calculate_dual_variables =
+        @timed calculate_dual_variables!(container, port, is_milp(container))
+
+    status = RunStatus.SUCCESSFULLY_FINALIZED
+
+    return status
+end
+
+function write_optimizer_stats!(container::SingleOptimizationContainer)
+    write_optimizer_stats!(get_optimizer_stats(container), get_jump_model(container))
+    return
+end
+
+"""
+Exports the OpModel JuMP object in MathOptFormat
+"""
+function serialize_optimization_model(
+    container::SingleOptimizationContainer,
+    save_path::String,
+)
+    serialize_jump_optimization_model(get_jump_model(container), save_path)
+    return
+end
+
+"""
+Each Tuple corresponds to (con_name, internal_index, moi_index)
+"""
+function get_all_variable_index(container::SingleOptimizationContainer)
+    var_keys = get_all_variable_keys(container)
+    return [IS.Optimization.encode_key(v) for v in var_keys]
+end
+
+# Probably a more efficiency way of doing this
+function get_all_variable_keys(container::SingleOptimizationContainer)
+    var_index = Vector{VariableKey}()
+    for (key, value) in get_variables(container)
+        push!(var_index, key)
+    end
+    return var_index
+end
+
+function check_duplicate_names(
+    names::Vector{String},
+    container::SingleOptimizationContainer,
+    variable_type::T,
+    tech_type::Type{D},
+    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+) where {T <: ISOPT.VariableType, D <: PSIP.Technology}
+    duplicate = false
+    n = ""
+    try
+        variable = get_variable(container, variable_type, tech_type)
+        ax = axes(variable)
+        for name in names
+            if (name * meta in ax[1])
+                duplicate = true
+                n = name
+            end
+        end
+    catch
+        true
+    end
+
+    if duplicate
+        throw(ArgumentError("$n is already being used with another technology model"))
+    end
+end
+
+function serialize_metadata!(container::SingleOptimizationContainer, output_dir::String)
+    for key in Iterators.flatten((
+        keys(container.constraints),
+        keys(container.duals),
+        keys(container.variables),
+        keys(container.aux_variables),
+        keys(container.expressions),
+    ))
+        encoded_key = encode_key_as_string(key)
+        if IS.Optimization.has_container_key(container.metadata, encoded_key)
+            # Constraints and Duals can store the same key.
+            IS.@assert_op key ==
+                          IS.Optimization.get_container_key(container.metadata, encoded_key)
+        end
+        IS.Optimization.add_container_key!(container.metadata, encoded_key, key)
+    end
+
+    filename = IS.Optimization._make_metadata_filename(output_dir)
+    # TODO: Fix Serialization Metadata
+    #Serialization.serialize(filename, container.metadata)
 end

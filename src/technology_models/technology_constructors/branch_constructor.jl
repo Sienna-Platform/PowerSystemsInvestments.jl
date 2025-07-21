@@ -9,14 +9,16 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
-    T <: PSIP.SupplyTechnology,
-    B <: Union{ContinuousInvestment, IntegerInvestment},
+    T <: PSIP.AggregateTransportTechnology,
+    B <: ContinuousInvestment,
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
+    # BuildCapacity variable
     add_variable!(container, BuildCapacity(), devices, B())
 
+    # CumulativeCapacity
     add_expression!(container, p, CumulativeCapacity(), devices, B())
     return
 end
@@ -31,13 +33,13 @@ function construct_technologies!(
     tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: PSIP.SupplyTechnology, C <: BasicDispatch, X <: TechnologyModel}
+) where {T <: PSIP.AggregateTransportTechnology, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    add_variable!(container, ActivePowerVariable(), devices, C())
+    add_variable!(container, FlowActivePowerVariable(), devices, C())
 
-    # EnergyBalance
     add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
+
     return
 end
 
@@ -52,14 +54,13 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
-    T <: PSIP.SupplyTechnology,
+    T <: PSIP.AggregateTransportTechnology,
     D <: FeasibilityTechnologyFormulation,
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    # Feasibility Surplus
-    add_to_expression!(container, FeasibilitySurplus(), devices, D(), transport_model)
+    # TODO: Feasibility Models
     return
 end
 
@@ -74,8 +75,8 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
-    T <: PSIP.SupplyTechnology,
-    B <: InvestmentTechnologyFormulation,
+    T <: PSIP.AggregateTransportTechnology,
+    B <: ContinuousInvestment,
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
@@ -93,6 +94,7 @@ function construct_technologies!(
         devices,
         B(),
     )
+
     return
 end
 
@@ -106,20 +108,14 @@ function construct_technologies!(
     tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: PSIP.SupplyTechnology, C <: BasicDispatch, X <: TechnologyModel}
+) where {T <: PSIP.AggregateTransportTechnology, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
-
-    # Operations Component of objective function
-    objective_function!(container, devices, C())
-
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
 
     # Dispatch constraint
     add_constraints!(
         container,
         ActivePowerLimitsConstraint(),
-        ActivePowerVariable(),
+        FlowActivePowerVariable(),
         devices,
         C(),
         tech_model_vector,
@@ -138,13 +134,12 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
-    T <: PSIP.SupplyTechnology,
+    T <: PSIP.AggregateTransportTechnology,
     D <: FeasibilityTechnologyFormulation,
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    # TODO: Feasibility models
-
+    # TODO: Feasibility Models
     return
 end
