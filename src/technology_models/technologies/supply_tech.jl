@@ -392,13 +392,14 @@ function add_constraints!(
         tech_model = tech_model_vector[ix]
         inv_model = string(get_investment_formulation(tech_model))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        outage_factor = PSIP.get_outage_factor(d)
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
-                    active_power[name, t] <= installed_cap[name, time_step_inv]
+                    active_power[name, t] <= installed_cap[name, time_step_inv] * outage_factor
                 )
             end
         end
