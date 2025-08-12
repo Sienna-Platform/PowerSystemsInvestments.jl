@@ -7,6 +7,7 @@ export InvestmentModel
 export InvestmentModelTemplate
 export TransportModel
 export OptimizationProblemResults
+export InvestmentScheduleResults
 
 ### Algorithms ###
 export SingleInstanceSolve
@@ -107,6 +108,7 @@ import Logging
 import TimerOutputs
 import Serialization
 import DataFrames
+import InteractiveUtils
 
 const IS = InfrastructureSystems
 const ISOPT = InfrastructureSystems.Optimization
@@ -255,4 +257,6 @@ include("technology_models/technologies/common/objective_function/common_financi
 include("technology_models/technologies/common/objective_function/common_capital.jl")
 include("technology_models/technologies/common/objective_function/common_operations.jl")
 include("technology_models/technologies/common/objective_function/linear_curve.jl")
+# Results #
+include("base/investment_schedule.jl")
 end
