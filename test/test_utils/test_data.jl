@@ -257,8 +257,10 @@ function test_2_zone_portfolio()
     end
 
     # Data added in MW
-    ts_demand_2030 = SingleTimeSeries("ops_peak_load", TimeArray(tstamp_2030_ops, ts_load_2030))
-    ts_demand_2035 = SingleTimeSeries("ops_peak_load", TimeArray(tstamp_2035_ops, ts_load_2035))
+    ts_demand_2030 =
+        SingleTimeSeries("ops_peak_load", TimeArray(tstamp_2030_ops, ts_load_2030))
+    ts_demand_2035 =
+        SingleTimeSeries("ops_peak_load", TimeArray(tstamp_2035_ops, ts_load_2035))
 
     t_demand1 = DemandRequirement{PowerLoad}(
         name="demand1",
