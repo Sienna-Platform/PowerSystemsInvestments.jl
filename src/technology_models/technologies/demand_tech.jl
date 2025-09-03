@@ -84,6 +84,7 @@ function add_to_expression!(
     for d in devices
         # Only 1 region supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
+        peak_demand_mw = PSIP.get_peak_demand_mw(d)
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
@@ -97,7 +98,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix])
+                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix] * peak_demand_mw)
             end
         end
     end
@@ -123,6 +124,7 @@ function add_to_expression!(
     time_stamps = get_time_stamps(time_mapping)
 
     for d in devices
+        peak_demand_mw = PSIP.get_peak_demand_mw(d)
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
@@ -136,7 +138,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix])
+                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix] * peak_demand_mw)
             end
         end
     end

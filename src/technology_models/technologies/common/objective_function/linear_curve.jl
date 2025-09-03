@@ -232,7 +232,8 @@ function _add_linearcurve_cost!(
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
-    tech_base_year = PSIP.get_technology_base_year(technology)
+    financials = PSIP.get_financial_data(technology)
+    tech_base_year = PSIP.get_technology_base_year(financials)
 
     discount_factor = 1 / (1 + discount_rate)
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
