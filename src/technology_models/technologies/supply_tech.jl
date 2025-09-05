@@ -311,7 +311,7 @@ function add_constraints!(
     S <: BasicDispatch,
     X <: TechnologyModel,
 } where {
-    D <: PSIP.SupplyTechnology{Y}
+    D <: PSIP.SupplyTechnology{Y},
 } where {Y <: Union{PSY.RenewableDispatch, PSY.RenewableNonDispatch}}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
