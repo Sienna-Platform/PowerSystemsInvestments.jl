@@ -98,7 +98,10 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix] * peak_demand_mw)
+                _add_to_jump_expression!(
+                    expression[region, t],
+                    -1.0 * ts_data[ix] * peak_demand_mw,
+                )
             end
         end
     end
@@ -138,7 +141,10 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix] * peak_demand_mw)
+                _add_to_jump_expression!(
+                    expression[SINGLE_REGION, t],
+                    -1.0 * ts_data[ix] * peak_demand_mw,
+                )
             end
         end
     end
