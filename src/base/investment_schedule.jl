@@ -256,7 +256,7 @@ period = (Date("2030-01-01"), Date("2034-12-31"))
 coal_capacity = results.results[period][(SupplyTechnology, "Coal_Plant_1")]    # Extract optimization results from the solved model
 ```
 """
-function InvestmentScheduleResults(model::InvestmentModel)
+function read_investment_schedule_results(model::InvestmentModel)
     # Extract optimization results from the solved model
     res = OptimizationProblemResults(model)
 
@@ -318,5 +318,5 @@ function InvestmentScheduleResults(model::InvestmentModel)
     end
 
     # Return the complete InvestmentScheduleResults object
-    return InvestmentScheduleResults(results)
+    return PSIP.InvestmentScheduleResults(results)
 end
