@@ -259,4 +259,5 @@ include("technology_models/technologies/common/objective_function/common_operati
 include("technology_models/technologies/common/objective_function/linear_curve.jl")
 # Results #
 include("base/investment_schedule.jl")
+include("base/update_system_with_schedule.jl")
 end
