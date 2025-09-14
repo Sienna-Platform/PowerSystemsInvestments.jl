@@ -415,6 +415,105 @@ function update_system_with_tech_result!(
 end
 
 """
+    update_system_with_tech_result!(
+        new_sys::PSY.System,
+        tech::PSIP.AggregateTransportTechnology{T},
+        capacity::Float64
+    ) where {T <: PSY.ACBranch}
+
+Update a PowerSystems.jl system by adding or modifying transmission line capacity.
+
+This method handles the integration of transmission technology investment results into a
+PowerSystems.jl system. It either creates new transmission lines or updates existing
+ones based on the investment schedule results.
+
+# Arguments
+
+  - `new_sys::PSY.System`: PowerSystems.jl system to be updated
+  - `tech::PSIP.NodalACTransportTechnology{T}`: Investment technology specification for zonal transmission lines
+  - `capacity::Float64`: Capacity to add/update in MW
+
+# Side Effects
+
+  - Modifies `new_sys` by adding new lines
+  - Logs information when creating new components
+
+# Notes
+
+  - Currently only supports creating new lines (updating existing ones is TODO)
+  - Requires `zonal_to_nodal` and `list_of_techs` mappings in system extensions
+  - Uses base power of 100 MVA for per-unit calculations
+
+# Example
+
+```julia
+update_system_with_tech_result!(system, line, 300.0)
+# Adds a 300 MW transmission line to the system
+```
+"""
+function update_system_with_tech_result!(
+    new_sys::PSY.System,
+    tech::PSIP.AggregateTransportTechnology{T},
+    capacity::Float64,
+) where {T <: PSY.ACBranch}
+    # Extract technology name from the investment technology
+    tech_name = PSIP.get_name(tech)
+
+    # TODO: Implement proper zonal to nodal mapping
+    # Get mapping from zonal areas and technology types to specific buses
+    zonal_to_nodal = new_sys.internal.ext["zonal_to_nodal"]
+
+    # Check if a generator with this name already exists in the system
+    line = PSY.get_component(T, new_sys, tech_name)
+
+    if isnothing(line)
+        # Generator doesn't exist, create a new one
+        @info "Component $tech_name of type $T not found in original system. Creating new component"
+
+        # Get the area/region name for this technology
+        area_from = PSIP.get_name(PSIP.get_start_region(tech))
+        area_to = PSIP.get_name(PSIP.get_end_region(tech))
+
+        # Get the specific buses where this line should be connected
+        bus_from = PSY.get_component(PSY.ACBus, new_sys, zonal_to_nodal[(area_from, tech_name)])
+        bus_to = PSY.get_component(PSY.ACBus, new_sys, zonal_to_nodal[(area_to, tech_name)])
+
+        # Use buses to get the specific arc for this line
+        arc = only(PSY.get_components(x -> ((PSY.get_from(x)==bus_from) & (PSY.get_to(x)==bus_to)) | 
+            ((PSY.get_from(x)==bus_to) & (PSY.get_to(x)==bus_from)),
+            PSY.Arc, new_sys)
+        )
+
+        # Get a transmission line attached to that same arc to get line parameters
+        example_line = first(PSY.get_components(x -> PSY.get_arc(x)==arc, PSY.Line, new_sys))
+
+        # Set base power for per-unit calculations
+        cap_pu = capacity / PSY.get_base_power(new_sys)  # Convert to per-unit
+
+        # Create new renewable generator with investment specifications
+        new_line = PSY.Line(;
+            name=tech_name,
+            available=true,
+            arc=arc,
+            active_power_flow=0.0,  # Initial power output
+            reactive_power_flow=0.0,  # Initial reactive power
+            rating=cap_pu,  # Maximum capacity in per-unit
+            r=PSY.get_r(example_line),
+            x=PSY.get_x(example_line),
+            b=PSY.get_b(example_line),
+            g=PSY.get_g(example_line),
+            angle_limits=PSY.get_angle_limits(example_line)
+        )
+
+        # Add the new generator to the system
+        PSY.add_component!(new_sys, new_line)
+    else
+        # Generator already exists - updating capacity is not yet implemented
+        error("TODO: Method for update existing unit")
+    end
+end
+
+"""
     update_system_with_investment_schedule!(
         p::PSIP.Portfolio,
         schedule::PSIP.InvestmentScheduleResults,
