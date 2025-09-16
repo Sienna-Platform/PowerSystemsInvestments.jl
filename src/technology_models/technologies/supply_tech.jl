@@ -16,6 +16,10 @@ get_init_cap(d::PSIP.SupplyTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) 
 
 #! format: on
 
+function get_inv_default_time_series_names(::Type{U}) where {U <: PSIP.SupplyTechnology}
+    return "inv_capex"
+end
+
 function get_default_time_series_names(::Type{U}) where {U <: PSIP.SupplyTechnology}
     # TODO: We need to discuss about an API for timeseries names for users
     return "ops_variable_cap_factor"
