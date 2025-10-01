@@ -30,7 +30,6 @@ t is beginning of investment period, and p is the investment time period.
 ## Fixed OM Cost (\$/kW-year in ATB)
 """
 
-
 # ╔═╡ 39df9740-3fb5-497d-a288-0d6b0416ed04
 md"""
 
