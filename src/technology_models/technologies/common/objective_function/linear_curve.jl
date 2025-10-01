@@ -156,27 +156,23 @@ function _add_linearcurve_cost!(
     proportional_term::Float64,
     tech_model::String,
 ) where {T <: InvestmentVariableType}
-   
     time_mapping = get_time_mapping(container)
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
         inv_date = inv_tuples[t] # extract investment period
-        year = Dates.value.(Dates.Year.(inv_date[1])) # extract beginning year
-        inv_time_series = retrieve_inv_time_series(technology, t, time_mapping, T)
-        inv_ts_data = TimeSeries.values(inv_time_series.data)
-        npv_proportional_term = 0.0
-        for val in inv_ts_data
-            amortized_proportional_term, discount_factor, base_year =
+        year = Dates.year.(inv_date[1]) # extract beginning year
+        inv_time_series = retrieve_inv_time_series(technology, time_mapping, T)
+        scaling_value = retrieve_inv_time_series_value(inv_time_series, year)
+        amortized_proportional_term, discount_factor, base_year =
             amortize_overnight_term_to_base_year_dollars(
                 container,
                 technology,
-                proportional_term * val,
+                proportional_term * scaling_value,
             )
-            future_to_present_value = discount_factor^(year - base_year) 
-            npv_proportional_term += amortized_proportional_term * future_to_present_value
+        future_to_present_value = discount_factor^(year - base_year)
+        npv_proportional_term = amortized_proportional_term * future_to_present_value
 
-        end
         _add_linearcurve_variable_term_to_model!(
             container,
             T(),
@@ -200,7 +196,7 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: InvestmentVariableType}
     time_mapping = get_time_mapping(container)
-    base_year= get_base_year(container)
+    base_year = get_base_year(container)
     inflation_rate = get_inflation_rate(container)
     discount_rate = get_discount_rate(container)
     financials = PSIP.get_financial_data(technology)
@@ -210,11 +206,12 @@ function _add_linearcurve_cost!(
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     inv_tuples = get_investment_time_stamps(time_mapping) # Gets all investment periods
     # Iterate through every investment period
-    for t in get_investment_time_steps(time_mapping) 
-        inv_date = inv_tuples[t] 
+    for t in get_investment_time_steps(time_mapping)
+        inv_date = inv_tuples[t]
         year = Dates.value.(Dates.Year.(inv_date[1])) # Gets beginning year of investment period
         future_to_present_value = discount_factor^(year - base_year)
-        npv_proportional_term = proportional_term * dollars_to_base_year * future_to_present_value
+        npv_proportional_term =
+            proportional_term * dollars_to_base_year * future_to_present_value
         _add_linearcurve_variable_term_to_model!(
             container,
             T(),
@@ -247,8 +244,8 @@ function _add_linearcurve_cost!(
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
-        inv_tuple = inv_tuples[t] 
-        year = Dates.value.(Dates.Year.(inv_tuple[1])) 
+        inv_tuple = inv_tuples[t]
+        year = Dates.value.(Dates.Year.(inv_tuple[1]))
         future_to_present_value = discount_factor^(year - base_year)
         npv_proportional_term =
             proportional_term * dollars_to_base_year * future_to_present_value
