@@ -41,6 +41,20 @@ get_init_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity, p::PSIP.Port
 
 #! format: on
 
+function get_inv_default_time_series_names(
+    ::Type{U},
+    ::BuildEnergyCapacity,
+) where {U <: PSIP.StorageTechnology}
+    return "inv_energy_capex"
+end
+
+function get_inv_default_time_series_names(
+    ::Type{U},
+    ::BuildPowerCapacity,
+) where {U <: PSIP.StorageTechnology}
+    return "inv_power_capex"
+end
+
 function get_default_attributes(
     ::Type{U},
     ::Type{V},

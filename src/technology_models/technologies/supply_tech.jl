@@ -16,7 +16,10 @@ get_init_cap(d::PSIP.SupplyTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) 
 
 #! format: on
 
-function get_inv_default_time_series_names(::Type{U}) where {U <: PSIP.SupplyTechnology}
+function get_inv_default_time_series_names(
+    ::Type{U},
+    ::V,
+) where {U <: PSIP.Technology, V <: BuildInvestmentVariableType}
     return "inv_capex"
 end
 
