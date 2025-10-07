@@ -7,7 +7,6 @@ export InvestmentModel
 export InvestmentModelTemplate
 export TransportModel
 export OptimizationProblemResults
-export InvestmentScheduleResults
 
 ### Algorithms ###
 export SingleInstanceSolve
