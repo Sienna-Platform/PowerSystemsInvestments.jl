@@ -14,6 +14,37 @@ make_portfolio_filename(port::PSIP.Portfolio) = make_portfolio_filename(IS.get_u
 make_portfolio_filename(port_uuid::Union{Base.UUID, AbstractString}) =
     "portfolio-$(port_uuid).json"
 
+function retrieve_inv_time_series(
+    d::PSIP.Technology,
+    time_mapping::TimeMapping,
+    ::Type{V},
+) where {V <: BuildInvestmentVariableType}
+    ts_name = get_inv_default_time_series_names(typeof(d), V())
+    ts_available_names = IS.get_name.(IS.get_time_series_keys(d))
+    if ts_name ∈ ts_available_names
+        return IS.get_time_series(IS.SingleTimeSeries, d, ts_name)
+    else
+        nothing
+    end
+end
+
+function retrieve_inv_time_series_value(ts::IS.SingleTimeSeries, inv_year::Int)
+    time_array = ts.data
+    timestamps = TimeSeries.timestamp(time_array)
+    values = TimeSeries.values(time_array)
+    ix = findfirst(t -> Dates.year(t) == inv_year, timestamps)
+    if ix !== nothing
+        return values[ix]
+    else
+        @warn "Year $inv_year not found in investment time series $(ts.name). Returning 1.0 as scaling factor."
+        return 1.0
+    end
+end
+
+function retrieve_inv_time_series_value(::Nothing, ::Int)
+    return 1.0
+end
+
 function retrieve_ops_time_series(d::PSIP.Technology, op_ix::Int, time_mapping::TimeMapping)
     ts_name = get_default_time_series_names(typeof(d))
     first_t = first(get_consecutive_slices(time_mapping)[op_ix])

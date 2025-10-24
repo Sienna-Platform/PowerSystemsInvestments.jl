@@ -202,7 +202,7 @@ tech_name = "Coal_Plant_Unit_1"
 tech_types = ["Coal", "Gas", "Nuclear"]
 result = find_substring_in_vector(tech_name, tech_types)
 # Returns: "Coal"
-```    # Iterate through each potential technology type
+```
 """
 function find_substring_in_vector(
     name::AbstractString,
@@ -475,17 +475,24 @@ function update_system_with_tech_result!(
         area_to = PSIP.get_name(PSIP.get_end_region(tech))
 
         # Get the specific buses where this line should be connected
-        bus_from = PSY.get_component(PSY.ACBus, new_sys, zonal_to_nodal[(area_from, tech_name)])
+        bus_from =
+            PSY.get_component(PSY.ACBus, new_sys, zonal_to_nodal[(area_from, tech_name)])
         bus_to = PSY.get_component(PSY.ACBus, new_sys, zonal_to_nodal[(area_to, tech_name)])
 
         # Use buses to get the specific arc for this line
-        arc = only(PSY.get_components(x -> ((PSY.get_from(x)==bus_from) & (PSY.get_to(x)==bus_to)) | 
-            ((PSY.get_from(x)==bus_to) & (PSY.get_to(x)==bus_from)),
-            PSY.Arc, new_sys)
+        arc = only(
+            PSY.get_components(
+                x ->
+                    ((PSY.get_from(x) == bus_from) & (PSY.get_to(x) == bus_to)) |
+                    ((PSY.get_from(x) == bus_to) & (PSY.get_to(x) == bus_from)),
+                PSY.Arc,
+                new_sys,
+            ),
         )
 
         # Get a transmission line attached to that same arc to get line parameters
-        example_line = first(PSY.get_components(x -> PSY.get_arc(x)==arc, PSY.Line, new_sys))
+        example_line =
+            first(PSY.get_components(x -> PSY.get_arc(x) == arc, PSY.Line, new_sys))
 
         # Set base power for per-unit calculations
         cap_pu = capacity / PSY.get_base_power(new_sys)  # Convert to per-unit
@@ -502,7 +509,7 @@ function update_system_with_tech_result!(
             x=PSY.get_x(example_line),
             b=PSY.get_b(example_line),
             g=PSY.get_g(example_line),
-            angle_limits=PSY.get_angle_limits(example_line)
+            angle_limits=PSY.get_angle_limits(example_line),
         )
 
         # Add the new generator to the system
@@ -539,6 +546,7 @@ investments up to a specified period and creates/updates generators accordingly.
 # Process Overview
 
  1. Calculate cumulative capacity investments for all technologies up to the target period
+
  2. Create a deep copy of the base system from the portfolio
  3. For each technology with positive cumulative capacity:
 

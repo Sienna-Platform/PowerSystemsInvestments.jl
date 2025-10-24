@@ -72,12 +72,40 @@ get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerW
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerSolarVariable) = PSIP.get_operation_costs_solar(d)
 #! format: on
 
-function get_default_time_series_names(
+# TO-DO: Function call for this is not working
+function get_inv_default_time_series_names(
     ::Type{U},
-    ::ActivePowerWindVariable,
+    ::BuildSolarCapacity,
 ) where {U <: PSIP.ColocatedSupplyStorageTechnology}
-    # TODO: We need to discuss about an API for timeseries names for users
-    return "ops_wind_variable_cap_factor"
+    return "inv_solar_capex"
+end
+
+function get_inv_default_time_series_names(
+    ::Type{U},
+    ::BuildWindCapacity,
+) where {U <: PSIP.ColocatedSupplyStorageTechnology}
+    return "inv_wind_capex"
+end
+
+function get_inv_default_time_series_names(
+    ::Type{U},
+    ::BuildEnergyCapacity,
+) where {U <: PSIP.ColocatedSupplyStorageTechnology}
+    return "inv_energy_capex"
+end
+
+function get_inv_default_time_series_names(
+    ::Type{U},
+    ::BuildPowerCapacity,
+) where {U <: PSIP.ColocatedSupplyStorageTechnology}
+    return "inv_power_capex"
+end
+
+function get_inv_default_time_series_names(
+    ::Type{U},
+    ::BuildInverterCapacity,
+) where {U <: PSIP.ColocatedSupplyStorageTechnology}
+    return "inv_inverter_capex"
 end
 
 function get_default_time_series_names(
@@ -86,6 +114,14 @@ function get_default_time_series_names(
 ) where {U <: PSIP.ColocatedSupplyStorageTechnology}
     # TODO: We need to discuss about an API for timeseries names for users
     return "ops_solar_variable_cap_factor"
+end
+
+function get_default_time_series_names(
+    ::Type{U},
+    ::ActivePowerWindVariable,
+) where {U <: PSIP.ColocatedSupplyStorageTechnology}
+    # TODO: We need to discuss about an API for timeseries names for users
+    return "ops_wind_variable_cap_factor"
 end
 
 function get_default_attributes(
