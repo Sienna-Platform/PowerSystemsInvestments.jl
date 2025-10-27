@@ -743,18 +743,9 @@ function build_model!(
 
     # TODO: 
     # Requirements Model HERE
-    #=
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
-        construct_requirements!(
-            container,
-            sys,
-            ArgumentConstructStage(),
-            get_service_models(template),
-            get_device_models(template),
-            transmission_model,
-        )
+        construct_requirements!(container, port, ModelConstructStage())
     end
-    =#
 
     # Branches Model Arguments #
     for (ix, type_map) in enumerate(br_maps)
