@@ -1,0 +1,1 @@
+struct EnergyShareRequirementModel <: RequirementFormulation end
