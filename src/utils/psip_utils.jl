@@ -67,3 +67,15 @@ end
 function PSY.get_fixed(cost::PSY.RenewableGenerationCost)
     return 0.0
 end
+
+function get_wacc(tech_financials::PSIP.TechnologyFinancialData)
+    dr = tech_financials.debt_rate
+    tr = tech_financials.tax_rate
+    re = tech_financials.return_on_equity
+    df = tech_financials.debt_fraction
+    ef = 1.0 - df
+    if df > 1.0 || df < 0.0
+        error("Debt fraction must be between 0.0 and 1.0")
+    end
+    return df * dr * (1.0 - tr) + ef * re
+end
