@@ -1,12 +1,10 @@
 using PowerSystems
-using PowerSystemsInvestmentsPortfolios
+import PowerSystemsInvestmentsPortfolios as PSIP
 using PowerSystemCaseBuilder
 using Statistics
-using InfrastructureSystems
+import InfrastructureSystems as IS
 using TimeSeries
 using Dates
-const PSIP = PowerSystemsInvestmentsPortfolios
-const IS = InfrastructureSystems
 
 function test_2_zone_portfolio()
     ########################

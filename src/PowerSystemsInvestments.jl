@@ -92,30 +92,23 @@ export get_expression
 
 #### Imports ###
 
-import InfrastructureSystems
-import PowerSystems
+import InfrastructureSystems as IS
+import InfrastructureSystems.Optimization as ISOPT
+import PowerSystems as PSY
 import JuMP
-import MathOptInterface
-import PowerSystemsInvestmentsPortfolios
+import MathOptInterface as MOI
+import MathOptInterface.FileFormats.Model as MOPFM
+import PowerSystemsInvestmentsPortfolios as PSIP
 import Dates
-import PowerModels
+import PowerModels as PM
 import DataStructures
-import PowerNetworkMatrices
+import PowerNetworkMatrices as PNM
 import PrettyTables
 import TimeSeries
 import Logging
 import TimerOutputs
 import Serialization
 import DataFrames
-
-const IS = InfrastructureSystems
-const ISOPT = InfrastructureSystems.Optimization
-const PSY = PowerSystems
-const MOI = MathOptInterface
-const PSIP = PowerSystemsInvestmentsPortfolios
-const PM = PowerModels
-const PNM = PowerNetworkMatrices
-const MOPFM = MOI.FileFormats.Model
 
 using DocStringExtensions
 

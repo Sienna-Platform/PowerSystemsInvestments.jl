@@ -1,18 +1,14 @@
 using Test
-import InfrastructureSystems
+import InfrastructureSystems as IS
 import InfrastructureSystems.Optimization
 using JuMP
 using Logging
 using PowerSystemsInvestments
-using PowerSystemsInvestmentsPortfolios
-using PowerSystems
+import PowerSystemsInvestments as PSIN
+import PowerSystemsInvestmentsPortfolios as PSIP
+import PowerSystems as PSY
 using DataFrames
 using HiGHS
-
-const IS = InfrastructureSystems
-const PSIP = PowerSystemsInvestmentsPortfolios
-const PSIN = PowerSystemsInvestments
-const PSY = PowerSystems
 
 include("test_utils/test_data.jl")
 include("test_utils/model_checks.jl")
