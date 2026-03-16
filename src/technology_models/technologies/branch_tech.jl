@@ -42,7 +42,7 @@ end
 ################## Expressions ###################
 
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -81,7 +81,7 @@ function add_expression!(
 end
 
 function add_to_expression!(
-    ::SingleOptimizationContainer,
+    ::OptimizationContainer,
     ::T,
     ::U,
     ::BasicDispatch,
@@ -96,7 +96,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     devices::U,
     ::S,
@@ -132,7 +132,7 @@ function add_to_expression!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -183,7 +183,7 @@ end
 
 # Maximum cumulative capacity
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -225,7 +225,7 @@ end
 ########################### Objective Function Calls#############################################
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.AggregateTransportTechnology, S <: ContinuousInvestment}

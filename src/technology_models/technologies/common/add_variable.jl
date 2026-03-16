@@ -1,5 +1,5 @@
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::S,
@@ -39,7 +39,7 @@ function add_variable!(
 end
 
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::V,
@@ -82,7 +82,7 @@ function add_variable!(
 end
 
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::S,
@@ -124,7 +124,7 @@ function add_variable!(
 end
 
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::S,
@@ -165,7 +165,7 @@ function add_variable!(
 end
 
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::S,

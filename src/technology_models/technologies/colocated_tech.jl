@@ -105,7 +105,7 @@ end
 ################## Expressions ###################
 
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     ::S, # variable type
@@ -150,7 +150,7 @@ end
 ################### Constraints ##################
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -191,7 +191,7 @@ end
 
 # TODO: ActivePowerLimits for each type
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     ::W,
@@ -245,7 +245,7 @@ end
 
 # Limits for renewables #
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     ::W,
@@ -313,7 +313,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     devices::U,
     formulation::S,
@@ -373,7 +373,7 @@ end
 
 ### Storage Balance ####
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -454,7 +454,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -532,7 +532,7 @@ end
 # These functions are custom implementations of the cost data. In the file objective_functions.jl there are default implementations. Define these only if needed.
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.ColocatedSupplyStorageTechnology, S <: OperationsColocatedFormulation}
@@ -569,7 +569,7 @@ function objective_function!(
 end
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.ColocatedSupplyStorageTechnology, S <: InvestmentTechnologyFormulation}

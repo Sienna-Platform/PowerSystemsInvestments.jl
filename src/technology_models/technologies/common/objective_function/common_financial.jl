@@ -1,5 +1,5 @@
 function amortize_overnight_term_to_base_year_dollars(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     technology::PSIP.Technology,
     proportional_term::Float64,
 )
