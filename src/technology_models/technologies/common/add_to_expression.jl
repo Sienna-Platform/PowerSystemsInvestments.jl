@@ -2,7 +2,7 @@
 Default implementation to add technology cost variables to VariableOMCost
 """
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{S},
     cost_expression::JuMP.AbstractJuMPScalar,
     technology::T,
@@ -21,7 +21,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{S},
     cost_expression::JuMP.AbstractJuMPScalar,
     technology::T,
@@ -41,7 +41,7 @@ end
 
 ### StorageTechnology add_to_expression
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{S},
     cost_expression::JuMP.AbstractJuMPScalar,
     technology::T,
@@ -60,7 +60,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{S},
     cost_expression::JuMP.AbstractJuMPScalar,
     technology::T,
@@ -82,7 +82,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{S},
     cost_expression::JuMP.AbstractJuMPScalar,
     technology::T,

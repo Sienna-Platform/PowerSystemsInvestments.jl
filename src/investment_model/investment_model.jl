@@ -2,7 +2,7 @@ mutable struct InvestmentModel{S <: SolutionAlgorithm}
     name::Symbol
     template::InvestmentModelTemplate
     portfolio::PSIP.Portfolio
-    internal::Union{Nothing, ISOPT.ModelInternal}
+    internal::Union{Nothing, IOM.ModelInternal}
     simulation_info::SimulationInfo
     store::InvestmentModelStore
     ext::Dict{String, Any}
@@ -12,10 +12,10 @@ function InvestmentModel(
     template::AbstractInvestmentModelTemplate,
     M::Type{SingleInstanceSolve},
     portfolio::PSIP.Portfolio,
-    settings::Settings,
+    settings::IOM.Settings,
     jump_model::Union{Nothing, JuMP.Model}=nothing;
 )
-    internal = ISOPT.ModelInternal(SingleOptimizationContainer(settings, jump_model))
+    internal = IOM.ModelInternal(OptimizationContainer(settings, jump_model))
 
     model = InvestmentModel{M}(
         :CEM,
@@ -48,7 +48,7 @@ function InvestmentModel(
     initial_time=UNSET_INI_TIME,
     time_series_cache_size::Int=IS.TIME_SERIES_CACHE_SIZE_BYTES,
 )
-    settings = Settings(
+    settings = InvestmentSettings(
         portfolio;
         initial_time=initial_time,
         time_series_cache_size=time_series_cache_size,
@@ -91,23 +91,23 @@ end
 
 # Default implementations of getter/setter functions for InvestmentModel.
 is_built(model::InvestmentModel) =
-    IS.Optimization.get_status(get_internal(model)) == ModelBuildStatus.BUILT
+    IOM.get_status(get_internal(model)) == ModelBuildStatus.BUILT
 isempty(model::InvestmentModel) =
-    IS.Optimization.get_status(get_internal(model)) == ModelBuildStatus.EMPTY
+    IOM.get_status(get_internal(model)) == ModelBuildStatus.EMPTY
 
 get_constraints(model::InvestmentModel) =
-    IS.Optimization.get_constraints(get_internal(model))
+    IOM.get_constraints(get_internal(model))
 get_internal(model::InvestmentModel) = model.internal
 
 function get_jump_model(model::InvestmentModel)
-    return get_jump_model(IS.Optimization.get_container(get_internal(model)))
+    return get_jump_model(IOM.get_container(get_internal(model)))
 end
 
 get_name(model::InvestmentModel) = model.name
 get_store(model::InvestmentModel) = model.store
 
 function get_optimization_container(model::InvestmentModel)
-    return IS.Optimization.get_optimization_container(get_internal(model))
+    return IOM.get_optimization_container(get_internal(model))
 end
 
 function get_timestamps(model::InvestmentModel)
@@ -125,15 +125,15 @@ get_settings(model::InvestmentModel) = get_optimization_container(model).setting
 get_optimizer_stats(model::InvestmentModel) =
     get_optimizer_stats(get_optimization_container(model))
 
-get_status(model::InvestmentModel) = IS.Optimization.get_status(get_internal(model))
+get_status(model::InvestmentModel) = IOM.get_status(get_internal(model))
 get_portfolio(model::InvestmentModel) = model.portfolio
 get_template(model::InvestmentModel) = model.template
 get_time_stamps(model::InvestmentModel) =
-    get_time_stamps(model.internal.container.time_mapping)
+    get_time_stamps(get_time_mapping(get_optimization_container(model)))
 
 get_store_params(model::InvestmentModel) =
-    IS.Optimization.get_store_params(get_internal(model))
-get_output_dir(model::InvestmentModel) = IS.Optimization.get_output_dir(get_internal(model))
+    IOM.get_store_params(get_internal(model))
+get_output_dir(model::InvestmentModel) = IOM.get_output_dir(get_internal(model))
 get_recorder_dir(model::InvestmentModel) = joinpath(get_output_dir(model), "recorder")
 
 get_variables(model::InvestmentModel) = get_variables(get_optimization_container(model))
@@ -142,7 +142,7 @@ get_initial_conditions(model::InvestmentModel) =
     get_initial_conditions(get_optimization_container(model))
 
 get_simulation_info(model::InvestmentModel) = model.simulation_info
-get_executions(model::InvestmentModel) = IS.Optimization.get_executions(get_internal(model))
+get_executions(model::InvestmentModel) = IOM.get_executions(get_internal(model))
 
 get_run_status(model::InvestmentModel) = get_run_status(get_simulation_info(model))
 set_run_status!(model::InvestmentModel, status) =
@@ -204,7 +204,7 @@ function write_model_dual_results!(
             df = to_dataframe(jump_value.(constraint), key)
             time_col = range(index; length=horizon_count, step=resolution)
             DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            IS.Optimization.export_result(file_type, exports_path, key, index, df)
+            IOM.export_result(file_type, exports_path, key, index, df)
         end
     end
     return
@@ -242,7 +242,7 @@ function write_model_variable_results!(
             df = to_dataframe(data, key)
             time_col = range(index; length=horizon_count, step=resolution)
             DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            IS.Optimization.export_result(file_type, exports_path, key, index, df)
+            IOM.export_result(file_type, exports_path, key, index, df)
         end
     end
     return
@@ -275,7 +275,7 @@ function write_model_aux_variable_results!(
             df = to_dataframe(data, key)
             time_col = range(index; length=horizon_count, step=resolution)
             DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            IS.Optimization.export_result(file_type, exports_path, key, index, df)
+            IOM.export_result(file_type, exports_path, key, index, df)
         end
     end
     return
@@ -314,7 +314,7 @@ function write_model_expression_results!(
             df = to_dataframe(data, key)
             time_col = range(index; length=horizon_count, step=resolution)
             DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            IS.Optimization.export_result(file_type, exports_path, key, index, df)
+            IOM.export_result(file_type, exports_path, key, index, df)
         end
     end
     return
@@ -324,12 +324,12 @@ function init_model_store_params!(model::InvestmentModel)
     base_power = 1.0 # Investment Models should default to Natural Units
     port_uuid = IS.make_uuid()
 
-    store_params = ModelStoreParams(
+    store_params = InvestmentModelStoreParams(
         base_power,
         port_uuid,
         get_metadata(get_optimization_container(model)),
     )
-    IS.Optimization.set_store_params!(get_internal(model), store_params)
+    IOM.set_store_params!(get_internal(model), store_params)
     return
 end
 
@@ -350,7 +350,7 @@ function build_pre_step!(model::InvestmentModel)
             get_template(model),
             get_portfolio(model),
         )
-        @info "Initializing ModelStoreParams"
+        @info "Initializing InvestmentModelStoreParams"
         init_model_store_params!(model)
         set_status!(model, ModelBuildStatus.IN_PROGRESS)
     end
@@ -389,10 +389,10 @@ function build!(
                 TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Model $(get_name(model))" begin
                     build_impl!(model)
                 end
-                set_status!(model, ISOPT.ModelBuildStatus.BUILT)
+                set_status!(model, IOM.ModelBuildStatus.BUILT)
                 @info "\n$(BUILD_PROBLEMS_TIMER)\n"
             catch e
-                set_status!(model, ISOPT.ModelBuildStatus.FAILED)
+                set_status!(model, IOM.ModelBuildStatus.FAILED)
                 bt = catch_backtrace()
                 @error "InvestmentModel Build Failed" exception = e, bt
             end
@@ -426,7 +426,7 @@ function solve!(
     disable_timer_outputs && TimerOutputs.disable_timer!(RUN_OPERATION_MODEL_TIMER)
     file_mode = "a"
     register_recorders!(model, file_mode)
-    logger = IS.Optimization.configure_logging(
+    logger = IOM.configure_logging(
         get_internal(model),
         PROBLEM_LOG_FILENAME,
         file_mode,
@@ -488,12 +488,12 @@ function solve_impl!(model::InvestmentModel)
     if status != RunStatus.SUCCESSFULLY_FINALIZED
         settings = get_settings(model)
         model_name = get_name(model)
-        ts = get_current_timestamp(model)
+        ts = get_initial_time(model)
         output_dir = get_output_dir(model)
         infeasible_opt_path = joinpath(output_dir, "infeasible_$(model_name).json")
         @error("Serializing Infeasible Problem at $(infeasible_opt_path)")
         serialize_optimization_model(container, infeasible_opt_path)
-        if !get_allow_fails(settings)
+        if !IOM.get_allow_fails(settings)
             error("Solving model $(model_name) failed at $(ts)")
         else
             @error "Solving model $(model_name) failed at $(ts). Failure Allowed"
@@ -503,17 +503,17 @@ function solve_impl!(model::InvestmentModel)
 end
 
 set_console_level!(model::InvestmentModel, val) =
-    IS.Optimization.set_console_level!(get_internal(model), val)
+    IOM.set_console_level!(get_internal(model), val)
 set_file_level!(model::InvestmentModel, val) =
-    IS.Optimization.set_file_level!(get_internal(model), val)
+    IOM.set_file_level!(get_internal(model), val)
 
-function set_status!(model::InvestmentModel, status::ISOPT.ModelBuildStatus)
-    IS.Optimization.set_status!(get_internal(model), status)
+function set_status!(model::InvestmentModel, status::IOM.ModelBuildStatus)
+    IOM.set_status!(get_internal(model), status)
     return
 end
 
 function set_output_dir!(model::InvestmentModel, path::AbstractString)
-    IS.Optimization.set_output_dir!(get_internal(model), path)
+    IOM.set_output_dir!(get_internal(model), path)
     return
 end
 
@@ -548,16 +548,16 @@ end
 read_optimizer_stats(model::InvestmentModel) = read_optimizer_stats(get_store(model))
 
 list_aux_variable_keys(x::InvestmentModel) =
-    IS.Optimization.list_keys(get_store(x), STORE_CONTAINER_AUX_VARIABLES)
+    IOM.list_keys(get_store(x), STORE_CONTAINER_AUX_VARIABLES)
 list_aux_variable_names(x::InvestmentModel) = _list_names(x, STORE_CONTAINER_AUX_VARIABLES)
 list_variable_keys(x::InvestmentModel) =
-    IS.Optimization.list_keys(get_store(x), STORE_CONTAINER_VARIABLES)
+    IOM.list_keys(get_store(x), STORE_CONTAINER_VARIABLES)
 list_variable_names(x::InvestmentModel) = _list_names(x, STORE_CONTAINER_VARIABLES)
 list_dual_keys(x::InvestmentModel) =
-    IS.Optimization.list_keys(get_store(x), STORE_CONTAINER_DUALS)
+    IOM.list_keys(get_store(x), STORE_CONTAINER_DUALS)
 list_dual_names(x::InvestmentModel) = _list_names(x, STORE_CONTAINER_DUALS)
 list_expression_keys(x::InvestmentModel) =
-    IS.Optimization.list_keys(get_store(x), STORE_CONTAINER_EXPRESSIONS)
+    IOM.list_keys(get_store(x), STORE_CONTAINER_EXPRESSIONS)
 list_expression_names(x::InvestmentModel) = _list_names(x, STORE_CONTAINER_EXPRESSIONS)
 
 function list_all_keys(x::InvestmentModel)
@@ -568,20 +568,20 @@ end
 
 function _list_names(model::InvestmentModel, container_type)
     return encode_keys_as_strings(
-        IS.Optimization.list_keys(get_store(model), container_type),
+        IOM.list_keys(get_store(model), container_type),
     )
 end
 
 function register_recorders!(model::InvestmentModel, file_mode)
     recorder_dir = get_recorder_dir(model)
     mkpath(recorder_dir)
-    for name in IS.Optimization.get_recorders(get_internal(model))
+    for name in IOM.get_recorders(get_internal(model))
         IS.register_recorder!(name; mode=file_mode, directory=recorder_dir)
     end
 end
 
 function unregister_recorders!(model::InvestmentModel)
-    for name in IS.Optimization.get_recorders(get_internal(model))
+    for name in IOM.get_recorders(get_internal(model))
         IS.unregister_recorder!(name)
     end
 end

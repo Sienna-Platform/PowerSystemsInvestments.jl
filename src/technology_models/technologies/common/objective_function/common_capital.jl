@@ -3,7 +3,7 @@
 ##################################
 
 function add_capital_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::U,
     devices::Vector{T},
     ::V,
@@ -21,7 +21,7 @@ function add_capital_cost!(
 end
 
 function add_capital_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::U,
     devices::Vector{T},
     ::V,
@@ -39,7 +39,7 @@ function add_capital_cost!(
 end
 
 function _add_proportional_term!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     technology::U,
     linear_term::Float64,
@@ -59,7 +59,7 @@ end
 #############################
 
 function add_fixed_om_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::U,
     devices::Vector{T},
     ::V,
@@ -77,7 +77,7 @@ function add_fixed_om_cost!(
 end
 
 function add_fixed_om_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::U,
     devices::Vector{T},
     ::V,
@@ -95,7 +95,7 @@ function add_fixed_om_cost!(
 end
 
 function add_fixed_om_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::U,
     devices::Vector{T},
     ::V,
@@ -113,7 +113,7 @@ function add_fixed_om_cost!(
 end
 
 function _add_proportional_term!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     technology::U,
     linear_term::Float64,
@@ -133,7 +133,7 @@ end
 ########################################
 
 function add_capital_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::U,
     devices::Vector{T},
     ::V,
@@ -155,7 +155,7 @@ end
 #######################################
 
 function add_capital_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::U,
     devices::Vector{T},
     ::V,
@@ -177,7 +177,7 @@ end
 ########################################
 
 function add_capital_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::U,
     devices::Vector{T},
     ::V,
@@ -195,7 +195,7 @@ function add_capital_cost!(
 end
 
 function add_fixed_om_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::U,
     devices::Vector{T},
     ::V,

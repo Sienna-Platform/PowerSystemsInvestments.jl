@@ -1,5 +1,5 @@
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -22,7 +22,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -42,7 +42,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -64,7 +64,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,
@@ -97,7 +97,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,
@@ -128,7 +128,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,

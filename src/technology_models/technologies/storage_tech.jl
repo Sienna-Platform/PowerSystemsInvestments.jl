@@ -163,7 +163,7 @@ end
 ################## Expressions ###################
 
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -202,7 +202,7 @@ function add_expression!(
 end
 
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -242,7 +242,7 @@ end
 
 # PowerCap for IntegerInvestment
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -283,7 +283,7 @@ end
 
 # EnergyCap for Integer decisions in Storage
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -323,7 +323,7 @@ function add_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -357,7 +357,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -393,7 +393,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -426,7 +426,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -463,7 +463,7 @@ end
 ################### Constraints ##################
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -517,7 +517,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -567,7 +567,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -648,7 +648,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -724,7 +724,7 @@ end
 
 # Maximum cumulative capacity
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -767,7 +767,7 @@ end
 # These functions are custom implementations of the cost data. In the file objective_functions.jl there are default implementations. Define these only if needed.
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.StorageTechnology, S <: OperationsStorageFormulation}
@@ -784,7 +784,7 @@ function objective_function!(
 end
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.StorageTechnology, S <: InvestmentTechnologyFormulation}

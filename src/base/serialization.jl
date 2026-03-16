@@ -29,7 +29,7 @@ end
 struct ProblemSerializationWrapper
     template::InvestmentModelTemplate
     sys::Union{Nothing, String}
-    settings::Settings
+    settings::IOM.Settings
     model_type::DataType
     name::String
     optimizer::OptimizerAttributes

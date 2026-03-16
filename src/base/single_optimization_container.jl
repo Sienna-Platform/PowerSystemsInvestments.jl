@@ -1,47 +1,15 @@
-struct PrimalValuesCache
-    variables_cache::Dict{VariableKey, AbstractArray}
-    expressions_cache::Dict{ExpressionKey, AbstractArray}
-end
+"""
+PSI-specific methods on OptimizationContainer.
 
-function PrimalValuesCache()
-    return PrimalValuesCache(
-        Dict{VariableKey, AbstractArray}(),
-        Dict{ExpressionKey, AbstractArray}(),
-    )
-end
+Investment-specific fields (TimeMapping, financial data) are stored in InvestmentContainerData,
+accessed via the container's settings.ext dictionary.
+"""
 
-function Base.isempty(pvc::PrimalValuesCache)
-    return isempty(pvc.variables_cache) && isempty(pvc.expressions_cache)
-end
-
-Base.@kwdef mutable struct SingleOptimizationContainer <:
-                           ISOPT.AbstractOptimizationContainer
-    JuMPmodel::JuMP.Model
-    time_mapping::TimeMapping
-    settings::Settings
-    settings_copy::Settings
-    variables::Dict{ISOPT.VariableKey, AbstractArray}
-    aux_variables::Dict{ISOPT.AuxVarKey, AbstractArray}
-    duals::Dict{ISOPT.ConstraintKey, AbstractArray}
-    constraints::Dict{ISOPT.ConstraintKey, AbstractArray}
-    objective_function::ObjectiveFunction
-    expressions::Dict{ISOPT.ExpressionKey, AbstractArray}
-    primal_values_cache::PrimalValuesCache
-    operational_weights::Union{Nothing, Vector{Float64}}
-    base_year::Int
-    discount_rate::Float64
-    inflation_rate::Float64
-    interest_rate::Float64
-    infeasibility_conflict::Dict{Symbol, Array}
-    optimizer_stats::ISOPT.OptimizerStats
-    metadata::ISOPT.OptimizationContainerMetadata
-end
-
-function SingleOptimizationContainer(
-    settings::Settings,
+function OptimizationContainer(
+    settings::IOM.Settings,
     jump_model::Union{Nothing, JuMP.Model},
 )
-    if jump_model !== nothing && get_direct_mode_optimizer(settings)
+    if jump_model !== nothing && IOM.get_direct_mode_optimizer(settings)
         throw(
             IS.ConflictingInputsError(
                 "Externally provided JuMP models are not compatible with the direct model keyword argument. Use JuMP.direct_model before passing the custom model",
@@ -49,117 +17,83 @@ function SingleOptimizationContainer(
         )
     end
 
-    return SingleOptimizationContainer(
+    # Create a minimal "system" object for the IOM constructor that provides get_base_power
+    # Investment models always use natural units (base_power = 1.0)
+    container = OptimizationContainer(
         jump_model === nothing ? JuMP.Model() : jump_model,
-        TimeMapping(nothing),
+        1:1,
         settings,
-        copy_for_serialization(settings),
-        Dict{VariableKey, AbstractArray}(),
-        Dict{AuxVarKey, AbstractArray}(),
-        Dict{ConstraintKey, AbstractArray}(),
-        Dict{ConstraintKey, AbstractArray}(),
-        ObjectiveFunction(),
-        Dict{ExpressionKey, AbstractArray}(),
-        PrimalValuesCache(),
-        nothing,
-        2020,
-        0.0,
-        0.0,
-        0.0,
+        IOM.copy_for_serialization(settings),
+        OrderedDict{VariableKey, AbstractArray}(),
+        OrderedDict{AuxVarKey, AbstractArray}(),
+        OrderedDict{ConstraintKey, AbstractArray}(),
+        OrderedDict{ConstraintKey, AbstractArray}(),
+        IOM.ObjectiveFunction(),
+        OrderedDict{ExpressionKey, AbstractArray}(),
+        OrderedDict{IOM.ParameterKey, IOM.ParameterContainer}(),
+        IOM.PrimalValuesCache(),
+        OrderedDict{IOM.InitialConditionKey, Vector{IOM.InitialCondition}}(),
+        IOM.InitialConditionsData(),
         Dict{Symbol, Array}(),
-        ISOPT.OptimizerStats(),
-        ISOPT.OptimizationContainerMetadata(),
+        nothing,
+        1.0,  # base_power = 1.0 for investment models (natural units)
+        IOM.OptimizerStats(),
+        false,
+        OptimizationContainerMetadata(),
+        PSY.SingleTimeSeries,
+        IOM.AbstractPowerFlowEvaluationData[],
     )
+    # Store investment-specific data
+    set_investment_data!(container, InvestmentContainerData())
+    return container
 end
 
-built_for_recurrent_solves(container::SingleOptimizationContainer) =
-    container.built_for_recurrent_solves
+# Re-export IOM accessors that PSI uses with the same names
+get_jump_model(container::OptimizationContainer) = IOM.get_jump_model(container)
+get_settings(container::OptimizationContainer) = IOM.get_settings(container)
+get_variables(container::OptimizationContainer) = IOM.get_variables(container)
+get_aux_variables(container::OptimizationContainer) = IOM.get_aux_variables(container)
+get_constraints(container::OptimizationContainer) = IOM.get_constraints(container)
+get_expressions(container::OptimizationContainer) = IOM.get_expressions(container)
+get_duals(container::OptimizationContainer) = IOM.get_duals(container)
+get_optimizer_stats(container::OptimizationContainer) = IOM.get_optimizer_stats(container)
+get_metadata(container::OptimizationContainer) = IOM.get_metadata(container)
+get_initial_time(container::OptimizationContainer) = IOM.get_initial_time(container)
+get_resolution(container::OptimizationContainer) = IOM.get_resolution(container)
+get_time_steps(container::OptimizationContainer) = IOM.get_time_steps(container)
 
-get_default_time_series_type(container::SingleOptimizationContainer) =
-    container.default_time_series_type
-get_duals(container::SingleOptimizationContainer) = container.duals
-get_expressions(container::SingleOptimizationContainer) = container.expressions
-get_initial_conditions(container::SingleOptimizationContainer) =
-    container.initial_conditions
-get_initial_conditions_data(container::SingleOptimizationContainer) =
-    container.initial_conditions_data
-get_initial_time(container::SingleOptimizationContainer) =
-    get_initial_time(container.settings)
-get_jump_model(container::SingleOptimizationContainer) = container.JuMPmodel
-get_metadata(container::SingleOptimizationContainer) = container.metadata
-get_optimizer_stats(container::SingleOptimizationContainer) = container.optimizer_stats
-get_resolution(container::SingleOptimizationContainer) = get_resolution(container.settings)
-get_settings(container::SingleOptimizationContainer) = container.settings
-get_time_mapping(container::SingleOptimizationContainer) = container.time_mapping
-get_operational_weights(container::SingleOptimizationContainer) =
-    container.operational_weights
-get_base_year(container::SingleOptimizationContainer) = container.base_year
-get_discount_rate(container::SingleOptimizationContainer) = container.discount_rate
-get_inflation_rate(container::SingleOptimizationContainer) = container.inflation_rate
-get_interest_rate(container::SingleOptimizationContainer) = container.interest_rate
-get_variables(container::SingleOptimizationContainer) = container.variables
+get_objective_expression(container::OptimizationContainer) =
+    IOM.get_objective_expression(container)
 
-set_initial_conditions_data!(container::SingleOptimizationContainer, data) =
-    container.initial_conditions_data = data
-get_objective_expression(container::SingleOptimizationContainer) =
-    container.objective_function
-is_synchronized(container::SingleOptimizationContainer) =
-    container.objective_function.synchronized
-set_time_mapping!(container::SingleOptimizationContainer, time_mapping::TimeMapping) =
-    container.time_mapping = time_mapping
-set_operational_weights!(
-    container::SingleOptimizationContainer,
-    operational_weights::Union{Nothing, Vector{Float64}},
-) = container.operational_weights = operational_weights
-set_base_year!(container::SingleOptimizationContainer, base_year::Int) =
-    container.base_year = base_year
-set_discount_rate!(container::SingleOptimizationContainer, discount_rate::Float64) =
-    container.discount_rate = discount_rate
-set_inflation_rate!(container::SingleOptimizationContainer, inflation_rate::Float64) =
-    container.inflation_rate = inflation_rate
-set_interest_rate!(container::SingleOptimizationContainer, interest_rate::Float64) =
-    container.interest_rate = interest_rate
-
-get_aux_variables(container::SingleOptimizationContainer) = container.aux_variables
-get_base_power(container::SingleOptimizationContainer) = container.base_power
-get_constraints(container::SingleOptimizationContainer) = container.constraints
-
-function is_milp(container::SingleOptimizationContainer)::Bool
-    !supports_milp(container) && return false
-    if !isempty(
-        JuMP.all_constraints(get_jump_model(container), JuMP.VariableRef, JuMP.MOI.ZeroOne),
-    )
-        return true
-    end
-    return false
+function is_milp(container::OptimizationContainer)::Bool
+    return IOM.is_milp(container)
 end
 
-function supports_milp(container::SingleOptimizationContainer)
-    jump_model = get_jump_model(container)
-    return supports_milp(jump_model)
+function supports_milp(container::OptimizationContainer)
+    return IOM.supports_milp(container)
 end
 
-function _finalize_jump_model!(container::SingleOptimizationContainer, settings::Settings)
+function _finalize_jump_model!(container::OptimizationContainer, settings::IOM.Settings)
     @debug "Instantiating the JuMP model" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
 
-    if get_direct_mode_optimizer(settings)
-        optimizer = () -> MOI.instantiate(get_optimizer(settings))
+    if IOM.get_direct_mode_optimizer(settings)
+        optimizer = () -> MOI.instantiate(IOM.get_optimizer(settings))
         container.JuMPmodel = JuMP.direct_model(optimizer())
-    elseif get_optimizer(settings) === nothing
+    elseif IOM.get_optimizer(settings) === nothing
         @debug "The optimization model has no optimizer attached" _group =
             LOG_GROUP_OPTIMIZATION_CONTAINER
     else
-        JuMP.set_optimizer(get_jump_model(container), get_optimizer(settings))
+        JuMP.set_optimizer(get_jump_model(container), IOM.get_optimizer(settings))
     end
 
     JuMPmodel = get_jump_model(container)
 
-    JuMP.set_string_names_on_creation(JuMPmodel, get_store_variable_names(settings))
+    JuMP.set_string_names_on_creation(JuMPmodel, IOM.get_store_variable_names(settings))
 
     @debug begin
         JuMP.set_string_names_on_creation(JuMPmodel, true)
     end
-    if get_optimizer_solve_log_print(settings)
+    if IOM.get_optimizer_solve_log_print(settings)
         JuMP.unset_silent(JuMPmodel)
         @debug "optimizer unset to silent" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
     else
@@ -170,7 +104,7 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
 end
 
 function init_optimization_container!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     template::InvestmentModelTemplate,
     portfolio::PSIP.Portfolio,
 )
@@ -198,21 +132,21 @@ function init_optimization_container!(
     set_interest_rate!(container, PSIP.get_interest_rate(portfolio))
 
     stats = get_optimizer_stats(container)
-    stats.detailed_stats = get_detailed_optimizer_stats(settings)
+    stats.detailed_stats = IOM.get_detailed_optimizer_stats(settings)
 
     _finalize_jump_model!(container, settings)
     return
 end
 
-function check_optimization_container(container::SingleOptimizationContainer)
-    container.settings_copy = copy_for_serialization(container.settings)
+function check_optimization_container(container::OptimizationContainer)
+    container.settings_copy = IOM.copy_for_serialization(container.settings)
     return
 end
 
-function _assign_container!(container::Dict, key::OptimizationContainerKey, value)
+function _assign_container!(container::Union{Dict, OrderedDict}, key::OptimizationContainerKey, value)
     if haskey(container, key)
-        @error "$(IS.Optimization.encode_key(key)) is already stored" sort!(
-            IS.Optimization.encode_key.(keys(container)),
+        @error "$(IOM.encode_key(key)) is already stored" sort!(
+            IOM.encode_key.(keys(container)),
         )
         throw(IS.InvalidValue("$key is already stored"))
     end
@@ -220,49 +154,9 @@ function _assign_container!(container::Dict, key::OptimizationContainerKey, valu
     return
 end
 
-function has_container_key(
-    container::SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    key = ExpressionKey(T, U, meta)
-    return haskey(container.expressions, key)
-end
-
-function has_container_key(
-    container::SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    key = VariableKey(T, U, meta)
-    return haskey(container.variables, key)
-end
-
-function has_container_key(
-    container::SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: AuxVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    key = AuxVarKey(T, U, meta)
-    return haskey(container.aux_variables, key)
-end
-
-function has_container_key(
-    container::SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
-    key = ConstraintKey(T, U, meta)
-    return haskey(container.constraints, key)
-end
-
 ####################################### Variable Container #################################
 function _add_variable_container!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     var_key::VariableKey{T, U},
     sparse::Bool,
     axs...,
@@ -277,19 +171,19 @@ function _add_variable_container!(
 end
 
 function add_variable_container!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::Type{U},
     axs...;
     sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
 ) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     var_key = VariableKey(T, U, meta)
     return _add_variable_container!(container, var_key, sparse, axs...)
 end
 
 function add_variable_container!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::Type{U},
     meta::String,
@@ -306,42 +200,42 @@ function _get_pwl_variables_container()
 end
 
 function add_variable_container!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::Type{U};
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
 ) where {T <: SparseVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     var_key = VariableKey(T, U, meta)
     _assign_container!(container.variables, var_key, _get_pwl_variables_container())
     return container.variables[var_key]
 end
 
-function get_variable_keys(container::SingleOptimizationContainer)
+function get_variable_keys(container::OptimizationContainer)
     return collect(keys(container.variables))
 end
 
-function get_variable(container::SingleOptimizationContainer, key::VariableKey)
+function get_variable(container::OptimizationContainer, key::VariableKey)
     var = get(container.variables, key, nothing)
     if var === nothing
-        name = IS.Optimization.encode_key(key)
-        keys = IS.Optimization.encode_key.(get_variable_keys(container))
+        name = IOM.encode_key(key)
+        keys = IOM.encode_key.(get_variable_keys(container))
         throw(IS.InvalidValue("variable $name is not stored. $keys"))
     end
     return var
 end
 
 function get_variable(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::Type{U},
-    meta::String=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta::String=IOM.CONTAINER_KEY_EMPTY_META,
 ) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     return get_variable(container, VariableKey(T, U, meta))
 end
 
 ##################################### Constraint Container #################################
 function _add_constraints_container!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     cons_key::ConstraintKey,
     axs...;
     sparse=false,
@@ -356,26 +250,26 @@ function _add_constraints_container!(
 end
 
 function add_constraints_container!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::Type{U},
     axs...;
     sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     cons_key = ConstraintKey(T, U, meta)
     return _add_constraints_container!(container, cons_key, axs...; sparse=sparse)
 end
 
-function get_constraint_keys(container::SingleOptimizationContainer)
+function get_constraint_keys(container::OptimizationContainer)
     return collect(keys(container.constraints))
 end
 
-function get_constraint(container::SingleOptimizationContainer, key::ConstraintKey)
+function get_constraint(container::OptimizationContainer, key::ConstraintKey)
     var = get(container.constraints, key, nothing)
     if var === nothing
-        name = IS.Optimization.encode_key(key)
-        keys = IS.Optimization.encode_key.(get_constraint_keys(container))
+        name = IOM.encode_key(key)
+        keys = IOM.encode_key.(get_constraint_keys(container))
         throw(IS.InvalidValue("constraint $name is not stored. $keys"))
     end
 
@@ -383,20 +277,13 @@ function get_constraint(container::SingleOptimizationContainer, key::ConstraintK
 end
 
 function get_constraint(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::Type{U},
-    meta::String=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta::String=IOM.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     return get_constraint(container, ConstraintKey(T, U, meta))
 end
-
-# TODO: Duals
-#=
-function read_duals(container::SingleOptimizationContainer)
-    return Dict(k => to_dataframe(jump_value.(v), k) for (k, v) in get_duals(container))
-end
-=#
 
 ##################################### Expression Container #################################
 
@@ -436,7 +323,7 @@ function _add_to_jump_expression!(
 end
 
 function _add_expression_container!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expr_key::ExpressionKey,
     ::Type{T},
     axs...;
@@ -453,27 +340,27 @@ function _add_expression_container!(
 end
 
 function add_expression_container!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::Type{U},
     axs...;
     sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     expr_key = ExpressionKey(T, U, meta)
     return _add_expression_container!(container, expr_key, GAE, axs...; sparse=sparse)
 end
 
-function get_expression_keys(container::SingleOptimizationContainer)
+function get_expression_keys(container::OptimizationContainer)
     return collect(keys(container.expressions))
 end
 
-function get_expression(container::SingleOptimizationContainer, key::ExpressionKey)
+function get_expression(container::OptimizationContainer, key::ExpressionKey)
     var = get(container.expressions, key, nothing)
     if var === nothing
         throw(
             IS.InvalidValue(
-                "constraint $key is not stored. $(collect(keys(container.expressions)))",
+                "expression $key is not stored. $(collect(keys(container.expressions)))",
             ),
         )
     end
@@ -482,54 +369,93 @@ function get_expression(container::SingleOptimizationContainer, key::ExpressionK
 end
 
 function get_expression(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     return get_expression(container, ExpressionKey(T, U, meta))
 end
 
 function get_expression(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ExpressionType}
     return get_expression(container, ExpressionKey(T, meta))
 end
 
+##################################### has_container_key #################################
+function has_container_key(
+    container::OptimizationContainer,
+    ::Type{T},
+    ::Type{U},
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
+) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+    key = ExpressionKey(T, U, meta)
+    return haskey(container.expressions, key)
+end
+
+function has_container_key(
+    container::OptimizationContainer,
+    ::Type{T},
+    ::Type{U},
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+    key = VariableKey(T, U, meta)
+    return haskey(container.variables, key)
+end
+
+function has_container_key(
+    container::OptimizationContainer,
+    ::Type{T},
+    ::Type{U},
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
+) where {T <: AuxVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+    key = AuxVarKey(T, U, meta)
+    return haskey(container.aux_variables, key)
+end
+
+function has_container_key(
+    container::OptimizationContainer,
+    ::Type{T},
+    ::Type{U},
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
+) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+    key = ConstraintKey(T, U, meta)
+    return haskey(container.constraints, key)
+end
+
 ##################################### Objective Function Container #################################
-function update_objective_function!(container::SingleOptimizationContainer)
-    JuMP.@objective(
-        get_jump_model(container),
-        get_sense(container.objective_function),
-        get_objective_expression(container.objective_function)
-    )
+function update_objective_function!(container::OptimizationContainer)
+    IOM.update_objective_function!(container)
     return
 end
 
 function add_to_objective_operations_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     cost_expr::T,
 ) where {T <: JuMP.AbstractJuMPScalar}
-    T_cf = typeof(container.objective_function.operation_terms)
+    # Map PSI operation_terms -> IOM variant_terms
+    T_cf = typeof(container.objective_function.variant_terms)
     if T_cf <: JuMP.GenericAffExpr && T <: JuMP.GenericQuadExpr
-        container.objective_function.operation_terms += cost_expr
+        container.objective_function.variant_terms += cost_expr
     else
-        JuMP.add_to_expression!(container.objective_function.operation_terms, cost_expr)
+        JuMP.add_to_expression!(container.objective_function.variant_terms, cost_expr)
     end
     return
 end
 
 function add_to_objective_investment_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     cost_expr::T,
 ) where {T <: JuMP.AbstractJuMPScalar}
-    T_cf = typeof(container.objective_function.capital_terms)
+    # Map PSI capital_terms -> IOM invariant_terms
+    T_cf = typeof(container.objective_function.invariant_terms)
     if T_cf <: JuMP.GenericAffExpr && T <: JuMP.GenericQuadExpr
-        container.objective_function.capital_terms += cost_expr
+        container.objective_function.invariant_terms += cost_expr
     else
-        JuMP.add_to_expression!(container.objective_function.capital_terms, cost_expr)
+        JuMP.add_to_expression!(container.objective_function.invariant_terms, cost_expr)
     end
     return
 end
@@ -541,12 +467,12 @@ function _make_container_array(ax...)
 end
 
 function _make_system_expressions!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{SingleRegionBalanceModel},
 )
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    container.expressions = Dict(
+    container.expressions = OrderedDict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array([SINGLE_REGION], time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
@@ -556,14 +482,14 @@ function _make_system_expressions!(
 end
 
 function _make_system_expressions!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{MultiRegionBalanceModel},
     port::PSIP.Portfolio,
 )
     regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    container.expressions = Dict(
+    container.expressions = OrderedDict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
@@ -573,7 +499,7 @@ function _make_system_expressions!(
 end
 
 function initialize_system_expressions!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     transport_model::TransportModel{T},
     port::PSIP.Portfolio,
 ) where {T <: SingleRegionBalanceModel}
@@ -582,7 +508,7 @@ function initialize_system_expressions!(
 end
 
 function initialize_system_expressions!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     transport_model::TransportModel{T},
     port::PSIP.Portfolio,
 ) where {T <: MultiRegionBalanceModel}
@@ -593,7 +519,7 @@ end
 ################################### Aux Variables and Duals ############################
 
 function calculate_aux_variables!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     port::PSIP.Portfolio,
 )
     aux_vars = get_aux_variables(container)
@@ -604,14 +530,14 @@ function calculate_aux_variables!(
 end
 
 function _calculate_dual_variables_discrete_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::PSIP.Portfolio,
 )
     return _process_duals(container, container.settings.optimizer)
 end
 
 function calculate_dual_variables!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     port::PSIP.Portfolio,
     is_milp::Bool,
 )
@@ -627,7 +553,7 @@ end
 ##### Build Models #######
 
 function build_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     template::InvestmentModelTemplate,
     port::PSIP.Portfolio,
 )
@@ -688,21 +614,6 @@ function build_model!(
         end
     end
 
-    # TODO: 
-    # Requirements Arguments HERE
-    #=
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
-        construct_requirements!(
-            container,
-            sys,
-            ArgumentConstructStage(),
-            get_service_models(template),
-            get_device_models(template),
-            transmission_model,
-        )
-    end
-    =#
-
     # Branches Model Arguments #
     for (ix, type_map) in enumerate(br_maps)
         for (tuple, name_list) in type_map
@@ -750,21 +661,6 @@ function build_model!(
         end
     end
 
-    # TODO: 
-    # Requirements Model HERE
-    #=
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
-        construct_requirements!(
-            container,
-            sys,
-            ArgumentConstructStage(),
-            get_service_models(template),
-            get_device_models(template),
-            transmission_model,
-        )
-    end
-    =#
-
     # Branches Model Arguments #
     for (ix, type_map) in enumerate(br_maps)
         for (tuple, name_list) in type_map
@@ -788,7 +684,7 @@ function build_model!(
         @debug "Building Objective" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
         update_objective_function!(container)
     end
-    @debug "Total operation count $(PSI.get_jump_model(container).operator_counter)" _group =
+    @debug "Total operation count $(get_jump_model(container).operator_counter)" _group =
         LOG_GROUP_OPTIMIZATION_CONTAINER
 
     check_optimization_container(container)
@@ -798,7 +694,7 @@ end
 """
 Default solve method for OptimizationContainer
 """
-function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfolio)
+function solve_model!(container::OptimizationContainer, port::PSIP.Portfolio)
     optimizer_stats = get_optimizer_stats(container)
 
     jump_model = get_jump_model(container)
@@ -815,9 +711,9 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
         model_status = JuMP.primal_status(jump_model)
 
         if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
-            if get_calculate_conflict(get_settings(container))
+            if IOM.get_calculate_conflict(get_settings(container))
                 @warn "Optimizer returned $model_status computing conflict"
-                conflict_status = compute_conflict!(container)
+                conflict_status = IOM.compute_conflict!(container)
                 if conflict_status == MOI.CONFLICT_FOUND
                     return RunStatus.FAILED
                 end
@@ -847,7 +743,7 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     return status
 end
 
-function write_optimizer_stats!(container::SingleOptimizationContainer)
+function write_optimizer_stats!(container::OptimizationContainer)
     write_optimizer_stats!(get_optimizer_stats(container), get_jump_model(container))
     return
 end
@@ -856,7 +752,7 @@ end
 Exports the OpModel JuMP object in MathOptFormat
 """
 function serialize_optimization_model(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     save_path::String,
 )
     serialize_jump_optimization_model(get_jump_model(container), save_path)
@@ -866,13 +762,13 @@ end
 """
 Each Tuple corresponds to (con_name, internal_index, moi_index)
 """
-function get_all_variable_index(container::SingleOptimizationContainer)
+function get_all_variable_index(container::OptimizationContainer)
     var_keys = get_all_variable_keys(container)
-    return [IS.Optimization.encode_key(v) for v in var_keys]
+    return [IOM.encode_key(v) for v in var_keys]
 end
 
 # Probably a more efficiency way of doing this
-function get_all_variable_keys(container::SingleOptimizationContainer)
+function get_all_variable_keys(container::OptimizationContainer)
     var_index = Vector{VariableKey}()
     for (key, value) in get_variables(container)
         push!(var_index, key)
@@ -882,11 +778,11 @@ end
 
 function check_duplicate_names(
     names::Vector{String},
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     tech_type::Type{D},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ISOPT.VariableType, D <: PSIP.Technology}
+    meta=IOM.CONTAINER_KEY_EMPTY_META,
+) where {T <: IOM.VariableType, D <: PSIP.Technology}
     duplicate = false
     n = ""
     try
@@ -907,7 +803,7 @@ function check_duplicate_names(
     end
 end
 
-function serialize_metadata!(container::SingleOptimizationContainer, output_dir::String)
+function serialize_metadata!(container::OptimizationContainer, output_dir::String)
     for key in Iterators.flatten((
         keys(container.constraints),
         keys(container.duals),
@@ -916,15 +812,15 @@ function serialize_metadata!(container::SingleOptimizationContainer, output_dir:
         keys(container.expressions),
     ))
         encoded_key = encode_key_as_string(key)
-        if IS.Optimization.has_container_key(container.metadata, encoded_key)
+        if IOM.has_container_key(container.metadata, encoded_key)
             # Constraints and Duals can store the same key.
             IS.@assert_op key ==
-                          IS.Optimization.get_container_key(container.metadata, encoded_key)
+                          IOM.get_container_key(container.metadata, encoded_key)
         end
-        IS.Optimization.add_container_key!(container.metadata, encoded_key, key)
+        IOM.add_container_key!(container.metadata, encoded_key, key)
     end
 
-    filename = IS.Optimization._make_metadata_filename(output_dir)
+    filename = IOM._make_metadata_filename(output_dir)
     # TODO: Fix Serialization Metadata
     #Serialization.serialize(filename, container.metadata)
 end

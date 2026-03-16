@@ -1,8 +1,8 @@
-abstract type SparseVariableType <: ISOPT.VariableType end
+abstract type SparseVariableType <: VariableType end
 
-abstract type InvestmentVariableType <: ISOPT.VariableType end
-abstract type OperationsVariableType <: ISOPT.VariableType end
-abstract type FeasibilityVariableType <: ISOPT.VariableType end
+abstract type InvestmentVariableType <: VariableType end
+abstract type OperationsVariableType <: VariableType end
+abstract type FeasibilityVariableType <: VariableType end
 
 ### Investment Variables ###
 
@@ -83,10 +83,10 @@ Struct to dispatch the creation of bidirectional Active Power Flow Variables
 """
 struct FlowActivePowerVariable <: OperationsVariableType end
 
-is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
+is_operation_entry(::Type{<:VariableType}) = error()
 is_operation_entry(::Type{<:OperationsVariableType}) = true
 is_operation_entry(::Type{<:InvestmentVariableType}) = false
 
-is_investment_entry(::Type{<:ISOPT.VariableType}) = error()
+is_investment_entry(::Type{<:VariableType}) = error()
 is_investment_entry(::Type{<:OperationsVariableType}) = false
 is_investment_entry(::Type{<:InvestmentVariableType}) = true

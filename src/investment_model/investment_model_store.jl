@@ -1,4 +1,4 @@
-mutable struct InvestmentModelStore <: ISOPT.AbstractModelStore
+mutable struct InvestmentModelStore <: IOM.AbstractModelStore
     # All DenseAxisArrays have axes (column names, row indexes)
     duals::Dict{ConstraintKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
     variables::Dict{VariableKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}
@@ -7,7 +7,7 @@ mutable struct InvestmentModelStore <: ISOPT.AbstractModelStore
         ExpressionKey,
         OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}},
     }
-    optimizer_stats::OrderedDict{Dates.DateTime, ISOPT.OptimizerStats}
+    optimizer_stats::OrderedDict{Dates.DateTime, IOM.OptimizerStats}
 end
 
 function InvestmentModelStore()
@@ -16,25 +16,25 @@ function InvestmentModelStore()
         Dict{VariableKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
         Dict{AuxVarKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
         Dict{ExpressionKey, OrderedDict{Dates.DateTime, DenseAxisArray{Float64, 2}}}(),
-        OrderedDict{Dates.DateTime, ISOPT.OptimizerStats}(),
+        OrderedDict{Dates.DateTime, IOM.OptimizerStats}(),
     )
 end
 
-struct ModelStoreParams <: ISOPT.AbstractModelStoreParams
+struct InvestmentModelStoreParams <: IOM.AbstractModelStoreParams
     base_power::Float64
     system_uuid::Base.UUID
-    container_metadata::ISOPT.OptimizationContainerMetadata
+    container_metadata::OptimizationContainerMetadata
 end
 
-get_base_power(params::ModelStoreParams) = params.base_power
-get_system_uuid(params::ModelStoreParams) = params.system_uuid
-deserialize_key(params::ModelStoreParams, name) =
+get_base_power(params::InvestmentModelStoreParams) = params.base_power
+get_system_uuid(params::InvestmentModelStoreParams) = params.system_uuid
+deserialize_key(params::InvestmentModelStoreParams, name) =
     deserialize_key(params.container_metadata, name)
 
 function initialize_storage!(
     store::InvestmentModelStore,
-    container::ISOPT.AbstractOptimizationContainer,
-    params::ModelStoreParams,
+    container::IOM.AbstractOptimizationContainer,
+    params::InvestmentModelStoreParams,
 )
     time_mapping = get_time_mapping(container)
     if length(get_time_steps(time_mapping)) < 1
@@ -117,7 +117,7 @@ end
 
 function write_optimizer_stats!(
     store::InvestmentModelStore,
-    stats::ISOPT.OptimizerStats,
+    stats::IOM.OptimizerStats,
     index::Dates.Date,
 )
     if index in keys(store.optimizer_stats)
@@ -128,7 +128,7 @@ function write_optimizer_stats!(
 end
 
 function read_optimizer_stats(store::InvestmentModelStore)
-    stats = [to_namedtuple(x) for x in values(store.optimizer_stats)]
+    stats = [IS.to_namedtuple(x) for x in values(store.optimizer_stats)]
     df = DataFrames.DataFrame(stats)
     DataFrames.insertcols!(df, 1, :DateTime => keys(store.optimizer_stats))
     return df

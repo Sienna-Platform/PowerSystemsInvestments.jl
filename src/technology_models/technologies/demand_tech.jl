@@ -24,7 +24,7 @@ get_variable_multiplier(::ActivePowerVariable, ::Type{PSIP.DemandRequirement}) =
 ################## Expressions ###################
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::BasicDispatch,
@@ -64,7 +64,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::BasicDispatch,
@@ -105,7 +105,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::BasicDispatchFeasibility,
@@ -145,7 +145,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::BasicDispatchFeasibility,
