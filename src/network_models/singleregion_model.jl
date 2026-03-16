@@ -1,5 +1,5 @@
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{T},
     port::U,
 ) where {T <: SingleRegionBalanceConstraint, U <: PSIP.Portfolio}
@@ -16,7 +16,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{T},
     port::U,
 ) where {T <: SingleRegionBalanceFeasibilityConstraint, U <: PSIP.Portfolio}
