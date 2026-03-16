@@ -45,7 +45,7 @@ end
 
     settings = PSIN.Settings(p_5bus)
     model = JuMP.Model(HiGHS.Optimizer)
-    container = PSIN.SingleOptimizationContainer(settings, model)
+    container = PSIN.OptimizationContainer(settings, model)
 
     PSIN.init_optimization_container!(container, template, p_5bus)
 
