@@ -1,6 +1,6 @@
-abstract type InvestmentExpressionType <: ISOPT.ExpressionType end
-abstract type OperationsExpressionType <: ISOPT.ExpressionType end
-abstract type FeasibilityExpressionType <: ISOPT.ExpressionType end
+abstract type InvestmentExpressionType <: ExpressionType end
+abstract type OperationsExpressionType <: ExpressionType end
+abstract type FeasibilityExpressionType <: ExpressionType end
 
 abstract type CumulativeInvestmentExpressionType <: InvestmentExpressionType end
 
@@ -19,7 +19,7 @@ struct CumulativeInverterCapacity <: CumulativeInvestmentExpressionType end
 struct CapitalCost <: InvestmentExpressionType end
 struct FixedOperationModelCost <: InvestmentExpressionType end
 
-struct TotalCapitalCost <: ISOPT.ExpressionType end
+struct TotalCapitalCost <: ExpressionType end
 
 struct VariableOMCost <: OperationsExpressionType end
 

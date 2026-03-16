@@ -28,4 +28,8 @@ ModelBuildStatus = IS.Optimization.ModelBuildStatus
 
 RunStatus = IS.Simulation.RunStatus
 
+# PSI-specific: more retries than IOM default
 const MAX_OPTIMIZE_TRIES = 10
+
+# Import shared name delimiter
+const PSI_NAME_DELIMITER = "__"

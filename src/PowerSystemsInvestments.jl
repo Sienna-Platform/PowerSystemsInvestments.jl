@@ -93,6 +93,7 @@ export get_expression
 #### Imports ###
 
 import InfrastructureSystems
+import InfrastructureOptimizationModels
 import PowerSystems
 import JuMP
 import MathOptInterface
@@ -110,6 +111,7 @@ import DataFrames
 
 const IS = InfrastructureSystems
 const ISOPT = InfrastructureSystems.Optimization
+const IOM = InfrastructureOptimizationModels
 const PSY = PowerSystems
 const MOI = MathOptInterface
 const PSIP = PowerSystemsInvestmentsPortfolios
@@ -136,62 +138,60 @@ export optimizer_with_attributes
 # Base imports
 import Base.isempty
 
-# IS.Optimization imports that stay private, may or may not be additional methods in PowerSimulations
-import InfrastructureSystems.Optimization: ArgumentConstructStage, ModelConstructStage
-import InfrastructureSystems.Optimization:
+# Import from IOM (which re-exports from IS.Optimization where needed)
+import InfrastructureOptimizationModels:
+    ArgumentConstructStage,
+    ModelConstructStage,
+    OptimizationContainer,
+    # Store container type symbols
     STORE_CONTAINERS,
     STORE_CONTAINER_DUALS,
     STORE_CONTAINER_EXPRESSIONS,
     STORE_CONTAINER_PARAMETERS,
     STORE_CONTAINER_VARIABLES,
-    STORE_CONTAINER_AUX_VARIABLES
-import InfrastructureSystems.Optimization:
+    STORE_CONTAINER_AUX_VARIABLES,
+    # Container key types
     OptimizationContainerKey,
     VariableKey,
     ConstraintKey,
     ExpressionKey,
     AuxVarKey,
-    InitialConditionKey,
-    ParameterKey
-import InfrastructureSystems.Optimization:
-    RightHandSideParameter, ObjectiveFunctionParameter, TimeSeriesParameter
-import InfrastructureSystems.Optimization:
+    # Abstract types for dispatch
     VariableType,
     ConstraintType,
     AuxVariableType,
     ParameterType,
-    InitialConditionType,
-    ExpressionType
-import InfrastructureSystems.Optimization:
+    ExpressionType,
+    # Key utility functions
+    encode_key_as_string,
+    encode_keys_as_strings,
+    should_write_resulting_value,
+    get_store_container_type,
+    get_entry_type,
+    get_component_type,
+    deserialize_key,
+    # Model types
+    OptimizerStats,
+    # Functions from IOM
+    get_timestamps,
+    read_variable,
+    read_dual,
+    read_expression,
+    read_optimizer_stats,
+    # Export-control functions
     should_export_variable,
     should_export_dual,
     should_export_parameter,
     should_export_aux_variable,
-    should_export_expression
-import InfrastructureSystems.Optimization:
-    get_entry_type, get_component_type, get_output_dir
-import InfrastructureSystems.Optimization:
-    read_results_with_keys,
-    deserialize_key,
-    encode_key_as_string,
-    encode_keys_as_strings,
-    should_write_resulting_value,
-    convert_result_to_natural_units,
-    to_matrix,
-    get_store_container_type
-import InfrastructureSystems.Optimization:
-    OptimizationProblemResults, OptimizationProblemResultsExport, OptimizerStats
-import InfrastructureSystems.Optimization:
-    read_optimizer_stats,
-    get_optimizer_stats,
-    export_results,
-    serialize_results,
-    get_timestamps,
-    get_model_base_power,
-    get_objective_value,
-    read_variable,
-    read_dual,
-    read_expression
+    should_export_expression,
+    # Model internals
+    get_output_dir
+
+# Renamed IOM symbols
+const OptimizationProblemResults = IOM.OptimizationProblemOutputs
+const export_results = IOM.export_outputs
+const serialize_results = IOM.serialize_outputs
+
 import TimerOutputs
 
 ####
@@ -217,8 +217,8 @@ include("base/technology_model.jl")
 include("base/investment_model_template.jl")
 include("base/time_mapping.jl")
 include("base/objective_function.jl")
+include("base/investment_container_data.jl")
 include("base/single_optimization_container.jl")
-include("base/multi_optimization_container.jl")
 # Investment Model #
 include("investment_model/investment_model_store.jl")
 include("investment_model/investment_model.jl")
