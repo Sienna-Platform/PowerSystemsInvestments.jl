@@ -10,7 +10,7 @@ function OptimizationProblemResults(model::InvestmentModel)
     end
 
     timestamps = get_time_stamps(model)
-    optimizer_stats = IS.Optimization.to_dataframe(get_optimizer_stats(model))
+    optimizer_stats = IOM.to_dataframe(get_optimizer_stats(model))
     aux_variable_values =
         Dict(x => read_aux_variable(model, x) for x in list_aux_variable_keys(model))
     variable_values = Dict(x => read_variable(model, x) for x in list_variable_keys(model))
