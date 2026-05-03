@@ -669,7 +669,7 @@ function construct_devices!(
     energy_balance_expr = get_expression(container, EnergyBalance(), PSIP.Portfolio)
 
     # Process each device type configured in device_models
-    # device_models stores: PSY.ComponentType => OperationFormulation
+    # device_models stores: PSY.ComponentType => OperationFormulation (or nothing for loads)
     for (component_type, operation_formulation) in device_models_dict
         # Get matching components from base_system
         device_components = PSY.get_components(component_type, base_system)
@@ -679,23 +679,37 @@ function construct_devices!(
             continue
         end
 
-        # For each device, create a dispatch variable and add it to energy balance
-        for device in device_list
-            device_name = PSY.get_name(device)
-            max_power = PSY.get_max_active_power(device)
+        # Handle generators: create dispatch variables and add to supply
+        if component_type <: PSY.Generator
+            for device in device_list
+                device_name = PSY.get_name(device)
+                max_power = PSY.get_max_active_power(device)
 
-            # Create dispatch variable: [device, time_step]
-            dispatch_var = JuMP.@variable(
-                jump_model,
-                [t in time_steps],
-                lower_bound = 0.0,
-                upper_bound = max_power,
-                base_name = device_name
-            )
+                # Create dispatch variable: [device, time_step]
+                dispatch_var = JuMP.@variable(
+                    jump_model,
+                    [t in time_steps],
+                    lower_bound = 0.0,
+                    upper_bound = max_power,
+                    base_name = device_name
+                )
 
-            # Add device dispatch to energy balance expression for each time step
-            for t in time_steps
-                JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], dispatch_var[t])
+                # Add device dispatch to energy balance expression (positive = supply)
+                for t in time_steps
+                    JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], dispatch_var[t])
+                end
+            end
+        # Handle loads: fixed demand that must be served
+        elseif component_type <: PSY.PowerLoad
+            for device in device_list
+                device_name = PSY.get_name(device)
+                # Loads are fixed requirements - use their max power as constant demand
+                fixed_demand = PSY.get_max_active_power(device)
+
+                # Subtract fixed load from energy balance (negative = demand to be served)
+                for t in time_steps
+                    JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], -fixed_demand)
+                end
             end
         end
     end
