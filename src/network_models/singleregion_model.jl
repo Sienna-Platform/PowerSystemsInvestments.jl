@@ -292,7 +292,19 @@ function add_capacity_adequacy_constraint!(container, portfolio::PSIP.Portfolio,
         jump_model = get_jump_model(container)
         if !isnothing(jump_model)
             JuMP.add_to_expression!(capacity_expr, existing_effective_capacity)
-            JuMP.@constraint(jump_model, capacity_expr >= peak_demand)
+
+            # Register constraint in container
+            constraint_array = add_constraints_container!(
+                container,
+                CapacityAdequacyConstraint(),
+                PSIP.Portfolio,
+                1:1  # Single constraint indexed by 1
+            )
+
+            # Add the constraint to the JuMP model and register it
+            constraint_array[1] = JuMP.@constraint(jump_model, capacity_expr >= peak_demand)
+
+            @debug "Registered capacity adequacy constraint in container"
         end
     end
 
