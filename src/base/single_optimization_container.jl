@@ -725,6 +725,10 @@ function build_model!(
     transport_model = get_transport_model(template)
     initialize_system_expressions!(container, transport_model, port)
 
+    # Process base_system devices BEFORE constructing technologies
+    # so device variables are available when energy balance constraints are built
+    construct_devices!(container, template, port)
+
     tech_names = collect(values(template.technology_models))
 
     # Check for duplicate technologies
@@ -875,12 +879,6 @@ function build_model!(
             )
         end
     end
-
-    ########################
-    #### Device Models #####
-    ########################
-    # Process base_system devices configured in device_models
-    construct_devices!(container, template, port)
 
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Objective" begin
         @debug "Building Objective" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
