@@ -783,7 +783,7 @@ function build_model!(
         end
     end
 
-    # TODO: 
+    # TODO:
     # Requirements Arguments HERE
     #=
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
@@ -845,7 +845,7 @@ function build_model!(
         end
     end
 
-    # TODO: 
+    # TODO:
     # Requirements Model HERE
     #=
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
@@ -884,7 +884,7 @@ function build_model!(
         @debug "Building Objective" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
         update_objective_function!(container)
     end
-    @debug "Total operation count $(PSI.get_jump_model(container).operator_counter)" _group =
+    @debug "Total operation count $(get_jump_model(container).operator_counter)" _group =
         LOG_GROUP_OPTIMIZATION_CONTAINER
 
     check_optimization_container(container)
