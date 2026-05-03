@@ -87,7 +87,7 @@ Returns a dictionary mapping technology names to credits (0.0 to 1.0).
 function get_capacity_credits(portfolio::PSIP.Portfolio, system::PSY.System)::Dict{String, Float64}
     credits = Dict{String, Float64}()
 
-    # Iterate through all technologies and calculate their capacity credits
+    # Iterate through all portfolio technologies and calculate their capacity credits
     for tech in PSIP.get_technologies(PSIP.Technology, portfolio)
         name = PSIP.get_name(tech)
 
@@ -125,6 +125,41 @@ function get_capacity_credits(portfolio::PSIP.Portfolio, system::PSY.System)::Di
 
         # Default: conservative estimate
         credits[name] = 0.5
+    end
+
+    # Also add capacity credits for base_system components
+    if !isnothing(system)
+        for gen in PSY.get_components(PSY.Generator, system)
+            name = PSY.get_name(gen)
+            # Skip if already in credits (portfolio tech takes precedence)
+            haskey(credits, name) && continue
+
+            # Assign capacity credits based on generator type
+            if gen isa PSY.ThermalStandard
+                credits[name] = 1.0
+            elseif gen isa PSY.HydroDispatch
+                credits[name] = 0.75
+            elseif gen isa PSY.RenewableDispatch
+                # Use renewable credit calculation based on prime mover
+                try
+                    prime_mover = PSY.get_prime_mover_type(gen)
+                    if prime_mover == PSY.PrimeMovers.WT
+                        credits[name] = 0.35  # Wind
+                    elseif prime_mover == PSY.PrimeMovers.PVe
+                        credits[name] = 0.25  # Solar
+                    else
+                        credits[name] = 0.30  # Generic renewable
+                    end
+                catch
+                    credits[name] = 0.30
+                end
+            elseif gen isa PSY.GenericBattery
+                credits[name] = 0.90  # Battery/storage
+            else
+                # Default for other generator types
+                credits[name] = 0.5
+            end
+        end
     end
 
     return credits
@@ -195,24 +230,23 @@ function add_capacity_adequacy_constraint!(container, portfolio::PSIP.Portfolio,
 
     isnothing(container) && return
 
+    @debug "Adding capacity adequacy constraint with peak demand: $peak_demand MW and reserve margin: $(_reserve_margin * 100)%"
     # Calculate existing effective capacity from base_system
     # Portfolio contains only candidate/new technologies for investment
     existing_effective_capacity = 0.0
     base_system = PSIP.get_base_system(portfolio)
 
-    if !isnothing(base_system)
-        # Get existing generators from the base system
-        for gen in PSY.get_components(PSY.Generator, base_system)
-            gen_name = PSY.get_name(gen)
-            credit = get(capacity_credits, gen_name, 0.0)
+    # Get existing generators from the base system
+    for gen in PSY.get_components(PSY.Generator, base_system)
+        gen_name = PSY.get_name(gen)
+        credit = get(capacity_credits, gen_name, 0.0)
 
-            if credit > 0.0
-                try
-                    cap = PSY.get_max_active_power(gen)
-                    existing_effective_capacity += cap * credit
-                catch
-                    # Skip generators we can't get capacity for
-                end
+        if credit > 0.0
+            try
+                cap = PSY.get_max_active_power(gen)
+                existing_effective_capacity += cap * credit
+            catch
+                # Skip generators we can't get capacity for
             end
         end
     end
@@ -224,24 +258,29 @@ function add_capacity_adequacy_constraint!(container, portfolio::PSIP.Portfolio,
     # Sum BuildCapacity variables weighted by capacity credits
     for (var_key, var_array) in container.variables
         var_name = string(typeof(var_key))
-        if contains(var_name, "BuildCapacity") && isa(var_array, JuMP.Containers.DenseAxisArray)
+
+        # Check if this is a BuildCapacity variable by examining the key type
+        if contains(var_name, "BuildCapacity")
+            if !isa(var_array, JuMP.Containers.DenseAxisArray)
+                continue
+            end
+
             try
                 axes_data = var_array.axes
-                if length(axes_data) >= 1
+                if length(axes_data) >= 2  # Need at least 2 dimensions: [tech, period]
+                    final_period = axes_data[2][end]
                     for tech_idx in axes_data[1]
                         tech_name = string(tech_idx)
                         credit = get(capacity_credits, tech_name, 0.0)
 
-                        # Only add positive-credit technologies
                         if credit > 0.0
-                            # Use the last investment period (final capacity after all investments)
-                            final_period = axes_data[2][end]
                             JuMP.add_to_expression!(capacity_expr, credit, var_array[tech_idx, final_period])
                             found_any = true
                         end
                     end
                 end
-            catch
+            catch _
+                # Skip on error - variable might not be properly structured
                 continue
             end
         end
