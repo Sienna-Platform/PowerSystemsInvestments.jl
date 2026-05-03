@@ -20,6 +20,10 @@ function InvestmentModelStore()
     )
 end
 
+Base.isempty(store::InvestmentModelStore) =
+    isempty(store.duals) && isempty(store.variables) && isempty(store.aux_variables) &&
+    isempty(store.expressions) && isempty(store.optimizer_stats)
+
 struct ModelStoreParams <: ISOPT.AbstractModelStoreParams
     base_power::Float64
     system_uuid::Base.UUID

@@ -45,3 +45,7 @@ struct ColocatedInternalBalanceConstraint <: ISOPT.ConstraintType end
 struct EnergyBalanceConstraint <: ISOPT.ConstraintType end
 
 struct SingleRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
+
+### Capacity Adequacy Constraint ###
+
+struct CapacityAdequacyConstraint <: ISOPT.ConstraintType end

@@ -9,45 +9,44 @@ function OptimizationProblemResults(model::InvestmentModel)
         error("Model Solved as part of a Simulation.")
     end
 
-    timestamps = get_time_stamps(model)
-    optimizer_stats = IS.Optimization.to_dataframe(get_optimizer_stats(model))
-    aux_variable_values =
-        Dict(x => read_aux_variable(model, x) for x in list_aux_variable_keys(model))
-    variable_values = Dict(x => read_variable(model, x) for x in list_variable_keys(model))
-    dual_values = Dict(x => read_dual(model, x) for x in list_dual_keys(model))
-    parameter_values = Dict()
-    expression_values =
-        Dict(x => read_expression(model, x) for x in list_expression_keys(model))
-
-    portfolio = get_portfolio(model)
-    return OptimizationProblemResults(
-        get_problem_base_power(model),
-        timestamps,
-        portfolio,
-        IS.get_uuid(portfolio),
-        aux_variable_values,
-        variable_values,
-        dual_values,
-        parameter_values,
-        expression_values,
-        optimizer_stats,
-        get_metadata(get_optimization_container(model)),
-        IS.strip_module_name(typeof(model)),
-        get_output_dir(model),
-        mkpath(joinpath(get_output_dir(model), "results")),
-    )
+    # Create result wrapper with validated model
+    result = ISOPT.OptimizationProblemResults()
+    result.model = model
+    return result
 end
 
-list_variable_keys(res::OptimizationProblemResults) = keys(res.variable_values)
-list_aux_variable_keys(res::OptimizationProblemResults) = keys(res.aux_variable_values)
-list_dual_keys(res::OptimizationProblemResults) = keys(res.dual_values)
-list_expression_keys(res::OptimizationProblemResults) = keys(res.expression_values)
+function list_variable_keys(res::ISOPT.OptimizationProblemResults)
+    container = get_optimization_container(res.model)
+    return isnothing(container) ? [] : collect(keys(get(container.ext, :variables, Dict())))
+end
 
-list_variable_names(res::OptimizationProblemResults) =
+function list_aux_variable_keys(res::ISOPT.OptimizationProblemResults)
+    container = get_optimization_container(res.model)
+    return isnothing(container) ? [] : collect(keys(get(container.ext, :aux_variables, Dict())))
+end
+
+function list_dual_keys(res::ISOPT.OptimizationProblemResults)
+    container = get_optimization_container(res.model)
+    return isnothing(container) ? [] : collect(keys(get(container.ext, :duals, Dict())))
+end
+
+function list_expression_keys(res::ISOPT.OptimizationProblemResults)
+    container = get_optimization_container(res.model)
+    return isnothing(container) ? [] : collect(keys(get(container.ext, :expressions, Dict())))
+end
+
+function list_variable_names(res::ISOPT.OptimizationProblemResults)
     encode_keys_as_strings(list_variable_keys(res))
-list_aux_variable_names(res::OptimizationProblemResults) =
+end
+
+function list_aux_variable_names(res::ISOPT.OptimizationProblemResults)
     encode_keys_as_strings(list_aux_variable_keys(res))
-list_dual_names(res::OptimizationProblemResults) =
+end
+
+function list_dual_names(res::ISOPT.OptimizationProblemResults)
     encode_keys_as_strings(list_dual_keys(res))
-list_expression_names(res::OptimizationProblemResults) =
+end
+
+function list_expression_names(res::ISOPT.OptimizationProblemResults)
     encode_keys_as_strings(list_expression_keys(res))
+end

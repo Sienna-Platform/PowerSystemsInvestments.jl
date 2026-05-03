@@ -139,6 +139,27 @@ function supports_milp(container::SingleOptimizationContainer)
     return supports_milp(jump_model)
 end
 
+# Dispatch helpers for extracting operational and feasibility periods from different operation models
+function _shift_periods_to_year(periods::Vector{Vector{Dates.DateTime}}, target_year::Int)
+    # Shift all DateTimes in periods to match target_year while preserving month/day/hour
+    if isempty(periods)
+        return periods
+    end
+    first_dt = first(first(periods))
+    year_diff = target_year - Dates.year(first_dt)
+    if year_diff == 0
+        return periods
+    end
+    return [[dt + Dates.Year(year_diff) for dt in period] for period in periods]
+end
+
+_get_rep_series(::AggregateOperatingCost, f, target_year::Int=2025) = _shift_periods_to_year(_get_sample_periods(f), target_year)
+_get_rep_series(op::OperationalRepresentativeDays, _feas_model, target_year::Int=2025) = op.representative_series
+_get_weights(::AggregateOperatingCost, f) = ones(length(_get_sample_periods(f)))
+_get_weights(op::OperationalRepresentativeDays, _feas_model) = op.series_weights
+_get_sample_periods(f::RepresentativePeriods) = f.sample_periods
+_get_sample_periods(::Any) = Vector{Vector{Dates.DateTime}}()
+
 function _finalize_jump_model!(container::SingleOptimizationContainer, settings::Settings)
     @debug "Instantiating the JuMP model" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
 
@@ -183,14 +204,19 @@ function init_optimization_container!(
     operation_model = get_operation_model(template)
     feasibility_model = get_feasibility_model(template)
 
-    time_map = TimeMapping(
-        capital_model.investment_years,
-        operation_model.representative_series,
-        feasibility_model.sample_periods,
-    )
+    # Extract target year from capital model for date shifting
+    target_year = if !isempty(capital_model.investment_years)
+        Dates.year(first(capital_model.investment_years)[1])
+    else
+        Dates.year(capital_model.base_year)
+    end
 
+    rep_series = _get_rep_series(operation_model, feasibility_model, target_year)
+    weights = _get_weights(operation_model, feasibility_model)
+    sample_periods = _shift_periods_to_year(_get_sample_periods(feasibility_model), target_year)
+    time_map = TimeMapping(capital_model.investment_years, rep_series, sample_periods)
     set_time_mapping!(container, time_map)
-    set_operational_weights!(container, operation_model.series_weights)
+    set_operational_weights!(container, weights)
     # Set Financial Data in Container from Portfolio
     set_base_year!(container, PSIP.get_base_year(portfolio))
     set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
@@ -224,7 +250,7 @@ function has_container_key(
     container::SingleOptimizationContainer,
     ::Type{T},
     ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     key = ExpressionKey(T, U, meta)
     return haskey(container.expressions, key)
@@ -234,7 +260,7 @@ function has_container_key(
     container::SingleOptimizationContainer,
     ::Type{T},
     ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     key = VariableKey(T, U, meta)
     return haskey(container.variables, key)
@@ -244,7 +270,7 @@ function has_container_key(
     container::SingleOptimizationContainer,
     ::Type{T},
     ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: AuxVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     key = AuxVarKey(T, U, meta)
     return haskey(container.aux_variables, key)
@@ -254,7 +280,7 @@ function has_container_key(
     container::SingleOptimizationContainer,
     ::Type{T},
     ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     key = ConstraintKey(T, U, meta)
     return haskey(container.constraints, key)
@@ -282,7 +308,7 @@ function add_variable_container!(
     ::Type{U},
     axs...;
     sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     var_key = VariableKey(T, U, meta)
     return _add_variable_container!(container, var_key, sparse, axs...)
@@ -309,7 +335,7 @@ function add_variable_container!(
     container::SingleOptimizationContainer,
     ::T,
     ::Type{U};
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: SparseVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     var_key = VariableKey(T, U, meta)
     _assign_container!(container.variables, var_key, _get_pwl_variables_container())
@@ -334,7 +360,7 @@ function get_variable(
     container::SingleOptimizationContainer,
     ::T,
     ::Type{U},
-    meta::String=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta::String=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     return get_variable(container, VariableKey(T, U, meta))
 end
@@ -361,7 +387,7 @@ function add_constraints_container!(
     ::Type{U},
     axs...;
     sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     cons_key = ConstraintKey(T, U, meta)
     return _add_constraints_container!(container, cons_key, axs...; sparse=sparse)
@@ -386,7 +412,7 @@ function get_constraint(
     container::SingleOptimizationContainer,
     ::T,
     ::Type{U},
-    meta::String=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta::String=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     return get_constraint(container, ConstraintKey(T, U, meta))
 end
@@ -458,7 +484,7 @@ function add_expression_container!(
     ::Type{U},
     axs...;
     sparse=false,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     expr_key = ExpressionKey(T, U, meta)
     return _add_expression_container!(container, expr_key, GAE, axs...; sparse=sparse)
@@ -485,7 +511,7 @@ function get_expression(
     container::SingleOptimizationContainer,
     ::T,
     ::Type{U},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
     return get_expression(container, ExpressionKey(T, U, meta))
 end
@@ -493,7 +519,7 @@ end
 function get_expression(
     container::SingleOptimizationContainer,
     ::T,
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ExpressionType}
     return get_expression(container, ExpressionKey(T, meta))
 end
@@ -625,6 +651,57 @@ function calculate_dual_variables!(
 end
 
 ##### Build Models #######
+
+function construct_devices!(
+    container::SingleOptimizationContainer,
+    template::InvestmentModelTemplate,
+    port::PSIP.Portfolio,
+)
+    device_models_dict = get_device_models(template)
+    if isempty(device_models_dict) || isnothing(PSIP.get_base_system(port))
+        return
+    end
+
+    base_system = PSIP.get_base_system(port)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    jump_model = get_jump_model(container)
+    energy_balance_expr = get_expression(container, EnergyBalance(), PSIP.Portfolio)
+
+    # Process each device type configured in device_models
+    # device_models stores: PSY.ComponentType => OperationFormulation
+    for (component_type, operation_formulation) in device_models_dict
+        # Get matching components from base_system
+        device_components = PSY.get_components(component_type, base_system)
+        device_list = collect(device_components)
+
+        if isempty(device_list)
+            continue
+        end
+
+        # For each device, create a dispatch variable and add it to energy balance
+        for device in device_list
+            device_name = PSY.get_name(device)
+            max_power = PSY.get_max_active_power(device)
+
+            # Create dispatch variable: [device, time_step]
+            dispatch_var = JuMP.@variable(
+                jump_model,
+                [t in time_steps],
+                lower_bound = 0.0,
+                upper_bound = max_power,
+                base_name = device_name
+            )
+
+            # Add device dispatch to energy balance expression for each time step
+            for t in time_steps
+                JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], dispatch_var[t])
+            end
+        end
+    end
+
+    return
+end
 
 function build_model!(
     container::SingleOptimizationContainer,
@@ -784,6 +861,13 @@ function build_model!(
             )
         end
     end
+
+    ########################
+    #### Device Models #####
+    ########################
+    # Process base_system devices configured in device_models
+    construct_devices!(container, template, port)
+
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Objective" begin
         @debug "Building Objective" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
         update_objective_function!(container)
@@ -792,6 +876,20 @@ function build_model!(
         LOG_GROUP_OPTIMIZATION_CONTAINER
 
     check_optimization_container(container)
+
+    # Add capacity adequacy constraint if portfolio is available
+    if !isnothing(port)
+        try
+            peak_demand = get_peak_demand(port)
+            system = PSIP.get_base_system(port)
+            capacity_credits = get_capacity_credits(port, system)
+            reserve_margin = something(port.metadata.reserve_margin, 0.0)
+            add_capacity_adequacy_constraint!(container, port, peak_demand, reserve_margin, capacity_credits)
+        catch e
+            @debug "Failed to add capacity adequacy constraint: $e"
+        end
+    end
+
     return
 end
 
@@ -885,7 +983,7 @@ function check_duplicate_names(
     container::SingleOptimizationContainer,
     variable_type::T,
     tech_type::Type{D},
-    meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ISOPT.VariableType, D <: PSIP.Technology}
     duplicate = false
     n = ""
