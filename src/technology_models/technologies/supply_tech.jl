@@ -330,6 +330,11 @@ function add_constraints!(
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     time_stamps = get_time_stamps(time_mapping)
 
+    # DEBUG: Show time mapping structure
+    if length(operational_indexes) > 12
+        @warn "Time mapping has $(length(operational_indexes)) operational indexes (expected 12)"
+    end
+
     for (ix, d) in enumerate(devices)
         name = PSIP.get_name(d)
         tech_model = tech_model_vector[ix]
@@ -337,6 +342,11 @@ function add_constraints!(
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
+            first_t = first(time_slices)
+            first_ts = get_time_stamps(time_mapping)[first_t]
+            year_actual = Dates.year(first_ts)
+            month_actual = Dates.month(first_ts)
+            # retrieve_ops_time_series extracts month from timestamp, so pass op_ix
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             ts_data = TimeSeries.values(time_series.data)
             first_tstamp = time_stamps[first(time_slices)]
@@ -374,6 +384,57 @@ function add_constraints!(
     S <: BasicDispatch,
     X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology{PSY.ThermalStandard}}
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+    device_names = PSIP.get_name.(devices)
+    con_ub = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+    active_power = get_variable(container, V(), D, tech_model)
+    operational_indexes = get_all_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+
+    for (ix, d) in enumerate(devices)
+        name = PSIP.get_name(d)
+        tech_model = tech_model_vector[ix]
+        inv_model = string(get_investment_formulation(tech_model))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        for op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            time_step_inv = inverse_invest_mapping[op_ix]
+            for t in time_slices
+                con_ub[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    active_power[name, t] <= installed_cap[name, time_step_inv]
+                )
+            end
+        end
+    end
+    return
+end
+
+# Limits for hydro #
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+    tech_model_vector::Vector{X},
+) where {
+    T <: ActivePowerLimitsConstraint,
+    U <: Vector{D},
+    V <: ActivePowerVariable,
+    S <: BasicDispatch,
+    X <: TechnologyModel,
+} where {D <: PSIP.SupplyTechnology{PSY.HydroDispatch}}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)

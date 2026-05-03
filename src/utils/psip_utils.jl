@@ -17,8 +17,10 @@ make_portfolio_filename(port_uuid::Union{Base.UUID, AbstractString}) =
 function retrieve_ops_time_series(d::PSIP.Technology, op_ix::Int, time_mapping::TimeMapping)
     ts_name = get_default_time_series_names(typeof(d))
     first_t = first(get_consecutive_slices(time_mapping)[op_ix])
-    year = string(Dates.Year(get_time_stamps(time_mapping)[first_t]).value)
-    return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; year=year, rep_day=op_ix)
+    timestamp = get_time_stamps(time_mapping)[first_t]
+    year = string(Dates.Year(timestamp).value)
+    rep_day = Dates.month(timestamp)  # Use month instead of op_ix to handle multiple years
+    return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; year=year, rep_day=rep_day)
 end
 
 function retrieve_ops_time_series(

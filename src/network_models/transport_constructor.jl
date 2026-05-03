@@ -5,6 +5,7 @@ function construct_transport!(
 )
     add_constraints!(container, SingleRegionBalanceConstraint, p)
     add_constraints!(container, SingleRegionBalanceFeasibilityConstraint, p)
+    # Note: CapacityAdequacyConstraint is added post-build when variables exist
 end
 
 function construct_transport!(
@@ -13,4 +14,5 @@ function construct_transport!(
     ::TransportModel{MultiRegionBalanceModel},
 )
     add_constraints!(container, MultiRegionBalanceConstraint, p)
+    # Note: CapacityAdequacyConstraint is added post-build when variables exist
 end

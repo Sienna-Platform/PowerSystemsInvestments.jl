@@ -7,6 +7,7 @@ mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
     transport_model::TransportModel{<:AbstractTransportAggregation}
     technology_models::Dict # TODO: define strict Type for this
     branch_models::Dict # TODO: Decide name for branches: path? corridors? We are using transport for network
+    device_models::Dict # Configuration for how to treat device types from base_system by type
 
     function InvestmentModelTemplate(
         capital_model::CapitalCostModel,
@@ -21,6 +22,7 @@ mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
             transport_model,
             Dict(),
             Dict(),
+            Dict(),  # device_models
         )
     end
 end
@@ -45,6 +47,34 @@ get_transport_formulation(::TransportModel{T}) where {T <: AbstractTransportAggr
 get_capital_model(template::InvestmentModelTemplate) = template.capital_model
 get_operation_model(template::InvestmentModelTemplate) = template.operation_model
 get_feasibility_model(template::InvestmentModelTemplate) = template.feasibility_model
+get_device_models(template::InvestmentModelTemplate) = template.device_models
+
+function set_device_model!(
+    template::InvestmentModelTemplate,
+    component_type::Type{<:PSIP.Technology},
+    model::TechnologyModel{
+        <:PSIP.Technology,
+        <:InvestmentTechnologyFormulation,
+        <:OperationsTechnologyFormulation,
+        <:FeasibilityTechnologyFormulation,
+    },
+)
+    template.device_models[component_type] = model
+    return
+end
+
+"""
+Set device model with just the operations formulation (for base_system devices).
+Device models configure how to treat existing devices from base_system.
+"""
+function set_device_model!(
+    template::InvestmentModelTemplate,
+    component_type::Type{<:PSY.Component},
+    operations_formulation::Type{<:OperationsTechnologyFormulation},
+)
+    template.device_models[component_type] = operations_formulation
+    return
+end
 
 """
 Sets the network model in a template.

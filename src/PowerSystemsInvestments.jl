@@ -1,5 +1,7 @@
 module PowerSystemsInvestments
 
+__precompile__(false)
+
 ### Exports ###
 
 ### Base models ###
@@ -32,6 +34,7 @@ export IntegerInvestment
 
 ### Operation Formulations ###
 export BasicDispatch
+export NoDispatch
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
 export CyclicalStorageDispatch
@@ -77,6 +80,8 @@ export CumulativeInverterCapacity
 export build!
 # Template exports
 export set_technology_model!
+export set_device_model!
+export get_device_models
 # Model Exports
 export solve!
 export get_initial_conditions
@@ -89,9 +94,14 @@ export read_expression
 export get_variable
 export get_constraint
 export get_expression
+export get_objective_value
+export read_optimization_status
+export extract_investment_summary
+export print_results_summary
 
 #### Imports ###
 
+using InfrastructureSystems
 import InfrastructureSystems
 import PowerSystems
 import JuMP
@@ -109,7 +119,7 @@ import Serialization
 import DataFrames
 
 const IS = InfrastructureSystems
-const ISOPT = InfrastructureSystems.Optimization
+# ISOPT will be redefined after including optimization_compat.jl
 const PSY = PowerSystems
 const MOI = MathOptInterface
 const PSIP = PowerSystemsInvestmentsPortfolios
@@ -138,64 +148,95 @@ import Base.isempty
 
 # IS.Optimization imports that stay private, may or may not be additional methods in PowerSimulations
 import InfrastructureSystems.Optimization: ArgumentConstructStage, ModelConstructStage
-import InfrastructureSystems.Optimization:
-    STORE_CONTAINERS,
-    STORE_CONTAINER_DUALS,
-    STORE_CONTAINER_EXPRESSIONS,
-    STORE_CONTAINER_PARAMETERS,
-    STORE_CONTAINER_VARIABLES,
-    STORE_CONTAINER_AUX_VARIABLES
-import InfrastructureSystems.Optimization:
-    OptimizationContainerKey,
-    VariableKey,
-    ConstraintKey,
-    ExpressionKey,
-    AuxVarKey,
-    InitialConditionKey,
-    ParameterKey
-import InfrastructureSystems.Optimization:
-    RightHandSideParameter, ObjectiveFunctionParameter, TimeSeriesParameter
-import InfrastructureSystems.Optimization:
-    VariableType,
-    ConstraintType,
-    AuxVariableType,
-    ParameterType,
-    InitialConditionType,
-    ExpressionType
-import InfrastructureSystems.Optimization:
-    should_export_variable,
-    should_export_dual,
-    should_export_parameter,
-    should_export_aux_variable,
-    should_export_expression
-import InfrastructureSystems.Optimization:
-    get_entry_type, get_component_type, get_output_dir
-import InfrastructureSystems.Optimization:
-    read_results_with_keys,
-    deserialize_key,
-    encode_key_as_string,
-    encode_keys_as_strings,
-    should_write_resulting_value,
-    convert_result_to_natural_units,
-    to_matrix,
-    get_store_container_type
-import InfrastructureSystems.Optimization:
-    OptimizationProblemResults, OptimizationProblemResultsExport, OptimizerStats
-import InfrastructureSystems.Optimization:
-    read_optimizer_stats,
-    get_optimizer_stats,
-    export_results,
-    serialize_results,
-    get_timestamps,
-    get_model_base_power,
-    get_objective_value,
-    read_variable,
-    read_dual,
-    read_expression
+# Commented out: these are now provided by optimization_compat.jl
+# import InfrastructureSystems.Optimization:
+#     STORE_CONTAINERS,
+#     STORE_CONTAINER_DUALS,
+#     STORE_CONTAINER_EXPRESSIONS,
+#     STORE_CONTAINER_PARAMETERS,
+#     STORE_CONTAINER_VARIABLES,
+#     STORE_CONTAINER_AUX_VARIABLES
+# import InfrastructureSystems.Optimization:
+#     OptimizationContainerKey,
+#     VariableKey,
+#     ConstraintKey,
+#     ExpressionKey,
+#     AuxVarKey,
+#     InitialConditionKey,
+#     ParameterKey
+# Commented out: provided by optimization_compat.jl
+# import InfrastructureSystems.Optimization:
+#     RightHandSideParameter, ObjectiveFunctionParameter, TimeSeriesParameter
+# import InfrastructureSystems.Optimization:
+#     VariableType,
+#     ConstraintType,
+#     AuxVariableType,
+#     ParameterType,
+#     InitialConditionType,
+#     ExpressionType
+# import InfrastructureSystems.Optimization:
+#     should_export_variable,
+#     should_export_dual,
+#     should_export_parameter,
+#     should_export_aux_variable,
+#     should_export_expression
+# import InfrastructureSystems.Optimization:
+#     get_entry_type, get_component_type, get_output_dir
+# import InfrastructureSystems.Optimization:
+#     read_results_with_keys,
+#     deserialize_key,
+#     encode_key_as_string,
+#     encode_keys_as_strings,
+#     should_write_resulting_value,
+#     convert_result_to_natural_units,
+#     to_matrix,
+#     get_store_container_type
+# import InfrastructureSystems.Optimization:
+#     OptimizationProblemResults, OptimizationProblemResultsExport, OptimizerStats
+# import InfrastructureSystems.Optimization:
+#     read_optimizer_stats,
+#     get_optimizer_stats,
+#     export_results,
+#     serialize_results,
+#     get_timestamps,
+#     get_model_base_power,
+#     get_objective_value,
+#     read_variable,
+#     read_dual,
+#     read_expression
 import TimerOutputs
 
 ####
 # Order Required #
+
+####
+# Order Required #
+include("utils/optimization_compat.jl")
+
+# Create an ISOPT alias that includes both real Optimization and our compat types
+module OptimizationProxy
+    import InfrastructureSystems
+    import InfrastructureSystems.Optimization
+    using InfrastructureSystems.Optimization
+    # Import our compat stubs from parent module
+    import ..OptimizationContainerKey, ..VariableKey, ..ConstraintKey, ..ExpressionKey, ..AuxVarKey, ..ParameterKey
+    import ..VariableType, ..ConstraintType, ..AuxVariableType, ..ParameterType, ..InitialConditionType, ..ExpressionType
+    import ..RightHandSideParameter, ..ObjectiveFunctionParameter, ..TimeSeriesParameter
+    import ..OptimizationProblemResults, ..OptimizationProblemResultsExport, ..OptimizerStats, ..OptimizationContainerMetadata
+    import ..AbstractModelStore, ..AbstractModelStoreParams, ..ModelInternal
+    import ..CONTAINER_KEY_EMPTY_META
+    import ..STORE_CONTAINER_DUALS, ..STORE_CONTAINER_PARAMETERS, ..STORE_CONTAINER_VARIABLES
+    import ..STORE_CONTAINER_AUX_VARIABLES, ..STORE_CONTAINER_EXPRESSIONS, ..STORE_CONTAINERS
+    import ..ModelBuildStatus, ..RunStatus
+    import ..set_output_dir!, ..get_status, ..set_status!, ..set_console_level!, ..set_file_level!
+    import ..get_output_dir, ..get_optimization_container, ..reset!, ..get_store_params
+    import ..get_container, ..set_store_params!, ..encode_key_as_string, ..encode_keys_as_strings
+    import ..has_container_key, ..add_container_key!, .._make_metadata_filename
+    import ..get_store_container_type, ..get_entry_type, ..to_dataframe, ..should_write_resulting_value, ..serialize_results
+    # Re-export AbstractOptimizationContainer from IS.Optimization
+    const AbstractOptimizationContainer = InfrastructureSystems.Optimization.AbstractOptimizationContainer
+end
+const ISOPT = OptimizationProxy
 include("utils/mpi_utils.jl")
 include("utils/jump_utils.jl")
 include("base/definitions.jl")
@@ -219,6 +260,8 @@ include("base/time_mapping.jl")
 include("base/objective_function.jl")
 include("base/single_optimization_container.jl")
 include("base/multi_optimization_container.jl")
+include("base/simplified_solver.jl")
+include("base/results_extraction.jl")
 # Investment Model #
 include("investment_model/investment_model_store.jl")
 include("investment_model/investment_model.jl")

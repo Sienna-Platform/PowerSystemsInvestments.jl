@@ -75,7 +75,7 @@ function TimeMapping(
             end
         end
         if !slice_found_in_interval
-            error()
+            error("Operational period $sx ($(first(slice)) to $(last(slice))) does not fit within any investment interval. Investment intervals: $investment_intervals")
         end
         slice_length = length(slice)
         slice_indeces = range(slice_running_count + 1, length=slice_length)

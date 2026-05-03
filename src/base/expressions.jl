@@ -34,6 +34,8 @@ should_write_resulting_value(::Type{CumulativeInverterCapacity}) = true
 
 is_operation_entry(::Type{<:OperationsExpressionType}) = true
 is_operation_entry(::Type{<:InvestmentExpressionType}) = false
+is_operation_entry(::Type{<:FeasibilityExpressionType}) = true
 
 is_investment_entry(::Type{<:OperationsExpressionType}) = false
 is_investment_entry(::Type{<:InvestmentExpressionType}) = true
+is_investment_entry(::Type{<:FeasibilityExpressionType}) = false

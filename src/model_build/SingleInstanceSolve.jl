@@ -6,6 +6,10 @@ function build_impl!(model::InvestmentModel{SingleInstanceSolve})
         get_template(model),
         get_portfolio(model),
     )
-    serialize_metadata!(get_optimization_container(model), get_output_dir(model))
+    try
+        serialize_metadata!(get_optimization_container(model), get_output_dir(model))
+    catch e
+        @warn "serialize_metadata! skipped: $e"
+    end
     return
 end

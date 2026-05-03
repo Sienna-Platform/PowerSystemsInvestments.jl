@@ -99,3 +99,36 @@ function construct_technologies!(
     # Do nothing for loads
     return
 end
+
+# NoDispatch formulation for demand - only adds load to energy balance, no dispatch variables
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    names::Vector{String},
+    ::ArgumentConstructStage,
+    model::OperationCostModel,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
+    transport_model::TransportModel{<:AbstractTransportAggregation},
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.DemandRequirement, C <: NoDispatch, X <: TechnologyModel}
+    devices = [PSIP.get_technology(T, p, n) for n in names]
+    # Add load to energy balance as a constant (not as a dispatch variable)
+    add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
+    return
+end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    names::Vector{String},
+    ::ModelConstructStage,
+    model::OperationCostModel,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
+    transport_model::TransportModel{<:AbstractTransportAggregation},
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.DemandRequirement, C <: NoDispatch, X <: TechnologyModel}
+    # Do nothing for NoDispatch loads (no variables to create)
+    return
+end
