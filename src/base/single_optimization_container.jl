@@ -289,10 +289,10 @@ end
 ####################################### Variable Container #################################
 function _add_variable_container!(
     container::SingleOptimizationContainer,
-    var_key::VariableKey{T, U},
+    var_key::VariableKey,
     sparse::Bool,
     axs...,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+)
     if sparse
         var_container = sparse_container_spec(JuMP.VariableRef, axs...)
     else
@@ -342,6 +342,31 @@ function add_variable_container!(
     return container.variables[var_key]
 end
 
+# Extended methods for PSY component types (device models)
+function add_variable_container!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::Type{U},
+    axs...;
+    sparse=false,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
+) where {T <: VariableType, U <: PSY.Component}
+    var_key = VariableKey(T, U, meta)
+    return _add_variable_container!(container, var_key, sparse, axs...)
+end
+
+function add_variable_container!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::Type{U},
+    meta::String,
+    axs...;
+    sparse=false,
+) where {T <: VariableType, U <: PSY.Component}
+    var_key = VariableKey(T, U, meta)
+    return _add_variable_container!(container, var_key, sparse, axs...)
+end
+
 function get_variable_keys(container::SingleOptimizationContainer)
     return collect(keys(container.variables))
 end
@@ -389,6 +414,19 @@ function add_constraints_container!(
     sparse=false,
     meta=ISOPT.CONTAINER_KEY_EMPTY_META,
 ) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+    cons_key = ConstraintKey(T, U, meta)
+    return _add_constraints_container!(container, cons_key, axs...; sparse=sparse)
+end
+
+# Extended method for PSY component types (device models)
+function add_constraints_container!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::Type{U},
+    axs...;
+    sparse=false,
+    meta=ISOPT.CONTAINER_KEY_EMPTY_META,
+) where {T <: ConstraintType, U <: PSY.Component}
     cons_key = ConstraintKey(T, U, meta)
     return _add_constraints_container!(container, cons_key, axs...; sparse=sparse)
 end
@@ -669,9 +707,7 @@ function construct_devices!(
     energy_balance_expr = get_expression(container, EnergyBalance(), PSIP.Portfolio)
 
     # Process each device type configured in device_models
-    # device_models stores: PSY.ComponentType => OperationFormulation (or nothing for loads)
     for (component_type, operation_formulation) in device_models_dict
-        # Get matching components from base_system
         device_components = PSY.get_components(component_type, base_system)
         device_list = collect(device_components)
 
@@ -681,34 +717,134 @@ function construct_devices!(
 
         # Handle generators: create dispatch variables and add to supply
         if component_type <: PSY.Generator
+            tech_model_str = string(operation_formulation)
+            device_names = PSY.get_name.(device_list)
+
+            # Register variables in container using extended add_variable_container! for PSY types
+            dispatch_vars = add_variable_container!(
+                container,
+                ActivePowerVariable(),
+                component_type,
+                device_names,
+                time_steps,
+                meta=tech_model_str,
+            )
+
+            # Create JuMP variables and set bounds using PSI2 pattern
             for device in device_list
-                device_name = PSY.get_name(device)
-                max_power = PSY.get_max_active_power(device)
+                name = PSY.get_name(device)
+                ub = PSY.get_max_active_power(device)
 
-                # Create dispatch variable: [device, time_step]
-                dispatch_var = JuMP.@variable(
-                    jump_model,
-                    [t in time_steps],
-                    lower_bound = 0.0,
-                    upper_bound = max_power,
-                    base_name = device_name
-                )
-
-                # Add device dispatch to energy balance expression (positive = supply)
                 for t in time_steps
-                    JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], dispatch_var[t])
+                    # Create variable with proper naming pattern
+                    type_name = split(string(component_type), '.')[end]
+                    base_var_name = "$(ActivePowerVariable)_$(type_name)_{$(name), $(t)}"
+                    dispatch_vars[name, t] = JuMP.@variable(
+                        jump_model,
+                        base_name=base_var_name,
+                    )
+                    JuMP.set_lower_bound(dispatch_vars[name, t], 0.0)
+                    JuMP.set_upper_bound(dispatch_vars[name, t], ub)
                 end
             end
-        # Handle loads: fixed demand that must be served
+
+            # Add device dispatch to energy balance expression
+            for t in time_steps
+                for device in device_list
+                    name = PSY.get_name(device)
+                    JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], dispatch_vars[name, t])
+                end
+            end
+
+            # Apply capacity factor constraints for renewable devices
+            if component_type <: PSY.RenewableDispatch
+                _add_renewable_dispatch_constraints!(
+                    container,
+                    jump_model,
+                    dispatch_vars,
+                    device_list,
+                    time_mapping,
+                    component_type,
+                    tech_model_str,
+                )
+            end
+
+        # Handle loads: fixed demand
         elseif component_type <: PSY.PowerLoad
             for device in device_list
                 device_name = PSY.get_name(device)
-                # Loads are fixed requirements - use their max power as constant demand
                 fixed_demand = PSY.get_max_active_power(device)
 
-                # Subtract fixed load from energy balance (negative = demand to be served)
                 for t in time_steps
                     JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], -fixed_demand)
+                end
+            end
+        end
+    end
+
+    return
+end
+
+function _add_renewable_dispatch_constraints!(
+    container::SingleOptimizationContainer,
+    jump_model::JuMP.Model,
+    dispatch_vars::AbstractArray,
+    devices::Vector,
+    time_mapping::TimeMapping,
+    component_type::Type,
+    tech_model_str::String,
+)
+    time_stamps = get_time_stamps(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    device_names = PSY.get_name.(devices)
+
+    # Register constraints in container
+    con_ub = add_constraints_container!(
+        container,
+        ActivePowerLimitsConstraint(),
+        component_type,
+        device_names,
+        get_time_steps(time_mapping),
+        meta=tech_model_str,
+    )
+
+    for device in devices
+        name = PSY.get_name(device)
+        max_power = PSY.get_max_active_power(device)
+
+        for op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            first_t = first(time_slices)
+            first_ts = time_stamps[first_t]
+
+            # Try to retrieve time series
+            ts_data = nothing
+            try
+                ts = IS.get_time_series(
+                    IS.TimeSeries,
+                    device,
+                    "ops_max_active_power";
+                    year=Dates.year(first_ts),
+                    rep_day=op_ix,
+                )
+                ts_data = TimeSeries.values(ts.data)
+            catch
+                # No time series - use full capacity
+            end
+
+            # Apply constraints
+            for (ix, t) in enumerate(time_slices)
+                if ts_data !== nothing
+                    con_ub[name, t] = JuMP.@constraint(
+                        jump_model,
+                        dispatch_vars[name, t] <= ts_data[ix] * max_power,
+                    )
+                else
+                    con_ub[name, t] = JuMP.@constraint(
+                        jump_model,
+                        dispatch_vars[name, t] <= max_power,
+                    )
                 end
             end
         end
