@@ -37,6 +37,20 @@ function get_default_attributes(
     return Dict{String, Any}()
 end
 
+function get_default_attributes(
+    ::Type{U},
+    ::Type{V},
+    ::Type{W},
+    ::Type{X},
+) where {
+    U <: PSIP.NodalACTransportTechnology,
+    V <: InvestmentTechnologyFormulation,
+    W <: OperationsTechnologyFormulation,
+    X <: FeasibilityTechnologyFormulation,
+}
+    return Dict{String, Any}()
+end
+
 ################### Variables ####################
 
 ################## Expressions ###################
