@@ -74,16 +74,37 @@ function read_variable(
                     if hasfield(typeof(container), :variables)
                         vars = container.variables
 
-                        # Extract all variables from the dictionary
-                        for (key, var_array) in vars
-                            tech_name = string(key)
-                            # Handle array or scalar values
-                            if isa(var_array, AbstractArray)
-                                for (idx, val) in enumerate(var_array)
-                                    push!(results_df, (technology="$tech_name[$idx]", value=val))
+                        # Filter variables matching the given variable_key
+                        for (var_key, var_array) in vars
+                            # Check if this variable key matches the requested variable type
+                            if typeof(var_key) == typeof(variable_key)
+                                # For investment variables (BuildCapacity, etc), axes are (technology_name, investment_period)
+                                try
+                                    if ndims(var_array) == 2
+                                        tech_names = axes(var_array, 1)
+                                        for tech_name in tech_names
+                                            # Sum across all investment periods for each technology
+                                            total_val = sum(JuMP.value.(var_array[tech_name, :]))
+                                            # Include all values, including zeros
+                                            push!(results_df, (technology=string(tech_name), value=total_val))
+                                        end
+                                    elseif ndims(var_array) == 1
+                                        # Scalar or 1D array variables
+                                        for (idx, val) in enumerate(var_array)
+                                            if isa(val, AbstractArray)
+                                                push!(results_df, (technology="index_$idx", value=sum(JuMP.value.(val))))
+                                            else
+                                                push!(results_df, (technology="index_$idx", value=JuMP.value(val)))
+                                            end
+                                        end
+                                    else
+                                        # Scalar variable
+                                        push!(results_df, (technology="scalar", value=JuMP.value(var_array)))
+                                    end
+                                catch
+                                    # Skip variables that can't be processed
+                                    continue
                                 end
-                            else
-                                push!(results_df, (technology=tech_name, value=var_array))
                             end
                         end
                     end

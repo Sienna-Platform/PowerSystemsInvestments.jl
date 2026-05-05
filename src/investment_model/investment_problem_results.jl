@@ -17,22 +17,22 @@ end
 
 function list_variable_keys(res::ISOPT.OptimizationProblemResults)
     container = get_optimization_container(res.model)
-    return isnothing(container) ? [] : collect(keys(get(container.ext, :variables, Dict())))
+    return isnothing(container) ? [] : collect(keys(container.variables))
 end
 
 function list_aux_variable_keys(res::ISOPT.OptimizationProblemResults)
     container = get_optimization_container(res.model)
-    return isnothing(container) ? [] : collect(keys(get(container.ext, :aux_variables, Dict())))
+    return isnothing(container) ? [] : collect(keys(container.aux_variables))
 end
 
 function list_dual_keys(res::ISOPT.OptimizationProblemResults)
     container = get_optimization_container(res.model)
-    return isnothing(container) ? [] : collect(keys(get(container.ext, :duals, Dict())))
+    return isnothing(container) ? [] : collect(keys(container.duals))
 end
 
 function list_expression_keys(res::ISOPT.OptimizationProblemResults)
     container = get_optimization_container(res.model)
-    return isnothing(container) ? [] : collect(keys(get(container.ext, :expressions, Dict())))
+    return isnothing(container) ? [] : collect(keys(container.expressions))
 end
 
 function list_variable_names(res::ISOPT.OptimizationProblemResults)
