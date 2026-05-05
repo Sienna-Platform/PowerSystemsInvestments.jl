@@ -44,6 +44,7 @@ export CyclicalColocatedDispatch
 ### Transport Formulations ###
 export SingleRegionBalanceModel
 export MultiRegionBalanceModel
+export NodalBalanceModel
 
 ### Variables ###
 export BuildCapacity
@@ -285,6 +286,7 @@ include("technology_models/technologies/branch_tech.jl")
 # Network #
 include("network_models/singleregion_model.jl")
 include("network_models/multiregion_model.jl")
+include("network_models/nodal_model.jl")
 include("network_models/transport_constructor.jl")
 # Constructors #
 include("technology_models/technology_constructors/supply_constructor.jl")

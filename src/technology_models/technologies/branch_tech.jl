@@ -235,3 +235,105 @@ function objective_function!(
     #add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
     return
 end
+
+########################### Nodal AC Transport Technology Methods #################################
+
+# Investment variable bounds
+get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
+get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
+get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::ContinuousInvestment) = false
+
+# Cumulative capacity bounds
+get_max_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
+get_min_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).min
+get_init_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+
+# Operations variable bounds: bidirectional flow with magnitude <= capacity
+get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = let
+    cap_max = PSIP.get_capacity_limits(d).max
+    -cap_max
+end
+
+get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = PSIP.get_capacity_limits(d).max
+
+# Energy balance contribution: negative at start node, positive at end node (no losses for now)
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    ::T,
+    devices::U,
+    ::S,
+    ::TransportModel{V},
+) where {
+    T <: EnergyBalance,
+    S <: BasicDispatch,
+    U <: Vector{D},
+    V <: NodalBalanceModel,
+} where {D <: PSIP.NodalACTransportTechnology}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+
+    variable = get_variable(container, FlowActivePowerVariable(), D, tech_model)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+
+    for d in devices, t in time_steps
+        name = PSIP.get_name(d)
+        start_node = PSIP.get_name(PSIP.get_start_node(d))
+        end_node = PSIP.get_name(PSIP.get_end_node(d))
+        # Flow leaves start node, enters end node (no losses assumed)
+        _add_to_jump_expression!(expression[start_node, t], variable[name, t], -1.0)
+        _add_to_jump_expression!(expression[end_node, t], variable[name, t], 1.0)
+    end
+
+    return
+end
+
+# Constraints: |flow| <= cumulative capacity (two inequality constraints per line)
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+    tech_model_vector::Vector{X},
+) where {
+    T <: ActivePowerLimitsConstraint,
+    S <: BasicDispatch,
+    U <: Vector{D},
+    V <: FlowActivePowerVariable,
+    X <: TechnologyModel,
+} where {D <: PSIP.NodalACTransportTechnology}
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+    device_names = PSIP.get_name.(devices)
+
+    con_ub = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+
+    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
+    variable = get_variable(container, FlowActivePowerVariable(), D, tech_model)
+
+    for d in devices
+        name = PSIP.get_name(d)
+        for t in time_steps
+            # Upper bound: flow >= -capacity
+            con_ub[name, t] = JuMP.@constraint(
+                get_jump_model(container),
+                variable[name, t] >= -installed_cap[name, t]
+            )
+            # Lower bound: flow <= capacity
+            con_ub[Symbol(name, "_ub"), t] = JuMP.@constraint(
+                get_jump_model(container),
+                variable[name, t] <= installed_cap[name, t]
+            )
+        end
+    end
+end
