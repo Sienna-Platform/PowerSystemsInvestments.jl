@@ -818,29 +818,33 @@ function _add_renewable_dispatch_constraints!(
             first_t = first(time_slices)
             first_ts = time_stamps[first_t]
 
-            # Try to retrieve time series
+            # Retrieve time series from base_system device
+            # Time series values are already scaled by max_active_power
             ts_data = nothing
+            ts_name = "max_active_power"
+
             try
+                # Get time series from device in base_system
                 ts = IS.get_time_series(
-                    IS.TimeSeries,
+                    IS.SingleTimeSeries,
                     device,
-                    "ops_max_active_power";
-                    year=Dates.year(first_ts),
-                    rep_day=op_ix,
+                    ts_name,
                 )
                 ts_data = TimeSeries.values(ts.data)
             catch
-                # No time series - use full capacity
+                # Time series not found - constraint will use max power only
             end
 
-            # Apply constraints
+            # Apply capacity constraints
             for (ix, t) in enumerate(time_slices)
-                if ts_data !== nothing
+                if ts_data !== nothing && length(ts_data) >= ix
+                    # Apply constraint with time series (already scaled)
                     con_ub[name, t] = JuMP.@constraint(
                         jump_model,
-                        dispatch_vars[name, t] <= ts_data[ix] * max_power,
+                        dispatch_vars[name, t] <= ts_data[ix],
                     )
                 else
+                    # Fallback: constraint with max power only
                     con_ub[name, t] = JuMP.@constraint(
                         jump_model,
                         dispatch_vars[name, t] <= max_power,
