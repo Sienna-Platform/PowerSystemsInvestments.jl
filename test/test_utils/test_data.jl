@@ -58,9 +58,12 @@ function test_2_zone_portfolio()
     ####################
 
     tech_financials() = TechnologyFinancialData(;
-        interest_rate=0.04,
         capital_recovery_period=30,
         technology_base_year=2025,
+        debt_rate=0.04,
+        debt_fraction = 1.0,
+        return_on_equity=0.0,
+        tax_rate=0.0,
     )
 
     thermals = collect(get_components(ThermalStandard, sys))
