@@ -97,6 +97,12 @@ function get_capacity_credits(portfolio::PSIP.Portfolio, system::PSY.System)::Di
             continue
         end
 
+        # Transport/transmission technologies don't provide capacity
+        if tech isa PSIP.TransportTechnology
+            credits[name] = 0.0
+            continue
+        end
+
         # Thermal generation is fully dispatchable
         if tech isa PSIP.SupplyTechnology{PSY.ThermalStandard}
             credits[name] = 1.0

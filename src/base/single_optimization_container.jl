@@ -154,7 +154,7 @@ function _shift_periods_to_year(periods::Vector{Vector{Dates.DateTime}}, target_
 end
 
 _get_rep_series(::AggregateOperatingCost, f, target_year::Int=2025) = _shift_periods_to_year(_get_sample_periods(f), target_year)
-_get_rep_series(op::OperationalRepresentativeDays, _feas_model, target_year::Int=2025) = op.representative_series
+_get_rep_series(op::OperationalRepresentativeDays, _feas_model, target_year::Int=2025) = _shift_periods_to_year(op.representative_series, target_year)
 _get_weights(::AggregateOperatingCost, f) = ones(length(_get_sample_periods(f)))
 _get_weights(op::OperationalRepresentativeDays, _feas_model) = op.series_weights
 _get_sample_periods(f::RepresentativePeriods) = f.sample_periods
