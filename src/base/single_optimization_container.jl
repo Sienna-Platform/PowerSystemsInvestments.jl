@@ -1055,18 +1055,14 @@ function build_model!(
 
     check_optimization_container(container)
 
-    # Add capacity adequacy constraint if portfolio is available
-    if !isnothing(port)
-        try
-            peak_demand = get_peak_demand(port)
-            system = PSIP.get_base_system(port)
-            capacity_credits = get_capacity_credits(port, system)
-            reserve_margin = something(port.metadata.reserve_margin, 0.0)
-            add_capacity_adequacy_constraint!(container, port, peak_demand, reserve_margin, capacity_credits)
-        catch e
-            @warn "Failed to add capacity adequacy constraint: $e" maxlog=1
-        end
-    end
+    peak_demand = get_peak_demand(port)
+    system = PSIP.get_base_system(port)
+    capacity_credits = get_capacity_credits(port, system)
+    reserve_margin = something(port.metadata.reserve_margin, 0.0)
+    @debug "Adding capacity adequacy constraint with reserve margin $reserve_margin, peak demand $peak_demand, capacity credits $capacity_credits" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
+
+    add_capacity_adequacy_constraint!(container, port, peak_demand, reserve_margin, capacity_credits)
+
 
     return
 end

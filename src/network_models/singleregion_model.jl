@@ -97,8 +97,8 @@ function get_capacity_credits(portfolio::PSIP.Portfolio, system::PSY.System)::Di
             continue
         end
 
-        # Transport/transmission technologies don't provide capacity
-        if tech isa PSIP.TransportTechnology
+        # Transmission technologies (lines, transformers) don't provide capacity
+        if tech isa PSIP.TransmissionTechnology
             credits[name] = 0.0
             continue
         end
