@@ -262,6 +262,47 @@ function add_constraints!(
     end
 end
 
+# Maximum cumulative capacity for NodalACTransportTechnology
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+) where {
+    T <: MaximumCumulativeCapacity,
+    S <: ContinuousInvestment,
+    U <: Vector{D},
+    V <: CumulativeCapacity,
+} where {D <: PSIP.NodalACTransportTechnology}
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(S)
+
+    device_names = PSIP.get_name.(devices)
+    con_ub = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+
+    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
+
+    for d in devices
+        name = PSIP.get_name(d)
+        max_capacity = get_max_cap(d, CumulativeCapacity())
+        for t in time_steps
+            con_ub[name, t] = JuMP.@constraint(
+                get_jump_model(container),
+                installed_cap[name, t] <= max_capacity
+            )
+        end
+    end
+end
+
 ########################### Objective Function Calls#############################################
 
 function objective_function!(
@@ -371,16 +412,26 @@ function add_constraints!(
     installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
     variable = get_variable(container, FlowActivePowerVariable(), D, tech_model)
 
+    # Create second constraint container for upper bounds with different meta tag
+    con_lb = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta="$(tech_model)_ub",
+    )
+
     for d in devices
         name = PSIP.get_name(d)
         for t in time_steps
-            # Upper bound: flow >= -capacity
+            # Lower bound: flow >= -capacity
             con_ub[name, t] = JuMP.@constraint(
                 get_jump_model(container),
                 variable[name, t] >= -installed_cap[name, t]
             )
-            # Lower bound: flow <= capacity
-            con_ub[Symbol(name, "_ub"), t] = JuMP.@constraint(
+            # Upper bound: flow <= capacity
+            con_lb[name, t] = JuMP.@constraint(
                 get_jump_model(container),
                 variable[name, t] <= installed_cap[name, t]
             )
