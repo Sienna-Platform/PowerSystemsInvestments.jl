@@ -400,6 +400,42 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{W},
 ) where {
+    S <: Union{OperationsStorageFormulation, OperationsColocatedFormulation},
+    T <: EnergyBalance,
+    U <: Vector{D},
+    V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
+    W <: NodalBalanceModel,
+} where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+
+    variable = get_variable(container, V(), D, tech_model)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+
+    for d in devices, t in time_steps
+        name = PSIP.get_name(d)
+        # Only 1 region (node) supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
+        _add_to_jump_expression!(
+            expression[region, t],
+            variable[name, t],
+            get_expression_multiplier(T(), V(), d, S()),
+        )
+    end
+
+    return
+end
+
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    var::V,
+    devices::U,
+    formulation::S,
+    transport_model::TransportModel{W},
+) where {
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Vector{D},
@@ -450,6 +486,41 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region supported
+        region = PSIP.get_name(only(PSIP.get_region(d)))
+        _add_to_jump_expression!(
+            expression[region, t],
+            variable[name, t],
+            get_expression_multiplier(T(), V(), d, S()),
+        )
+    end
+    return
+end
+
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    var::V,
+    devices::U,
+    formulation::S,
+    transport_model::TransportModel{W},
+) where {
+    S <: BasicDispatchFeasibility,
+    T <: FeasibilitySurplus,
+    U <: Vector{D},
+    V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
+    W <: NodalBalanceModel,
+} where {D <: PSIP.StorageTechnology}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+
+    variable = get_variable(container, V(), D, tech_model)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+
+    for d in devices, t in time_steps
+        name = PSIP.get_name(d)
+        # Only 1 region (node) supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],

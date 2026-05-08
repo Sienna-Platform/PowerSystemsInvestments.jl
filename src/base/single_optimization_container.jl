@@ -732,6 +732,18 @@ function construct_devices!(
     jump_model = get_jump_model(container)
     energy_balance_expr = get_expression(container, EnergyBalance(), PSIP.Portfolio)
 
+    # Determine if using nodal or single-region model
+    transport_model = get_transport_model(template)
+    transport_type = get_transport_formulation(transport_model)
+    is_nodal = transport_type <: NodalBalanceModel
+
+    # Build node/region mapping for nodal models
+    node_map = Dict()
+    if is_nodal
+        nodes = PSIP.get_regions(PSIP.Node, port)
+        node_map = Dict(PSIP.get_name(n) => PSIP.get_name(n) for n in nodes)
+    end
+
     # Process each device type configured in device_models
     for (component_type, operation_formulation) in device_models_dict
         device_components = PSY.get_components(component_type, base_system)
@@ -778,7 +790,20 @@ function construct_devices!(
             for t in time_steps
                 for device in device_list
                     name = PSY.get_name(device)
-                    JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], dispatch_vars[name, t])
+
+                    # Determine correct index for energy balance expression
+                    if is_nodal
+                        # For nodal model, map device to its node via bus
+                        bus = PSY.get_bus(device)
+                        bus_name = PSY.get_name(bus)
+                        if haskey(node_map, bus_name)
+                            node_name = node_map[bus_name]
+                            JuMP.add_to_expression!(energy_balance_expr[node_name, t], dispatch_vars[name, t])
+                        end
+                    else
+                        # For single-region model, use SINGLE_REGION index
+                        JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], dispatch_vars[name, t])
+                    end
                 end
             end
 
@@ -802,7 +827,18 @@ function construct_devices!(
                 fixed_demand = PSY.get_max_active_power(device)
 
                 for t in time_steps
-                    JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], -fixed_demand)
+                    if is_nodal
+                        # For nodal model, map load to its node
+                        bus = PSY.get_bus(device)
+                        bus_name = PSY.get_name(bus)
+                        if haskey(node_map, bus_name)
+                            node_name = node_map[bus_name]
+                            JuMP.add_to_expression!(energy_balance_expr[node_name, t], -fixed_demand)
+                        end
+                    else
+                        # For single-region model, use SINGLE_REGION
+                        JuMP.add_to_expression!(energy_balance_expr[SINGLE_REGION, t], -fixed_demand)
+                    end
                 end
             end
         end
