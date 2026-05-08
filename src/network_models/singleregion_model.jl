@@ -282,11 +282,12 @@ function add_capacity_adequacy_constraint!(container, portfolio::PSIP.Portfolio,
                         if credit > 0.0
                             JuMP.add_to_expression!(capacity_expr, credit, var_array[tech_idx, final_period])
                             found_any = true
+                            @debug "Added BuildCapacity var for $tech_name with credit $credit"
                         end
                     end
                 end
-            catch _
-                # Skip on error - variable might not be properly structured
+            catch e
+                @debug "Failed to process BuildCapacity variable: $e"
                 continue
             end
         end
@@ -310,8 +311,10 @@ function add_capacity_adequacy_constraint!(container, portfolio::PSIP.Portfolio,
             # Add the constraint to the JuMP model and register it
             constraint_array[1] = JuMP.@constraint(jump_model, capacity_expr >= peak_demand)
 
-            @debug "Registered capacity adequacy constraint in container"
+            @info "Capacity adequacy constraint added: existing_capacity=$existing_effective_capacity + weighted_buildcapacity >= peak_demand=$peak_demand"
         end
+    else
+        @debug "No BuildCapacity variables found for capacity adequacy constraint"
     end
 
     return

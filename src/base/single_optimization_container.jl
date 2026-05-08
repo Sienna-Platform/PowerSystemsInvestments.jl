@@ -1064,7 +1064,7 @@ function build_model!(
             reserve_margin = something(port.metadata.reserve_margin, 0.0)
             add_capacity_adequacy_constraint!(container, port, peak_demand, reserve_margin, capacity_credits)
         catch e
-            @debug "Failed to add capacity adequacy constraint: $e"
+            @warn "Failed to add capacity adequacy constraint: $e" maxlog=1
         end
     end
 
