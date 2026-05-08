@@ -3,13 +3,24 @@ get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, 
 get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::ContinuousInvestment) = false
 
+get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = get_max_new_capacity(d)
+get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
+get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::ContinuousInvestment) = false
+
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
+
+get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = nothing
+get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 
 get_max_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
 get_min_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).min
 
 get_init_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+
+function get_max_new_capacity(d::PSIP.NodalACTransportTechnology)
+    return PSIP.get_capacity_limits(d).max
+end
 
 #! format: on
 
@@ -106,6 +117,21 @@ function add_to_expression!(
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.AggregateTransportTechnology}
     # Do nothing for Transport Paths in SingleRegion models
+    return
+end
+
+function add_to_expression!(
+    ::SingleOptimizationContainer,
+    ::T,
+    ::U,
+    ::BasicDispatch,
+    ::TransportModel{V},
+) where {
+    T <: EnergyBalance,
+    U <: Vector{D},
+    V <: SingleRegionBalanceModel,
+} where {D <: PSIP.NodalACTransportTechnology}
+    # Do nothing for Nodal Transport Paths in SingleRegion models
     return
 end
 
@@ -250,6 +276,16 @@ function objective_function!(
     return
 end
 
+function objective_function!(
+    container::SingleOptimizationContainer,
+    devices::Vector{T},
+    formulation::S,
+) where {T <: PSIP.NodalACTransportTechnology, S <: ContinuousInvestment}
+    tech_model = string(S)
+    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    return
+end
+
 ########################### Nodal AC Transport Technology Methods #################################
 
 # Investment variable bounds
@@ -350,4 +386,47 @@ function add_constraints!(
             )
         end
     end
+end
+
+# ============================================================================
+# NodalACTransportTechnology add_expression! methods
+# ============================================================================
+
+function add_expression!(
+    container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
+    expression_type::T,
+    devices::U,
+    formulation::S,
+) where {
+    T <: CumulativeCapacity,
+    S <: AbstractTechnologyFormulation,
+    U <: Vector{D},
+} where {D <: PSIP.NodalACTransportTechnology}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(S)
+
+    var = get_variable(container, BuildCapacity(), D, tech_model)
+
+    expression = add_expression_container!(
+        container,
+        expression_type,
+        D,
+        [PSIP.get_name(d) for d in devices],
+        time_steps,
+        meta=tech_model,
+    )
+
+    for t in time_steps, d in devices
+        name = PSIP.get_name(d)
+        init_cap = get_init_cap(d, T(), portfolio)
+        expression[name, t] = JuMP.@expression(
+            get_jump_model(container),
+            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
+        )
+    end
+
+    return
 end

@@ -265,3 +265,91 @@ function add_to_expression!(
     end
     return
 end
+
+# NodalBalanceModel variants
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    devices::U,
+    formulation::BasicDispatch,
+    transport_model::TransportModel{V},
+) where {
+    T <: EnergyBalance,
+    U <: Vector{D},
+    V <: NodalBalanceModel,
+} where {D <: PSIP.DemandRequirement}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    operational_indexes = get_operational_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    time_stamps = get_time_stamps(time_mapping)
+
+    for d in devices
+        # Get each node the demand is assigned to
+        for node in PSIP.get_region(d)
+            node_name = PSIP.get_name(node)
+            for op_ix in operational_indexes
+                time_slices = consecutive_slices[op_ix]
+                time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+                # Load Data is in MW
+                ts_data = TimeSeries.values(time_series.data)
+                first_tstamp = time_stamps[first(time_slices)]
+                first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+                if first_tstamp != first_ts_tstamp
+                    @error(
+                        "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
+                    )
+                end
+                for (ix, t) in enumerate(time_slices)
+                    _add_to_jump_expression!(expression[node_name, t], -1.0 * ts_data[ix])
+                end
+            end
+        end
+    end
+
+    return
+end
+
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    devices::U,
+    formulation::NoDispatch,
+    transport_model::TransportModel{V},
+) where {
+    T <: EnergyBalance,
+    U <: Vector{D},
+    V <: NodalBalanceModel,
+} where {D <: PSIP.DemandRequirement}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    operational_indexes = get_operational_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    time_stamps = get_time_stamps(time_mapping)
+
+    for d in devices
+        # Get each node the demand is assigned to
+        for node in PSIP.get_region(d)
+            node_name = PSIP.get_name(node)
+            for op_ix in operational_indexes
+                time_slices = consecutive_slices[op_ix]
+                time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+                # Load Data is in MW
+                ts_data = TimeSeries.values(time_series.data)
+                first_tstamp = time_stamps[first(time_slices)]
+                first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+                if first_tstamp != first_ts_tstamp
+                    @error(
+                        "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
+                    )
+                end
+                for (ix, t) in enumerate(time_slices)
+                    _add_to_jump_expression!(expression[node_name, t], -1.0 * ts_data[ix])
+                end
+            end
+        end
+    end
+    return
+end

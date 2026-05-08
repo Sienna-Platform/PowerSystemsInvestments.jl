@@ -1,7 +1,7 @@
 # Compatibility stubs for missing InfrastructureSystems.Optimization types/functions
 # These are needed because PowerSystemsInvestments v0.1.0 was written for a different API version
 
-using DataFrames, Dates
+using DataFrames, Dates, InfrastructureSystems
 
 # These types don't exist in IS.Optimization v3.5.1 but are used by PSI
 # Define them as stubs so the code can run
@@ -342,6 +342,42 @@ end
 function should_write_resulting_value(key::Any)
     # Default to false - only types explicitly marked should write results
     return false
+end
+
+# Custom encode_key implementation for VariableKey, ConstraintKey, etc. with parameterized types
+function _type_to_string(t::Type)
+    # Handle parameterized types like NodalACTransportTechnology{Line}
+    if t.name !== nothing
+        base_name = t.name.name
+        if !isempty(t.parameters)
+            param_names = [_type_to_string(p) for p in t.parameters if p isa Type]
+            if !isempty(param_names)
+                return "$base_name{$(join(param_names, ","))}"
+            end
+        end
+        return base_name
+    end
+    return string(t)
+end
+
+# Override IS.Optimization.encode_key for our custom key types
+function IS.Optimization.encode_key(key::Union{VariableKey, ConstraintKey, ExpressionKey, AuxVarKey, ParameterKey})
+    try
+        # For our VariableKey{T, U} type, extract T and U from type parameters
+        t = typeof(key)
+        if t.name !== nothing && !isempty(t.parameters)
+            entry_type = t.parameters[1]  # T (e.g., BuildCapacity)
+            component_type = t.parameters[2]  # U (e.g., NodalACTransportTechnology{Line})
+
+            # Build the string representation
+            entry_str = _type_to_string(entry_type)
+            comp_str = _type_to_string(component_type)
+
+            return "$entry_str__$comp_str"
+        end
+    catch
+    end
+    return string(key)
 end
 
 function serialize_results(results::Any, output_dir::String)
