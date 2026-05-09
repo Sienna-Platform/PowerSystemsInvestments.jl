@@ -5,6 +5,8 @@ get_variable_lower_bound(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::Inve
 get_variable_upper_bound(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = nothing
 get_variable_lower_bound(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::ContinuousInvestment) = false
+get_variable_upper_bound(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::BinaryInvestment) = nothing
+get_variable_lower_bound(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::BinaryInvestment) = 0.0
 
 get_variable_lower_bound(::ActiveInPowerVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::ActiveInPowerVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = nothing

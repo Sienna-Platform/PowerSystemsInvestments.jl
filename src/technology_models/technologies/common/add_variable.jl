@@ -85,6 +85,66 @@ function add_variable!(
     container::SingleOptimizationContainer,
     variable_type::T,
     devices::U,
+    formulation::V,
+) where {
+    T <: InvestmentVariableType,
+    U <: Vector{D},
+    V <: BinaryInvestment,
+} where {D <: PSIP.Technology}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(V)
+
+    names = [PSIP.get_name(d) for d in devices]
+    check_duplicate_names(names, container, variable_type, D)
+
+    # Create capacity variable container (the actual capacity that gets reported)
+    variable = add_variable_container!(
+        container,
+        variable_type,
+        D,
+        names,
+        time_steps,
+        meta=tech_model,
+    )
+
+    # Create both variables and link them with constraint
+    for t in time_steps, d in devices
+        name = PSY.get_name(d)
+        # Get the maximum capacity for this unit
+        max_capacity = PSIP.get_capacity_limits(d).max
+
+        # Create binary decision variable (0 or 1: build this unit or not)
+        # This is created directly in the JuMP model, not as a registered container
+        binary_decision = JuMP.@variable(
+            get_jump_model(container),
+            base_name = "$(T)_binary_$(D)_{$(name), $(t)}",
+            binary = true,
+        )
+
+        # Create continuous BuildCapacity variable with lower bound only
+        variable[name, t] = JuMP.@variable(
+            get_jump_model(container),
+            base_name = "$(T)_$(D)_{$(name), $(t)}",
+            lower_bound = 0.0,
+        )
+
+        # Add constraint: BuildCapacity = BinaryDecision * max_capacity
+        # This constraint implicitly enforces the upper bound via the binary decision
+        JuMP.@constraint(
+            get_jump_model(container),
+            variable[name, t] == binary_decision * max_capacity
+        )
+    end
+
+    return
+end
+
+function add_variable!(
+    container::SingleOptimizationContainer,
+    variable_type::T,
+    devices::U,
     formulation::S,
 ) where {
     T <: OperationsVariableType,

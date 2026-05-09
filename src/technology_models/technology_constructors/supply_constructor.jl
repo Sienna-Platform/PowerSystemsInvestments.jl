@@ -10,7 +10,7 @@ function construct_technologies!(
     tech_model_vector::Vector{X},
 ) where {
     T <: PSIP.SupplyTechnology,
-    B <: Union{ContinuousInvestment, IntegerInvestment},
+    B <: Union{ContinuousInvestment, IntegerInvestment, BinaryInvestment},
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]

@@ -2,10 +2,14 @@
 get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = get_max_new_capacity(d)
 get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::ContinuousInvestment) = false
+get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::BinaryInvestment) = nothing
+get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::BinaryInvestment) = 0.0
 
 get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = get_max_new_capacity(d)
 get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::ContinuousInvestment) = false
+get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = nothing
+get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = 0.0
 
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
@@ -333,6 +337,9 @@ end
 get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
 get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::ContinuousInvestment) = false
+get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = true
+get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = 1.0
+get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = 0.0
 
 # Cumulative capacity bounds
 get_max_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
