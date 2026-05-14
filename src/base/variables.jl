@@ -36,6 +36,11 @@ TODO
 """
 struct BuildInverterCapacity <: BuildInvestmentVariableType end
 
+"""
+Binary investment decision variable for discrete capacity options (0 or 1)
+"""
+struct BinaryInvestmentDecision <: BuildInvestmentVariableType end
+
 ### Operations Variables ###
 
 """
