@@ -60,6 +60,8 @@ function read_variable(
 )
     results_df = DataFrame(
         technology = String[],
+        time_period_idx = Union{Int, Missing}[],
+        time_period = Union{String, Missing}[],
         value = Float64[],
     )
 
@@ -67,6 +69,18 @@ function read_variable(
         # Access path: res.model.internal.container.variables
         if hasfield(typeof(res), :model)
             model = res.model
+
+            # Try to get TimeMapping for converting indices to date ranges
+            time_mapping = nothing
+            if hasfield(typeof(model), :internal) && hasfield(typeof(model.internal), :container)
+                container = model.internal.container
+                try
+                    time_mapping = get_time_mapping(container)
+                catch
+                    # TimeMapping not available, continue without it
+                end
+            end
+
             if hasfield(typeof(model), :internal)
                 internal = model.internal
                 if hasfield(typeof(internal), :container)
@@ -81,25 +95,62 @@ function read_variable(
                                 # For investment variables (BuildCapacity, etc), axes are (technology_name, investment_period)
                                 try
                                     if ndims(var_array) == 2
-                                        tech_names = axes(var_array, 1)
-                                        for tech_name in tech_names
-                                            # Sum across all investment periods for each technology
-                                            total_val = sum(JuMP.value.(var_array[tech_name, :]))
+                                        # 2D array: (technology, time_period) indexing preserved
+                                        tech_names, time_periods = axes(var_array)
+                                        for tech_name in tech_names, time_period in time_periods
+                                            val = JuMP.value(var_array[tech_name, time_period])
+
+                                            # Map investment period index to date range if TimeMapping available
+                                            time_period_label = missing
+                                            if !isnothing(time_mapping) && isa(time_period, Int)
+                                                try
+                                                    inv_intervals = time_mapping.investment.time_stamps
+                                                    if time_period <= length(inv_intervals)
+                                                        date_range = inv_intervals[time_period]
+                                                        start_date = Dates.format(date_range[1], "yyyy-mm-dd")
+                                                        end_date = Dates.format(date_range[2], "yyyy-mm-dd")
+                                                        time_period_label = "$start_date to $end_date"
+                                                    end
+                                                catch e
+                                                    # If mapping fails, leave label as missing
+                                                end
+                                            end
+
                                             # Include all values, including zeros
-                                            push!(results_df, (technology=string(tech_name), value=total_val))
+                                            push!(results_df, (
+                                                technology=string(tech_name),
+                                                time_period_idx=time_period,
+                                                time_period=time_period_label,
+                                                value=val
+                                            ))
                                         end
                                     elseif ndims(var_array) == 1
-                                        # Scalar or 1D array variables
+                                        # Scalar or 1D array variables (no time dimension)
                                         for (idx, val) in enumerate(var_array)
                                             if isa(val, AbstractArray)
-                                                push!(results_df, (technology="index_$idx", value=sum(JuMP.value.(val))))
+                                                push!(results_df, (
+                                                    technology="index_$idx",
+                                                    time_period_idx=missing,
+                                                    time_period=missing,
+                                                    value=sum(JuMP.value.(val))
+                                                ))
                                             else
-                                                push!(results_df, (technology="index_$idx", value=JuMP.value(val)))
+                                                push!(results_df, (
+                                                    technology="index_$idx",
+                                                    time_period_idx=missing,
+                                                    time_period=missing,
+                                                    value=JuMP.value(val)
+                                                ))
                                             end
                                         end
                                     else
                                         # Scalar variable
-                                        push!(results_df, (technology="scalar", value=JuMP.value(var_array)))
+                                        push!(results_df, (
+                                            technology="scalar",
+                                            time_period_idx=missing,
+                                            time_period=missing,
+                                            value=JuMP.value(var_array)
+                                        ))
                                     end
                                 catch
                                     # Skip variables that can't be processed
@@ -117,6 +168,8 @@ function read_variable(
                         try
                             push!(results_df, (
                                 technology=string(var_ref),
+                                time_period_idx=missing,
+                                time_period=missing,
                                 value=value(var_ref),
                             ))
                         catch

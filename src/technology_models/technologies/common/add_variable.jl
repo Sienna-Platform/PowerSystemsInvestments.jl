@@ -109,44 +109,30 @@ function add_variable!(
         meta=tech_model,
     )
 
-    # Create binary decision variable container (registered in PSI2 for results access)
-    # This allows binary variables to be extracted via read_variable()
-    binary_variable = add_variable_container!(
-        container,
-        BinaryInvestmentDecision(),
-        D,
-        names,
-        time_steps,
-        meta=tech_model,
-    )
-
-    # Create both variables and link them with constraint
+    # Create variables and link with constraint
+    # Binary decision is implicit: BuildCapacity = BinaryDecision * max_capacity,
+    # so BuildCapacity values are either 0 or max_capacity (the binary decision recoverable as capacity/max_capacity)
     for t in time_steps, d in devices
         name = PSY.get_name(d)
-        # Get the maximum capacity for this unit
         max_capacity = PSIP.get_capacity_limits(d).max
 
         # Create binary decision variable (0 or 1: build this unit or not)
-        # Now registered in the container via the binary_variable container above
         binary_decision = JuMP.@variable(
             get_jump_model(container),
             base_name = "$(T)_binary_$(D)_{$(name), $(t)}",
             binary = true,
         )
-        binary_variable[name, t] = binary_decision
 
-        # Create continuous BuildCapacity variable with lower bound only
+        # Create continuous BuildCapacity variable (0 ≤ capacity ≤ max_capacity)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = "$(T)_$(D)_{$(name), $(t)}",
             lower_bound = 0.0,
         )
-
-        # Set upper bound on BuildCapacity (optional, enforced by constraint below)
         JuMP.set_upper_bound(variable[name, t], max_capacity)
 
-        # Add constraint: BuildCapacity = BinaryDecision * max_capacity
-        # This constraint implicitly enforces the upper bound via the binary decision
+        # Link: BuildCapacity = BinaryDecision * max_capacity
+        # This ensures capacity is either 0 or max_capacity (binary choice)
         JuMP.@constraint(
             get_jump_model(container),
             variable[name, t] == binary_decision * max_capacity
