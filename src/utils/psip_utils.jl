@@ -32,7 +32,3 @@ function retrieve_ops_time_series(
     return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; year=year, rep_day=op_ix)
 end
 
-# TODO: Add Fixed Cost to RenewableGenerationCost !
-function PSY.get_fixed(cost::PSY.RenewableGenerationCost)
-    return 0.0
-end
