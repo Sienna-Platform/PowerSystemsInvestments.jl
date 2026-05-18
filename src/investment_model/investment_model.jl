@@ -110,6 +110,10 @@ function get_optimization_container(model::InvestmentModel)
     return ISOPT.get_optimization_container(get_internal(model))
 end
 
+function get_container(model::InvestmentModel)
+    return ISOPT.get_container(get_internal(model))
+end
+
 function get_timestamps(model::InvestmentModel)
     optimization_container = get_optimization_container(model)
     start_time = get_initial_time(optimization_container)
