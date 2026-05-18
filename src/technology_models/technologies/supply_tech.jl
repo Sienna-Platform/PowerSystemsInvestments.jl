@@ -644,3 +644,122 @@ function objective_function!(
     # add_fixed_om_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     return
 end
+
+#################### Planned Addition Constraint ####################
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::PlannedAdditionConstraint,
+    ::CumulativeCapacity,
+    devices::Vector{T},
+    formulation::InvestmentTechnologyFormulation,
+) where {T <: PSIP.SupplyTechnology}
+    """
+    Enforce that cumulative built capacity meets planned additions from time series.
+    If a technology has a 'planned_addition' time series, the cumulative capacity
+    at each time period must be >= the planned addition value.
+    """
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(formulation)
+
+    cumulative_cap = get_expression(container, CumulativeCapacity(), T, tech_model)
+
+    # First pass: identify devices with planned_addition time series
+    devices_with_planned_addition = String[]
+    device_capacities = Dict{String, Float64}()
+
+    for device in devices
+        dev_name = PSIP.get_name(device)
+
+        try
+            # Use PSIP API to get time series from the device
+            ts_list = collect(IS.get_time_series_multiple(device))
+
+            # Look for planned_addition time series
+            for ts in ts_list
+                if IS.get_name(ts) == "planned_addition"
+                    # Aggregate all planned_addition time series values
+                    all_ts_values = Float64[]
+
+                    for ts_check in ts_list
+                        if IS.get_name(ts_check) == "planned_addition"
+                            try
+                                # Try standard method first
+                                if hasmethod(IS.get_time_series_values, Tuple{typeof(ts_check)})
+                                    ts_array = IS.get_time_series_values(ts_check)
+                                elseif hasfield(typeof(ts_check), :data)
+                                    # Extract values from TimeArray
+                                    ts_data = getproperty(ts_check, :data)
+                                    if hasmethod(values, Tuple{typeof(ts_data)})
+                                        ts_array = TimeSeries.values(ts_data)
+                                    else
+                                        ts_array = ts_data.values
+                                    end
+                                else
+                                    continue
+                                end
+                                append!(all_ts_values, vec(ts_array))
+                            catch
+                                continue
+                            end
+                        end
+                    end
+
+                    if !isempty(all_ts_values)
+                        planned_capacity = maximum(all_ts_values)
+                        if planned_capacity > 0.01
+                            push!(devices_with_planned_addition, dev_name)
+                            device_capacities[dev_name] = planned_capacity
+                        end
+                    end
+                    break
+                end
+            end
+        catch
+            # Device doesn't have planned_addition time series, skip
+            continue
+        end
+    end
+
+    # Only create constraint container for devices with planned_addition
+    if !isempty(devices_with_planned_addition)
+        con = add_constraints_container!(
+            container,
+            PlannedAdditionConstraint(),
+            T,
+            devices_with_planned_addition,
+            time_steps,
+            meta=tech_model,
+        )
+
+        # Get BuildCapacity variables for exogenous units
+        var = get_variable(container, BuildCapacity(), T, tech_model)
+
+        # Add constraints only for devices with planned_addition
+        for dev_name in devices_with_planned_addition
+            planned_capacity = device_capacities[dev_name]
+
+            # For exogenous units with planned_addition: require cumulative >= planned_capacity
+            # Also limit to at most 1 build total (across all periods) for binary investment
+            if contains(tech_model, "BinaryInvestment")
+                # Constraint: sum of BuildCapacity across all periods <= 1
+                # This ensures only 1 unit is built total
+                build_sum_expr = sum(var[dev_name, t] for t in time_steps)
+                JuMP.@constraint(
+                    get_jump_model(container),
+                    build_sum_expr <= 1,
+                )
+            end
+
+            for t in time_steps
+                con[dev_name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    cumulative_cap[dev_name, t] >= planned_capacity,
+                )
+            end
+        end
+    end
+
+    return
+end

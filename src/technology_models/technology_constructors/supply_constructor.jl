@@ -93,6 +93,15 @@ function construct_technologies!(
         devices,
         B(),
     )
+
+    # Planned addition constraint (enforce planned_addition time series if present)
+    add_constraints!(
+        container,
+        PlannedAdditionConstraint(),
+        CumulativeCapacity(),
+        devices,
+        B(),
+    )
     return
 end
 

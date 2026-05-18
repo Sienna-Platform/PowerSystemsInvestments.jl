@@ -14,6 +14,8 @@ struct MaximumCumulativeSolarCapacity <: MaximumCumulativeInvestmentConstraint e
 
 struct MaximumCumulativeInverterCapacity <: MaximumCumulativeInvestmentConstraint end
 
+struct PlannedAdditionConstraint <: ISOPT.ConstraintType end
+
 ### Operations Constraints ###
 
 abstract type OperationVariableLimitsConstraintType <: ISOPT.ConstraintType end
