@@ -29,6 +29,7 @@ export RepresentativePeriods
 export StaticLoadInvestment
 export ContinuousInvestment
 export IntegerInvestment
+export BinaryInvestment
 
 ### Operation Formulations ###
 export BasicDispatch
@@ -41,6 +42,8 @@ export CyclicalColocatedDispatch
 ### Transport Formulations ###
 export SingleRegionBalanceModel
 export MultiRegionBalanceModel
+export NodalBalanceModel
+export NodalBalanceConstraint
 
 ### Variables ###
 export BuildCapacity
@@ -100,7 +103,6 @@ import PowerSystemsInvestmentsPortfolios
 import Dates
 import PowerModels
 import DataStructures
-import PowerNetworkMatrices
 import PrettyTables
 import TimeSeries
 import Logging
@@ -114,7 +116,6 @@ const PSY = PowerSystems
 const MOI = MathOptInterface
 const PSIP = PowerSystemsInvestmentsPortfolios
 const PM = PowerModels
-const PNM = PowerNetworkMatrices
 const MOPFM = MOI.FileFormats.Model
 
 using DocStringExtensions
@@ -242,6 +243,7 @@ include("technology_models/technologies/branch_tech.jl")
 # Network #
 include("network_models/singleregion_model.jl")
 include("network_models/multiregion_model.jl")
+include("network_models/nodal_model.jl")
 include("network_models/transport_constructor.jl")
 # Constructors #
 include("technology_models/technology_constructors/supply_constructor.jl")

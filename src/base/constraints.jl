@@ -24,6 +24,8 @@ struct SingleRegionBalanceConstraint <: ISOPT.ConstraintType end
 
 struct MultiRegionBalanceConstraint <: ISOPT.ConstraintType end
 
+struct NodalBalanceConstraint <: ISOPT.ConstraintType end
+
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end
 
 struct OutputActivePowerVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
