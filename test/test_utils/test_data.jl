@@ -58,9 +58,12 @@ function test_2_zone_portfolio()
     ####################
 
     tech_financials() = TechnologyFinancialData(;
-        interest_rate=0.04,
         capital_recovery_period=30,
         technology_base_year=2025,
+        debt_fraction=0.6,
+        debt_rate=0.04,
+        return_on_equity=0.10,
+        tax_rate=0.21,
     )
 
     thermals = collect(get_components(ThermalStandard, sys))
@@ -92,16 +95,13 @@ function test_2_zone_portfolio()
     )
 
     t_th = SupplyTechnology{ThermalStandard}(;
-        base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.ST,
         capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
         id=1,
         available=true,
         name="cheap_thermal",
-        initial_capacity=0.0,
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
-        balancing_topology="Region",
         operation_costs=ThermalGenerationCost(
             variable=CostCurve(LinearCurve(cheap_th_var_cost)),
             fixed=0.0,
@@ -116,16 +116,13 @@ function test_2_zone_portfolio()
     )
 
     t_th_mid = SupplyTechnology{ThermalStandard}(;
-        base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.ST,
         capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
         id=3,
         available=true,
         name="mid_thermal",
-        initial_capacity=0.0,
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
-        balancing_topology="Region",
         operation_costs=ThermalGenerationCost(
             variable=CostCurve(LinearCurve(cheap_th_var_cost)),
             fixed=0.0,
@@ -140,16 +137,13 @@ function test_2_zone_portfolio()
     )
 
     t_th_exp = SupplyTechnology{ThermalStandard}(;
-        base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.ST,
         capital_costs=LinearCurve(coal_new_capex * 1000.0),
         id=2,
         available=true,
         name="expensive_thermal",
-        initial_capacity=initial_cap_exp,
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
-        balancing_topology="Region",
         operation_costs=ThermalGenerationCost(
             variable=CostCurve(LinearCurve(exp_th_var_cost)),
             fixed=0.0,
@@ -200,12 +194,10 @@ function test_2_zone_portfolio()
     ts_wind_2030 = SingleTimeSeries(;
         data=TimeArray(tstamp_2030_ops, ts_wind_2030_data),
         name="ops_variable_cap_factor",
-        scaling_factor_multiplier=get_initial_capacity,
     )
     ts_wind_2035 = SingleTimeSeries(;
         data=TimeArray(tstamp_2035_ops, ts_wind_2035_data),
         name="ops_variable_cap_factor",
-        scaling_factor_multiplier=get_initial_capacity,
     )
 
     ts_wind_inv_capex = SingleTimeSeries(
@@ -214,16 +206,13 @@ function test_2_zone_portfolio()
     )
 
     t_re = SupplyTechnology{RenewableDispatch}(;
-        base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.WT,
         capital_costs=LinearCurve(wind_capex * 1000.0), # to $/MW
         id=3,
         available=true,
         name="wind",
-        initial_capacity=initial_cap_wind,
         fuel=[ThermalFuels.OTHER],
         power_systems_type="RenewableDispatch",
-        balancing_topology="Region",
         operation_costs=ThermalGenerationCost(
             variable=CostCurve(LinearCurve(0.0)),
             fixed=wind_op_cost,
@@ -244,31 +233,22 @@ function test_2_zone_portfolio()
     stor_kwh_capex = 745.25 #$/kW
     t_stor = StorageTechnology{EnergyReservoirStorage}(;
         name="test_storage",
-        base_power=1.0,
         id=1,
         region=[z1],
         storage_tech=StorageTech.LIB,
-        existing_capacity_energy=0.0,
-        existing_capacity_power=0.0,
-        capacity_power_limits=(0.0, 300.0),
-        capacity_energy_limits=(0.0, 1000.0),
+        capacity_limits_discharge=(min=0.0, max=300.0),
+        capacity_limits_energy=(min=0.0, max=1000.0),
         power_systems_type="EnergyReservoirStorage",
-        balancing_topology="Region",
         prime_mover_type=PrimeMovers.BT,
         available=true,
-        capital_costs_power=LinearCurve(stor_kw_capex * 1000),
+        capital_costs_discharge=LinearCurve(stor_kw_capex * 1000),
         capital_costs_energy=LinearCurve(stor_kwh_capex * 1000),
-        operation_costs_energy=StorageCost(
+        operation_costs=StorageCost(
             charge_variable_cost=CostCurve(LinearCurve(0.0)),
             discharge_variable_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
         ),
-        operation_costs_power=StorageCost(
-            charge_variable_cost=CostCurve(LinearCurve(0.0)),
-            discharge_variable_cost=CostCurve(LinearCurve(0.0)),
-            fixed=0.0,
-        ),
-        unit_size_power=10.0,
+        unit_size_discharge=10.0,
         unit_size_energy=10.0,
         financial_data=tech_financials(),
     )
@@ -342,12 +322,10 @@ function test_2_zone_portfolio()
     ts_col_wind_2030 = SingleTimeSeries(;
         data=TimeArray(tstamp_2030_ops, ts_wind_2030_data),
         name="ops_wind_variable_cap_factor",
-        scaling_factor_multiplier=get_existing_capacity_wind,
     )
     ts_col_wind_2035 = SingleTimeSeries(;
         data=TimeArray(tstamp_2035_ops, ts_wind_2035_data),
         name="ops_wind_variable_cap_factor",
-        scaling_factor_multiplier=get_existing_capacity_wind,
     )
 
     ts_col_wind_inv_capex = SingleTimeSeries(
@@ -358,12 +336,10 @@ function test_2_zone_portfolio()
     ts_col_solar_2030 = SingleTimeSeries(;
         data=TimeArray(tstamp_2030_ops, ts_solar),
         name="ops_solar_variable_cap_factor",
-        scaling_factor_multiplier=get_existing_capacity_solar,
     )
     ts_col_solar_2035 = SingleTimeSeries(;
         data=TimeArray(tstamp_2035_ops, ts_solar),
         name="ops_solar_variable_cap_factor",
-        scaling_factor_multiplier=get_existing_capacity_solar,
     )
 
     ts_col_solar_inv_capex = SingleTimeSeries(
@@ -379,22 +355,16 @@ function test_2_zone_portfolio()
         id=10,
         power_systems_type="EnergyReservoirStorage",
         region=[z1],
-        balancing_topology="Region",
-        base_power=1.0,
         financial_data=tech_financials(),
         # Solar #
-        existing_capacity_solar=0.0,
         operation_costs_solar=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
         capital_costs_solar=LinearCurve(pv_capex * 1000.0), # to $/MW
         capacity_limits_solar=(min=0.0, max=1e8),
         # Wind # 
-        existing_capacity_wind=0.0,
         operation_costs_wind=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
         capital_costs_wind=LinearCurve(wind_capex * 1000.0), # to $/MW
         capacity_limits_wind=(min=0.0, max=1e8),
         # Storage #
-        existing_capacity_energy=0.0,
-        existing_capacity_power=0.0,
         efficiency_storage=(in=0.93, out=0.93),
         operation_costs_power=StorageCost(
             charge_variable_cost=CostCurve(LinearCurve(0.0)),
@@ -414,25 +384,22 @@ function test_2_zone_portfolio()
         operation_costs_inverter=LoadCost(CostCurve(LinearCurve(0.0)), 0.0),
         capital_costs_inverter=LinearCurve(inverter_capex),
         inverter_efficiency=1.0,
-        existing_capacity_inverter=0.0,
     )
 
     ####################
     ##### Transmission #####
     #####################
 
-    line = AggregateTransportTechnology{ACBranch}(
+    line = AggregateTransportTechnology{ACBranch}(;
         name="test_branch",
         start_region=z1,
         end_region=z2,
-        existing_line_capacity=100,
-        max_new_capacity=900,
+        capacity_limits=(min=0, max=1000),
         line_loss=0.05,
-        capital_cost=LinearCurve(5000.0),
+        capital_costs=LinearCurve(5000.0),
         available=true,
         power_systems_type="TransportTechnology",
         id=1,
-        base_power=1.0,
         financial_data=tech_financials(),
     )
 
