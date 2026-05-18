@@ -752,12 +752,14 @@ function add_constraints!(
                 )
             end
 
-            for t in time_steps
-                con[dev_name, t] = JuMP.@constraint(
-                    get_jump_model(container),
-                    cumulative_cap[dev_name, t] >= planned_capacity,
-                )
-            end
+            # Only apply constraint to the final period
+            # This ensures the unit is built by the end of the planning horizon
+            # (without requiring it earlier, which would be infeasible if availability is later)
+            final_period = time_steps[end]
+            con[dev_name, final_period] = JuMP.@constraint(
+                get_jump_model(container),
+                cumulative_cap[dev_name, final_period] >= planned_capacity,
+            )
         end
     end
 
