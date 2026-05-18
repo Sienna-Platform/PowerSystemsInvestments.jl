@@ -2,6 +2,8 @@
 get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = get_max_new_capacity(d)
 get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::ContinuousInvestment) = false
+get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::BinaryInvestment) = nothing
+get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::BinaryInvestment) = 0.0
 
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
