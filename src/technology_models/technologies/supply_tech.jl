@@ -2,6 +2,8 @@
 get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
 get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).min
 get_variable_binary(::BuildCapacity, d::PSIP.SupplyTechnology, ::ContinuousInvestment) = false
+get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::BinaryInvestment) = nothing
+get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::BinaryInvestment) = 0.0
 
 get_variable_lower_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::OperationsTechnologyFormulation) = nothing
@@ -88,6 +90,46 @@ function add_expression!(
     T <: CumulativeCapacity,
     U <: Vector{D},
     V <: IntegerInvestment,
+} where {D <: PSIP.SupplyTechnology}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(V)
+
+    var = get_variable(container, BuildCapacity(), D, tech_model)
+
+    expression = add_expression_container!(
+        container,
+        expression_type,
+        D,
+        [PSIP.get_name(d) for d in devices],
+        time_steps,
+        meta=tech_model,
+    )
+
+    for t in time_steps, d in devices
+        unit_size = PSIP.get_unit_size(d)
+        name = PSIP.get_name(d)
+        init_cap = get_init_cap(d, T(), portfolio)
+        expression[name, t] = JuMP.@expression(
+            get_jump_model(container),
+            init_cap + sum(var[name, t_p] * unit_size for t_p in time_steps if t_p <= t),
+        )
+    end
+
+    return
+end
+
+function add_expression!(
+    container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
+    expression_type::T,
+    devices::U,
+    formulation::V,
+) where {
+    T <: CumulativeCapacity,
+    U <: Vector{D},
+    V <: BinaryInvestment,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
