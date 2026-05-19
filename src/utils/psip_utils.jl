@@ -31,4 +31,3 @@ function retrieve_ops_time_series(
     year = string(Dates.Year(get_time_stamps(time_mapping)[first_t]).value)
     return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; year=year, rep_day=op_ix)
 end
-
