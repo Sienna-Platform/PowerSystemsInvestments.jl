@@ -90,6 +90,7 @@ function _show_method(
         name = "PowerSystemsInvestments"
     end
 
+    extra = backend == :auto ? (; display_size=(-1, -1)) : (;)
     for (k, val) in values
         if !isempty(val)
             println(io)
@@ -100,6 +101,7 @@ function _show_method(
                 backend=Val(backend),
                 title="$name Problem $k Results",
                 alignment=:l,
+                extra...,
                 kwargs...,
             )
         end
