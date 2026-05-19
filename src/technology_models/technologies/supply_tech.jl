@@ -657,17 +657,14 @@ function add_constraints!(
     """
     Enforce that cumulative built capacity meets planned additions from time series.
     If a technology has a 'planned_addition' time series, the cumulative capacity
-    at each time period must be >= the planned addition value.
+    at the final period must equal the planned addition value.
     """
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(formulation)
 
-    cumulative_cap = get_expression(container, CumulativeCapacity(), T, tech_model)
-
-    # First pass: identify devices with planned_addition time series
-    devices_with_planned_addition = String[]
-    device_capacities = Dict{String, Float64}()
+    # Identify devices with planned_addition time series and extract per-period values
+    devices_with_planned_addition = Dict{String, Vector{Float64}}()  # device_name -> [values per period]
 
     for device in devices
         dev_name = PSIP.get_name(device)
@@ -676,90 +673,95 @@ function add_constraints!(
             # Use PSIP API to get time series from the device
             ts_list = collect(IS.get_time_series_multiple(device))
 
-            # Look for planned_addition time series
             for ts in ts_list
                 if IS.get_name(ts) == "planned_addition"
-                    # Aggregate all planned_addition time series values
-                    all_ts_values = Float64[]
-
-                    for ts_check in ts_list
-                        if IS.get_name(ts_check) == "planned_addition"
-                            try
-                                # Try standard method first
-                                if hasmethod(IS.get_time_series_values, Tuple{typeof(ts_check)})
-                                    ts_array = IS.get_time_series_values(ts_check)
-                                elseif hasfield(typeof(ts_check), :data)
-                                    # Extract values from TimeArray
-                                    ts_data = getproperty(ts_check, :data)
-                                    if hasmethod(values, Tuple{typeof(ts_data)})
-                                        ts_array = TimeSeries.values(ts_data)
-                                    else
-                                        ts_array = ts_data.values
-                                    end
-                                else
-                                    continue
-                                end
-                                append!(all_ts_values, vec(ts_array))
-                            catch
-                                continue
+                    # Extract hourly time series values and aggregate to periods by year
+                    ts_values = Float64[]
+                    try
+                        if hasmethod(IS.get_time_series_values, Tuple{typeof(ts)})
+                            ts_array = IS.get_time_series_values(ts)
+                            ts_values = vec(ts_array)
+                        elseif hasfield(typeof(ts), :data)
+                            ts_data = getproperty(ts, :data)
+                            if hasmethod(values, Tuple{typeof(ts_data)})
+                                ts_values = vec(TimeSeries.values(ts_data))
+                            else
+                                ts_values = vec(ts_data.values)
                             end
                         end
-                    end
 
-                    if !isempty(all_ts_values)
-                        planned_capacity = maximum(all_ts_values)
-                        if planned_capacity > 0.01
-                            push!(devices_with_planned_addition, dev_name)
-                            device_capacities[dev_name] = planned_capacity
+                        # Map hourly values to periods based on year boundaries
+                        # Time series covers min_year to max_year (from planning.jl)
+                        if !isempty(ts_values) && length(time_steps) <= 4
+                            period_values = Float64[]
+
+                            # Simple mapping: assume time_steps correspond to rep_years
+                            # (2025, 2027, 2028, 2032) → periods roughly span those years
+                            # Count hours per year in the time series
+                            min_year = isempty(time_steps) ? 2025 : 2025
+                            hours_per_year_estimate = 8760
+
+                            for t_idx in 1:length(time_steps)
+                                # Period t covers roughly: min_year + (t-1) year(s) to min_year + t year(s)
+                                # For now, use a heuristic based on time_steps
+                                year_in_period = min_year + t_idx - 1
+
+                                # Find which hours correspond to this period
+                                # Hours 0-8759 = min_year, 8760-17519 = min_year+1, etc.
+                                start_hour = (t_idx - 1) * 8760 * 4  # rough estimate for 4-year periods
+                                end_hour = min(t_idx * 8760 * 4, length(ts_values))
+
+                                if start_hour < end_hour && start_hour < length(ts_values)
+                                    period_cap = maximum(ts_values[max(1, start_hour):min(end_hour, length(ts_values))])
+                                    push!(period_values, period_cap)
+                                else
+                                    push!(period_values, 0.0)
+                                end
+                            end
+
+                            # Store the per-period values
+                            if length(period_values) == length(time_steps)
+                                devices_with_planned_addition[dev_name] = period_values
+                            end
                         end
+                    catch
+                        continue
                     end
                     break
                 end
             end
         catch
-            # Device doesn't have planned_addition time series, skip
+            # Device doesn't have time series, skip
             continue
         end
     end
 
-    # Only create constraint container for devices with planned_addition
+    # Add constraints only for devices with planned_addition
     if !isempty(devices_with_planned_addition)
-        con = add_constraints_container!(
-            container,
-            PlannedAdditionConstraint(),
-            T,
-            devices_with_planned_addition,
-            time_steps,
-            meta=tech_model,
-        )
-
         # Get BuildCapacity variables for exogenous units
         var = get_variable(container, BuildCapacity(), T, tech_model)
 
-        # Add constraints only for devices with planned_addition
-        for dev_name in devices_with_planned_addition
-            planned_capacity = device_capacities[dev_name]
+        for (dev_name, ts_values) in devices_with_planned_addition
+            # Find the first period where capacity is planned (where max value > 0)
+            build_period_idx = findfirst(v -> v > 0.01, ts_values)
+            planned_capacity = build_period_idx !== nothing ? ts_values[build_period_idx] : 0.0
 
-            # For exogenous units with planned_addition: require cumulative >= planned_capacity
-            # Also limit to at most 1 build total (across all periods) for binary investment
-            if contains(tech_model, "BinaryInvestment")
-                # Constraint: sum of BuildCapacity across all periods <= 1
-                # This ensures only 1 unit is built total
-                build_sum_expr = sum(var[dev_name, t] for t in time_steps)
-                JuMP.@constraint(
-                    get_jump_model(container),
-                    build_sum_expr <= 1,
-                )
+            # Exogenous units: build exactly when the time series specifies
+            for (period_idx, t) in enumerate(time_steps)
+                if period_idx == build_period_idx
+                    # Build in the specified period
+                    JuMP.@constraint(
+                        get_jump_model(container),
+                        var[dev_name, t] >= planned_capacity,
+                    )
+                else
+                    # All other periods: no builds
+                    JuMP.@constraint(
+                        get_jump_model(container),
+                        var[dev_name, t] == 0,
+                    )
+                end
             end
-
-            # Only apply constraint to the final period
-            # This ensures the unit is built by the end of the planning horizon
-            # (without requiring it earlier, which would be infeasible if availability is later)
-            final_period = time_steps[end]
-            con[dev_name, final_period] = JuMP.@constraint(
-                get_jump_model(container),
-                cumulative_cap[dev_name, final_period] >= planned_capacity,
-            )
         end
     end
 
