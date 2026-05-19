@@ -412,6 +412,7 @@ function solve!(
     file_level=Logging.Info,
     disable_timer_outputs=false,
     export_optimization_problem=true,
+    output_dir::Union{String, Nothing}=nothing,
     kwargs...,
 )
     build_if_not_already_built!(
@@ -421,6 +422,10 @@ function solve!(
         disable_timer_outputs=disable_timer_outputs,
         kwargs...,
     )
+    # Ensure output_dir is set on model for serialization during solve
+    if !isnothing(output_dir)
+        ISOPT.set_output_dir!(get_internal(model), output_dir)
+    end
     ISOPT.set_console_level!(get_internal(model), console_level)
     ISOPT.set_file_level!(get_internal(model), file_level)
     TimerOutputs.reset_timer!(RUN_OPERATION_MODEL_TIMER)
