@@ -322,7 +322,7 @@ end
 
 function init_model_store_params!(model::InvestmentModel)
     base_power = 1.0 # Investment Models should default to Natural Units
-    port_uuid = IS.make_uuid()
+    port_uuid = IS.get_uuid(get_portfolio(model))
 
     store_params = ModelStoreParams(
         base_power,
@@ -540,9 +540,19 @@ function _read_col_name(axes)
 end
 
 function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
-    res = first(values(read_results(get_store(model), key)))
-    col_name = _read_col_name(axes(res))
-    return DataFrames.DataFrame(permutedims(res.data), col_name)
+    store_data = read_results(get_store(model), key)  # OrderedDict{Date, DenseAxisArray{Float64,2}}
+    frames = DataFrames.DataFrame[]
+    t_offset = 0
+    for (_, arr) in store_data
+        col_names = string.(_read_col_name(axes(arr)))
+        n_times = size(arr.data, 2)
+        df_wide = DataFrames.DataFrame(permutedims(arr.data), col_names)
+        df_wide.time_index = (t_offset + 1):(t_offset + n_times)
+        push!(frames, DataFrames.stack(df_wide, DataFrames.Not(:time_index);
+                                       variable_name = :name, value_name = :value))
+        t_offset += n_times
+    end
+    return vcat(frames...)
 end
 
 read_optimizer_stats(model::InvestmentModel) = read_optimizer_stats(get_store(model))
