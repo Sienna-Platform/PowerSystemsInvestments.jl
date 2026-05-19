@@ -47,6 +47,7 @@ function InvestmentModel(
     check_numerical_bounds=true,
     initial_time=UNSET_INI_TIME,
     time_series_cache_size::Int=IS.TIME_SERIES_CACHE_SIZE_BYTES,
+    output_dir::String="",
 )
     settings = Settings(
         portfolio;
@@ -62,6 +63,7 @@ function InvestmentModel(
         portfolio_to_file=portfolio_to_file,
         check_numerical_bounds=check_numerical_bounds,
         store_variable_names=store_variable_names,
+        output_dir=output_dir,
     )
     return InvestmentModel(template, alg, portfolio, settings, jump_model)
 end

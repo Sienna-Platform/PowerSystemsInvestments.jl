@@ -12,6 +12,7 @@ struct Settings
     deserialize_initial_conditions::Bool
     store_variable_names::Bool
     check_numerical_bounds::Bool
+    output_dir::String
     ext::Dict{String, Any}
 end
 
@@ -30,6 +31,7 @@ function Settings(
     deserialize_initial_conditions::Bool=false,
     check_numerical_bounds=true,
     store_variable_names=false,
+    output_dir::String="",
     ext=Dict{String, Any}(),
 )
     if time_series_cache_size > 0 && IS.stores_time_series_in_memory(portfolio.data)
@@ -61,6 +63,7 @@ function Settings(
         deserialize_initial_conditions,
         store_variable_names,
         check_numerical_bounds,
+        output_dir,
         ext,
     )
 end

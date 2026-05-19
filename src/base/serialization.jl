@@ -38,7 +38,12 @@ end
 function serialize_problem(model::InvestmentModel; optimizer=nothing)
     # A PowerSystem cannot be serialized in this format because of how it stores
     # time series data. Use its specialized serialization method instead.
-    output_dir = get_output_dir(model)
+    # Use output_dir from settings if available
+    output_dir = get_settings(model).output_dir
+    if isempty(output_dir)
+        # Fall back to ISOPT output_dir if not in settings
+        output_dir = get_output_dir(model)
+    end
     mkpath(output_dir)
     portfolio_to_file = get_portfolio_to_file(get_settings(model))
     if portfolio_to_file
@@ -72,7 +77,7 @@ function serialize_problem(model::InvestmentModel; optimizer=nothing)
         string(get_name(model)),
         OptimizerAttributes(model, optimizer),
     )
-    bin_file_name = joinpath(get_output_dir(model), _SERIALIZED_MODEL_FILENAME)
+    bin_file_name = joinpath(output_dir, _SERIALIZED_MODEL_FILENAME)
     Serialization.serialize(bin_file_name, obj)
     @info "Serialized OperationModel to" bin_file_name
 end
