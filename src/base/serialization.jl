@@ -38,11 +38,13 @@ end
 function serialize_problem(model::InvestmentModel; optimizer=nothing)
     # A PowerSystem cannot be serialized in this format because of how it stores
     # time series data. Use its specialized serialization method instead.
+    output_dir = get_output_dir(model)
+    mkpath(output_dir)
     portfolio_to_file = get_portfolio_to_file(get_settings(model))
     if portfolio_to_file
         portfolio = get_portfolio(model)
         portfolio_filename =
-            joinpath(get_output_dir(model), make_portfolio_filename(portfolio))
+            joinpath(output_dir, make_portfolio_filename(portfolio))
         # Skip serialization if the system is already in the folder
         !ispath(portfolio_filename) && PSIP.to_json(portfolio, portfolio_filename)
     else
