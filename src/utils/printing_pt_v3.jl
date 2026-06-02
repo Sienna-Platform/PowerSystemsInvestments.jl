@@ -1,44 +1,42 @@
 # PrettyTables v3 removed predefined HTML table format recipes.
 # This reproduces the v2 tf_html_simple CSS for backwards-compatible Jupyter output.
-const tf_html_simple = PrettyTables.HtmlTableFormat(;
-    css = """
-    table, td, th {
-        border-collapse: collapse;
-        font-family: sans-serif;
-    }
+const tf_html_simple = PrettyTables.HtmlTableFormat(; css="""
+                                                    table, td, th {
+                                                        border-collapse: collapse;
+                                                        font-family: sans-serif;
+                                                    }
 
-    td, th {
-        border-bottom: 0;
-        padding: 4px
-    }
+                                                    td, th {
+                                                        border-bottom: 0;
+                                                        padding: 4px
+                                                    }
 
-    tr:nth-child(odd) {
-        background: #eee;
-    }
+                                                    tr:nth-child(odd) {
+                                                        background: #eee;
+                                                    }
 
-    tr:nth-child(even) {
-        background: #fff;
-    }
+                                                    tr:nth-child(even) {
+                                                        background: #fff;
+                                                    }
 
-    tr.header {
-        background: #fff !important;
-        font-weight: bold;
-    }
+                                                    tr.header {
+                                                        background: #fff !important;
+                                                        font-weight: bold;
+                                                    }
 
-    tr.subheader {
-        background: #fff !important;
-        color: dimgray;
-    }
+                                                    tr.subheader {
+                                                        background: #fff !important;
+                                                        color: dimgray;
+                                                    }
 
-    tr.headerLastRow {
-        border-bottom: 2px solid black;
-    }
+                                                    tr.headerLastRow {
+                                                        border-bottom: 2px solid black;
+                                                    }
 
-    th.rowNumber, td.rowNumber {
-        text-align: right;
-    }
-    """,
-)
+                                                    th.rowNumber, td.rowNumber {
+                                                        text-align: right;
+                                                    }
+                                                    """)
 
 function Base.show(io::IO, ::MIME"text/plain", input::InvestmentModelTemplate)
     _show_method(io, input, :auto)
@@ -94,13 +92,7 @@ function Base.show(io::IO, ::MIME"text/plain", input::InvestmentModel)
 end
 
 function Base.show(io::IO, ::MIME"text/html", input::InvestmentModel)
-    _show_method(
-        io,
-        input.template,
-        :html;
-        stand_alone=false,
-        table_format=tf_html_simple,
-    )
+    _show_method(io, input.template, :html; stand_alone=false, table_format=tf_html_simple)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", input::OptimizationProblemResults)

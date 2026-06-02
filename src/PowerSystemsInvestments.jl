@@ -183,10 +183,7 @@ import InfrastructureSystems.Optimization:
 import InfrastructureSystems.Optimization:
     OptimizationProblemResults, OptimizationProblemResultsExport, OptimizerStats
 import InfrastructureSystems.Optimization:
-    list_variable_names,
-    list_aux_variable_names,
-    list_dual_names,
-    list_expression_names
+    list_variable_names, list_aux_variable_names, list_dual_names, list_expression_names
 import InfrastructureSystems.Optimization:
     read_optimizer_stats,
     get_optimizer_stats,
