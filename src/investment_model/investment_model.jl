@@ -488,7 +488,7 @@ function solve_impl!(model::InvestmentModel)
     if status != RunStatus.SUCCESSFULLY_FINALIZED
         settings = get_settings(model)
         model_name = get_name(model)
-        ts = get_current_timestamp(model)
+        ts = nothing
         output_dir = get_output_dir(model)
         infeasible_opt_path = joinpath(output_dir, "infeasible_$(model_name).json")
         @error("Serializing Infeasible Problem at $(infeasible_opt_path)")

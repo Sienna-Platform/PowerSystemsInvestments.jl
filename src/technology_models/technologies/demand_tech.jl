@@ -1,6 +1,6 @@
 function get_default_time_series_names(::Type{U}) where {U <: PSIP.DemandRequirement}
     # TODO: We need to discuss about an API for timeseries names for users
-    return "ops_peak_load"
+    return "ops_demand"
 end
 
 function get_default_attributes(
