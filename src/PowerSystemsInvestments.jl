@@ -234,7 +234,11 @@ include("base/serialization.jl")
 # Solve Instance #
 include("model_build/SingleInstanceSolve.jl")
 # Utils #
-include("utils/printing.jl")
+@static if pkgversion(PrettyTables).major == 2
+    include("utils/printing_pt_v2.jl")
+else
+    include("utils/printing_pt_v3.jl")
+end
 include("utils/logging.jl")
 include("utils/psip_utils.jl")
 # Technology Models #
