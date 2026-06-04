@@ -12,7 +12,14 @@ get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::
 get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = 0.0
 
 
-get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
+get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = get_max_new_capacity(d)
+get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
+get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::ContinuousInvestment) = false
+get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = nothing
+get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = 0.0
+
+
+get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = nothing
@@ -185,6 +192,14 @@ function add_constraints!(
         time_steps,
         meta=tech_model,
     )
+    con_lb = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta="$(tech_model)_lb",
+    )
 
     active_power = get_variable(container, V(), D, tech_model)
     operational_indexes = get_operational_indexes(time_mapping)
@@ -202,6 +217,10 @@ function add_constraints!(
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     active_power[name, t] <= installed_cap[name, time_step_inv]
+                )
+                con_lb[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    active_power[name, t] >= -installed_cap[name, time_step_inv]
                 )
             end
         end

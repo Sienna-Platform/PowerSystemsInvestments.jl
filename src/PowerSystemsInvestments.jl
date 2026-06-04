@@ -83,6 +83,7 @@ export set_technology_model!
 # Model Exports
 export solve!
 export get_initial_conditions
+export get_infeasibility_conflict
 export serialize_problem
 export serialize_results
 #Results interfaces

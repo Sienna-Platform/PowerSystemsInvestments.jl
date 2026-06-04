@@ -486,18 +486,12 @@ function solve_impl!(model::InvestmentModel)
     status = solve_model!(container, get_portfolio(model))
     set_run_status!(model, status)
     if status != RunStatus.SUCCESSFULLY_FINALIZED
-        settings = get_settings(model)
         model_name = get_name(model)
-        ts = nothing
         output_dir = get_output_dir(model)
         infeasible_opt_path = joinpath(output_dir, "infeasible_$(model_name).json")
         @error("Serializing Infeasible Problem at $(infeasible_opt_path)")
         serialize_optimization_model(container, infeasible_opt_path)
-        if !get_allow_fails(settings)
-            error("Solving model $(model_name) failed at $(ts)")
-        else
-            @error "Solving model $(model_name) failed at $(ts). Failure Allowed"
-        end
+        error("Solving model $(model_name) failed")
     end
     return
 end

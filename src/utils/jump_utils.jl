@@ -282,3 +282,37 @@ function serialize_jump_optimization_model(jump_model::JuMP.Model, save_path::St
     MOI.write_to_file(MOF_model, save_path)
     return
 end
+
+function check_conflict_status(
+    jump_model::JuMP.Model,
+    constraint_container::DenseAxisArray{JuMP.ConstraintRef},
+)
+    conflict_indices = Vector()
+    dims = axes(constraint_container)
+    for index in Iterators.product(dims...)
+        if isassigned(constraint_container, index...) &&
+           MOI.get(
+            jump_model,
+            MOI.ConstraintConflictStatus(),
+            constraint_container[index...],
+        ) != MOI.NOT_IN_CONFLICT
+            push!(conflict_indices, index)
+        end
+    end
+    return conflict_indices
+end
+
+function check_conflict_status(
+    jump_model::JuMP.Model,
+    constraint_container::SparseAxisArray{<:Union{Nothing, JuMP.ConstraintRef}},
+)
+    conflict_indices = Vector()
+    for (index, constraint) in constraint_container.data
+        constraint === nothing && continue
+        if MOI.get(jump_model, MOI.ConstraintConflictStatus(), constraint) !=
+           MOI.NOT_IN_CONFLICT
+            push!(conflict_indices, index)
+        end
+    end
+    return conflict_indices
+end
