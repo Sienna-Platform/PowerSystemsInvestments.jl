@@ -38,6 +38,24 @@ function add_capital_cost!(
     return
 end
 
+function add_capital_cost!(
+    container::SingleOptimizationContainer,
+    ::U,
+    devices::Vector{T},
+    ::V,
+    tech_model::String,
+) where {
+    T <: PSIP.NodalACTransportTechnology,
+    U <: BuildCapacity,
+    V <: InvestmentTechnologyFormulation,
+}
+    for d in devices
+        capital_cost_data = PSIP.get_capital_costs(d)
+        _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+    end
+    return
+end
+
 function _add_proportional_term!(
     container::SingleOptimizationContainer,
     ::T,

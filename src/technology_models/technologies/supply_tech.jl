@@ -260,6 +260,42 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{V},
 ) where {
+    S <: BasicDispatch,
+    T <: EnergyBalance,
+    U <: Vector{D},
+    V <: NodalBalanceModel,
+} where {D <: PSIP.SupplyTechnology}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+
+    W = ActivePowerVariable
+    variable = get_variable(container, W(), D, tech_model)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    for d in devices, t in time_steps
+        name = PSIP.get_name(d)
+        # Get each node the technology is assigned to
+        for node in PSIP.get_region(d)
+            node_name = PSIP.get_name(node)
+            _add_to_jump_expression!(
+                expression[node_name, t],
+                variable[name, t],
+                get_variable_multiplier(W(), D, S()),
+            )
+        end
+    end
+
+    return
+end
+
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    devices::U,
+    formulation::S,
+    transport_model::TransportModel{V},
+) where {
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Vector{D},

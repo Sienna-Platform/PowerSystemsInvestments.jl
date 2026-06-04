@@ -572,6 +572,23 @@ function _make_system_expressions!(
     return
 end
 
+function _make_system_expressions!(
+    container::SingleOptimizationContainer,
+    ::Type{NodalBalanceModel},
+    port::PSIP.Portfolio,
+)
+    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    container.expressions = Dict(
+        ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
+            _make_container_array(nodes, time_steps),
+        ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
+            _make_container_array(nodes, time_steps),
+    )
+    return
+end
+
 function initialize_system_expressions!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel{T},
@@ -586,6 +603,15 @@ function initialize_system_expressions!(
     transport_model::TransportModel{T},
     port::PSIP.Portfolio,
 ) where {T <: MultiRegionBalanceModel}
+    _make_system_expressions!(container, T, port)
+    return
+end
+
+function initialize_system_expressions!(
+    container::SingleOptimizationContainer,
+    transport_model::TransportModel{T},
+    port::PSIP.Portfolio,
+) where {T <: NodalBalanceModel}
     _make_system_expressions!(container, T, port)
     return
 end
