@@ -28,6 +28,10 @@ struct NodalBalanceConstraint <: ISOPT.ConstraintType end
 
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end
 
+struct FlowActivePowerLowerBoundConstraint <: OperationVariableLimitsConstraintType end
+
+struct FlowActivePowerUpperBoundConstraint <: OperationVariableLimitsConstraintType end
+
 struct OutputActivePowerVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
 
 struct InputActivePowerVariableLimitsConstraint <: OperationVariableLimitsConstraintType end

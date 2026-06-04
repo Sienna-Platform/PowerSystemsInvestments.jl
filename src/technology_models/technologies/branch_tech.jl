@@ -465,7 +465,6 @@ function add_constraints!(
         meta=tech_model,
     )
 
-    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
     variable = get_variable(container, FlowActivePowerVariable(), D, tech_model)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
