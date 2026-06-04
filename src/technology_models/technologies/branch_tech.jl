@@ -5,7 +5,7 @@ get_variable_binary(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::Con
 get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::BinaryInvestment) = nothing
 get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::BinaryInvestment) = 0.0
 
-get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = 0.0
+get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 
 get_max_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
@@ -159,6 +159,14 @@ function add_constraints!(
         time_steps,
         meta=tech_model,
     )
+    con_lb = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta="$(tech_model)_lb",
+    )
 
     active_power = get_variable(container, V(), D, tech_model)
     operational_indexes = get_operational_indexes(time_mapping)
@@ -176,6 +184,10 @@ function add_constraints!(
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     active_power[name, t] <= installed_cap[name, time_step_inv]
+                )
+                con_lb[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    active_power[name, t] >= -installed_cap[name, time_step_inv]
                 )
             end
         end
