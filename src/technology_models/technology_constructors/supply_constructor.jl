@@ -148,3 +148,59 @@ function construct_technologies!(
 
     return
 end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    names::Vector{String},
+    ::ArgumentConstructStage,
+    ::OperationCostModel,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
+    transport_model::TransportModel{<:AbstractTransportAggregation},
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.SupplyTechnology, C <: BasicDispatchWithBudget, X <: TechnologyModel}
+    devices = [PSIP.get_technology(T, p, n) for n in names]
+
+    add_variable!(container, ActivePowerVariable(), devices, C())
+
+    add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
+    return
+end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    names::Vector{String},
+    ::ModelConstructStage,
+    model::OperationCostModel,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
+    transport_model::TransportModel{<:AbstractTransportAggregation},
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.SupplyTechnology, C <: BasicDispatchWithBudget, X <: TechnologyModel}
+    devices = [PSIP.get_technology(T, p, n) for n in names]
+
+    objective_function!(container, devices, C())
+
+    update_objective_function!(container)
+
+    add_constraints!(
+        container,
+        ActivePowerLimitsConstraint(),
+        ActivePowerVariable(),
+        devices,
+        C(),
+        tech_model_vector,
+    )
+
+    add_constraints!(
+        container,
+        HydroEnergyBudgetConstraint(),
+        ActivePowerVariable(),
+        devices,
+        C(),
+        tech_model_vector,
+    )
+    return
+end

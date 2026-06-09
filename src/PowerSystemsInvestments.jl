@@ -33,6 +33,7 @@ export BinaryInvestment
 
 ### Operation Formulations ###
 export BasicDispatch
+export BasicDispatchWithBudget
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
 export CyclicalStorageDispatch
@@ -44,6 +45,7 @@ export SingleRegionBalanceModel
 export MultiRegionBalanceModel
 export NodalBalanceModel
 export NodalBalanceConstraint
+export HydroEnergyBudgetConstraint
 
 ### Variables ###
 export BuildCapacity

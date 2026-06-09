@@ -446,3 +446,302 @@ function test_2_zone_portfolio()
     PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2035; year="2035", rep_day=2)
     return p_5bus, [tstamp_2030_ops, tstamp_2035_ops]
 end
+
+function test_hydro_portfolio()
+    discount_rate = 0.07
+    inflation_rate = 0.05
+    interest_rate = 0.04
+
+    tech_financials() = TechnologyFinancialData(;
+        capital_recovery_period=30,
+        technology_base_year=2025,
+        debt_fraction=0.6,
+        debt_rate=0.04,
+        return_on_equity=0.10,
+        tax_rate=0.21,
+    )
+
+    tstamp_2030_ops = collect(
+        DateTime("1/1/2030  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2030  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+    tstamp_2035_ops = collect(
+        DateTime("1/1/2035  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2035  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+
+    z1 = Zone(name="Zone_1", id=1)
+
+    hydro_budget_vals = fill(0.5, 24)
+    ts_hydro_budget_2030 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2030_ops, hydro_budget_vals),
+        name="hydro_budget",
+    )
+    ts_hydro_budget_2035 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2035_ops, hydro_budget_vals),
+        name="hydro_budget",
+    )
+
+    t_hydro = SupplyTechnology{HydroDispatch}(;
+        prime_mover_type=PrimeMovers.HY,
+        capital_costs=LinearCurve(2000.0 * 1000.0),
+        id=1,
+        available=true,
+        name="hydro",
+        fuel=[ThermalFuels.OTHER],
+        power_systems_type="HydroDispatch",
+        operation_costs=ThermalGenerationCost(
+            variable=CostCurve(LinearCurve(0.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+        capacity_limits=(0.0, 500.0),
+        outage_factor=0.95,
+        region=[z1],
+        unit_size=50.0,
+        financial_data=tech_financials(),
+    )
+
+    ts_demand_2030 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2030_ops, fill(100.0, 24)),
+    )
+    ts_demand_2035 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2035_ops, fill(120.0, 24)),
+    )
+
+    t_demand = DemandRequirement{PowerLoad}(
+        name="demand",
+        id=1,
+        available=true,
+        power_systems_type="PowerLoad",
+        region=[z1],
+        value_of_lost_load=0.0,
+    )
+
+    p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
+    PSIP.set_name!(p, "hydro_test")
+    add_region!(p, z1)
+    add_technology!(p, t_hydro)
+    add_technology!(p, t_demand)
+
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+
+    return p, [tstamp_2030_ops, tstamp_2035_ops]
+end
+
+function test_hydro_basic_dispatch_portfolio()
+    discount_rate = 0.07
+    inflation_rate = 0.05
+    interest_rate = 0.04
+
+    tech_financials() = TechnologyFinancialData(;
+        capital_recovery_period=30,
+        technology_base_year=2025,
+        debt_fraction=0.6,
+        debt_rate=0.04,
+        return_on_equity=0.10,
+        tax_rate=0.21,
+    )
+
+    tstamp_2030_ops = collect(
+        DateTime("1/1/2030  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2030  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+    tstamp_2035_ops = collect(
+        DateTime("1/1/2035  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2035  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+
+    z1 = Zone(name="Zone_1", id=1)
+
+    # Flat 80% cap factor — well within capacity limits so model is always feasible
+    cap_factor_vals = fill(0.8, 24)
+    ts_cap_factor_2030 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2030_ops, cap_factor_vals),
+        name="ops_variable_cap_factor",
+    )
+    ts_cap_factor_2035 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2035_ops, cap_factor_vals),
+        name="ops_variable_cap_factor",
+    )
+
+    t_hydro = SupplyTechnology{HydroDispatch}(;
+        prime_mover_type=PrimeMovers.HY,
+        capital_costs=LinearCurve(2000.0 * 1000.0),
+        id=1,
+        available=true,
+        name="hydro",
+        fuel=[ThermalFuels.OTHER],
+        power_systems_type="HydroDispatch",
+        operation_costs=ThermalGenerationCost(
+            variable=CostCurve(LinearCurve(0.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+        capacity_limits=(0.0, 500.0),
+        outage_factor=0.95,
+        region=[z1],
+        unit_size=50.0,
+        financial_data=tech_financials(),
+    )
+
+    ts_demand_2030 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2030_ops, fill(100.0, 24)),
+    )
+    ts_demand_2035 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2035_ops, fill(120.0, 24)),
+    )
+
+    t_demand = DemandRequirement{PowerLoad}(
+        name="demand",
+        id=1,
+        available=true,
+        power_systems_type="PowerLoad",
+        region=[z1],
+        value_of_lost_load=0.0,
+    )
+
+    p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
+    PSIP.set_name!(p, "hydro_basic_dispatch_test")
+    add_region!(p, z1)
+    add_technology!(p, t_hydro)
+    add_technology!(p, t_demand)
+
+    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+
+    return p, [tstamp_2030_ops, tstamp_2035_ops]
+end
+
+function test_constrained_hydro_portfolio()
+    discount_rate = 0.07
+    inflation_rate = 0.05
+    interest_rate = 0.04
+
+    tech_financials() = TechnologyFinancialData(;
+        capital_recovery_period=30,
+        technology_base_year=2025,
+        debt_fraction=0.6,
+        debt_rate=0.04,
+        return_on_equity=0.10,
+        tax_rate=0.21,
+    )
+
+    tstamp_2030_ops = collect(
+        DateTime("1/1/2030  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2030  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+    tstamp_2035_ops = collect(
+        DateTime("1/1/2035  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2035  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+
+    z1 = Zone(name="Zone_1", id=1)
+
+    hydro_budget_vals = fill(0.05, 24)
+    ts_hydro_budget_2030 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2030_ops, hydro_budget_vals),
+        name="hydro_budget",
+    )
+    ts_hydro_budget_2035 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2035_ops, hydro_budget_vals),
+        name="hydro_budget",
+    )
+
+    t_hydro = SupplyTechnology{HydroDispatch}(;
+        prime_mover_type=PrimeMovers.HY,
+        capital_costs=LinearCurve(2000.0 * 1000.0),
+        id=1,
+        available=true,
+        name="hydro",
+        fuel=[ThermalFuels.OTHER],
+        power_systems_type="HydroDispatch",
+        operation_costs=ThermalGenerationCost(
+            variable=CostCurve(LinearCurve(0.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+        capacity_limits=(0.0, 500.0),
+        outage_factor=0.95,
+        region=[z1],
+        unit_size=50.0,
+        financial_data=tech_financials(),
+    )
+
+    t_thermal = SupplyTechnology{ThermalStandard}(;
+        prime_mover_type=PrimeMovers.ST,
+        capital_costs=LinearCurve(3000.0 * 1000.0),
+        id=2,
+        available=true,
+        name="backup_thermal",
+        fuel=[ThermalFuels.COAL],
+        power_systems_type="ThermalStandard",
+        operation_costs=ThermalGenerationCost(
+            variable=CostCurve(LinearCurve(50.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+        capacity_limits=(0.0, 1e8),
+        outage_factor=0.95,
+        region=[z1],
+        unit_size=100.0,
+        financial_data=tech_financials(),
+    )
+
+    ts_demand_2030 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2030_ops, fill(100.0, 24)),
+    )
+    ts_demand_2035 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2035_ops, fill(100.0, 24)),
+    )
+
+    t_demand = DemandRequirement{PowerLoad}(
+        name="demand",
+        id=1,
+        available=true,
+        power_systems_type="PowerLoad",
+        region=[z1],
+        value_of_lost_load=0.0,
+    )
+
+    p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
+    PSIP.set_name!(p, "hydro_constrained_test")
+    add_region!(p, z1)
+    add_technology!(p, t_hydro)
+    add_technology!(p, t_thermal)
+    add_technology!(p, t_demand)
+
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+
+    return p, [tstamp_2030_ops, tstamp_2035_ops]
+end
