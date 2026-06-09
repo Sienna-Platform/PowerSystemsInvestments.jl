@@ -48,14 +48,14 @@ get_init_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity, p::PSIP.Portf
 
 #! format: on
 
-function get_max_new_capacity(d::PSIP.AggregateTransportTechnology)
-    @warn "get_existing_line_capacity is not implemented for AggregateTransportTechnology. Returning maximum limits."
+function get_max_new_capacity(d::PSIP.TransmissionTechnology)
+    @warn "get_existing_line_capacity is not implemented for TransmissionTechnology. Returning maximum limits."
     return PSIP.get_capacity_limits(d).max
 end
 
 # TODO: Check if there is a different way we can get the existing line capacity
-function get_existing_line_capacity(d::PSIP.AggregateTransportTechnology)
-    @warn "get_existing_line_capacity is not implemented for AggregateTransportTechnology. Returning minimum limits."
+function get_existing_line_capacity(d::PSIP.TransmissionTechnology)
+    @warn "get_existing_line_capacity is not implemented for TransmissionTechnology. Returning minimum limits."
     return PSIP.get_capacity_limits(d).min
 end
 
