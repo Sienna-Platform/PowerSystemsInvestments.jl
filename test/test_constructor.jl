@@ -98,7 +98,9 @@ end
         [demand_model],
     )
 
-    @test length(container.expressions) == 2
+    # System expressions: EnergyBalance, FeasibilitySurplus, WeightedEnergyDemand.
+    # The demand argument stage only populates these existing containers.
+    @test length(container.expressions) == 3
     @test length(container.variables) == 0
 
     #SupplyTechnology{RenewableDispatch}
@@ -125,7 +127,8 @@ end
         [vre_model],
     )
 
-    @test length(container.expressions) == 3
+    # + CumulativeCapacity and WeightedEnergyGeneration for the wind supply tech.
+    @test length(container.expressions) == 5
     @test length(container.variables) == 2
 
     v = PSIN.get_variable(
@@ -177,7 +180,8 @@ end
         [thermal_model, thermal_model],
     )
 
-    @test length(container.expressions) == 4
+    # + CumulativeCapacity and WeightedEnergyGeneration for the thermal supply tech.
+    @test length(container.expressions) == 7
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(

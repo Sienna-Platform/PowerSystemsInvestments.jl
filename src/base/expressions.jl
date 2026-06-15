@@ -14,6 +14,7 @@ struct EnergyBalance <: OperationsExpressionType end
 struct WeightedEnergyGeneration <: OperationsExpressionType end
 struct WeightedEnergyDemand <: OperationsExpressionType end
 struct WeightedEnergyShareGeneration <: OperationsExpressionType end
+struct WeightedEnergyShareDemand <: OperationsExpressionType end
 
 struct CumulativeCapacity <: CumulativeInvestmentExpressionType end
 
@@ -42,6 +43,7 @@ should_write_resulting_value(::Type{CumulativeInverterCapacity}) = true
 should_write_resulting_value(::Type{WeightedEnergyGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyDemand}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareGeneration}) = true
+should_write_resulting_value(::Type{WeightedEnergyShareDemand}) = true
 
 is_operation_entry(::Type{<:OperationsExpressionType}) = true
 is_operation_entry(::Type{<:InvestmentExpressionType}) = false

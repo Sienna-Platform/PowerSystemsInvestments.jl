@@ -193,10 +193,10 @@
         ColocatedSupplyStorageTechnology{RenewableDispatch},
         "ChronologicalColocatedDispatch",
     ) in expr_keys
-    # The aggregation expression is policy-specific, so it must NOT exist here.
+    # The aggregation expressions are policy-specific, so they must NOT exist here.
     @test !any(
-        IS.Optimization.get_entry_type(k) == WeightedEnergyShareGeneration for
-        k in expr_keys
+        IS.Optimization.get_entry_type(k) in
+        (WeightedEnergyShareGeneration, WeightedEnergyShareDemand) for k in expr_keys
     )
 end
 
@@ -576,10 +576,11 @@ end
     p_5bus, op_days = test_2_zone_portfolio()
 
     # Attach an energy-share policy to the existing portfolio: wind must supply at
-    # least 30% of Zone_2 demand over the operational horizon.
+    # least 30% of demand2 over the operational horizon. The requirement is attached
+    # to the contributing technologies (wind on the generation side, demand2 on the
+    # demand side) via each technology's `requirements` field (PSIP PR #94 model).
     wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
-    zone2 =
-        only(z for z in PSIP.get_regions(PSIP.Zone, p_5bus) if PSIP.get_name(z) == "Zone_2")
+    demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand2")
 
     fraction = 0.3
     esr = PSIP.EnergyShareRequirements(;
@@ -588,10 +589,10 @@ end
         available=true,
         target_year=2030,
         generation_fraction_requirement=fraction,
-        eligible_resources=[wind],
-        eligible_regions=[zone2],
     )
     PSIP.add_requirement!(p_5bus, esr)
+    PSIP.set_requirements!(wind, [esr])
+    PSIP.set_requirements!(demand2, [esr])
 
     weights = [365 * 5, 365 * 5]
     periods = [
@@ -688,7 +689,6 @@ end
     wind_rows = filter(r -> r.name == "wind", wind_df)
     total_wind_2030 = sum(filter(r -> r.time_index in 1:24, wind_rows).value)
 
-    demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand2")
     d_2030 = IS.get_time_series(
         IS.SingleTimeSeries,
         demand2,
@@ -730,4 +730,13 @@ end
     )
     wesg_1 = only(filter(r -> r.name == "wind_share" && r.time_index == 1, wesg_df)).value
     @test isapprox(wesg_1, weg_wind_1; atol=1e-2)
+
+    # WeightedEnergyShareDemand["wind_share", op_ix=1] == weight * total_demand_2030
+    # (single contributing load, demand2).
+    wesd_df = read_expression(
+        m,
+        PSIN.ExpressionKey(WeightedEnergyShareDemand, PSIP.EnergyShareRequirements),
+    )
+    wesd_1 = only(filter(r -> r.name == "wind_share" && r.time_index == 1, wesd_df)).value
+    @test isapprox(wesd_1, weight_1 * total_demand_2030; atol=1e-2)
 end

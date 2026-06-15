@@ -3,10 +3,11 @@ get_default_attributes(
     ::Type{RequirementEnergyShare},
 ) = Dict{String, Any}()
 
-# Argument stage: build the per-policy WeightedEnergyShareGeneration expression by
-# aggregating the (already-populated) WeightedEnergyGeneration of the policy's
-# eligible resources. This is exported so users can inspect the aggregated
-# weighted generation directly in the results.
+# Argument stage: validate the policy's contributing technologies, then build the
+# two per-policy weighted-energy expressions it consumes — WeightedEnergyShareGeneration
+# (from the eligible resources' WeightedEnergyGeneration) and WeightedEnergyShareDemand
+# (from the eligible loads' demand time series). Both are exported so users can
+# inspect them directly in the results.
 function construct_requirement!(
     container::SingleOptimizationContainer,
     p::PSIP.Portfolio,
@@ -18,13 +19,16 @@ function construct_requirement!(
     names_to_model_map::Dict{String, TechnologyModel},
 ) where {T <: PSIP.EnergyShareRequirements, B <: RequirementEnergyShare}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
+    _validate_energy_share_contributors!(p, requirements)
     add_expression!(
         container,
         WeightedEnergyShareGeneration(),
+        p,
         requirements,
         B(),
         names_to_model_map,
     )
+    add_expression!(container, WeightedEnergyShareDemand(), p, requirements, B())
     return
 end
 
@@ -39,7 +43,13 @@ function construct_requirement!(
     names_to_model_map::Dict{String, TechnologyModel},
 ) where {T <: PSIP.EnergyShareRequirements, B <: RequirementEnergyShare}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
-    add_constraints!(container, EnergyShareRequirementConstraint(), p, requirements, B())
+    add_constraints!(
+        container,
+        EnergyShareRequirementConstraint(),
+        p,
+        requirements,
+        B(),
+    )
     return
 end
 
@@ -65,14 +75,49 @@ function _energy_share_operational_indexes(time_mapping::TimeMapping, target_yea
 end
 
 """
+Validate that each EnergyShareRequirements policy has at least one available
+contributing resource (numerator) and one available contributing demand
+technology (denominator). The error names exactly which side(s) is missing.
+"""
+function _validate_energy_share_contributors!(
+    p::PSIP.Portfolio,
+    requirements::Vector{T},
+) where {T <: PSIP.EnergyShareRequirements}
+    for req in requirements
+        req_name = PSIP.get_name(req)
+        has_res = !isempty(_contributing_resources(p, req))
+        has_dem = !isempty(_contributing_demands(p, req))
+        if !has_res && !has_dem
+            error(
+                "EnergyShareRequirement '$(req_name)' has no available contributing " *
+                "resources and no available contributing demand technologies.",
+            )
+        elseif !has_res
+            error(
+                "EnergyShareRequirement '$(req_name)' has available contributing demand " *
+                "technologies but no available contributing resources.",
+            )
+        elseif !has_dem
+            error(
+                "EnergyShareRequirement '$(req_name)' has available contributing " *
+                "resources but no available contributing demand technologies.",
+            )
+        end
+    end
+    return
+end
+
+"""
 Build the `WeightedEnergyShareGeneration` expression: for each policy and each
-operational index, the sum of the `WeightedEnergyGeneration` of every eligible
-resource. Built over all operational indexes for full results visibility; the
-energy-share constraint later consumes only the target period's subset.
+operational index, the sum of the `WeightedEnergyGeneration` of every available
+contributing resource. Built over all operational indexes for full results
+visibility; the energy-share constraint later consumes only the target period's
+subset.
 """
 function add_expression!(
     container::SingleOptimizationContainer,
     ::WeightedEnergyShareGeneration,
+    p::PSIP.Portfolio,
     requirements::Vector{T},
     ::RequirementEnergyShare,
     names_to_model_map::Dict{String, TechnologyModel},
@@ -91,14 +136,14 @@ function add_expression!(
 
     for req in requirements
         req_name = PSIP.get_name(req)
-        eligible_resources = PSIP.get_eligible_resources(req)
+        resources = _contributing_resources(p, req)
         for op_ix in operational_indexes
             share_expr = JuMP.AffExpr(0.0)
-            for resource in eligible_resources
+            for resource in resources
                 resource_name = PSIP.get_name(resource)
                 if !haskey(names_to_model_map, resource_name)
                     error(
-                        "EnergyShareRequirement '$(req_name)' lists eligible resource " *
+                        "EnergyShareRequirement '$(req_name)' lists contributing resource " *
                         "'$(resource_name)' which has no technology model in the template.",
                     )
                 end
@@ -120,18 +165,70 @@ function add_expression!(
 end
 
 """
+Build the `WeightedEnergyShareDemand` expression: for each policy and each
+operational index, the weighted demand of every available contributing demand
+technology, read from its `"ops_demand"` time series. A constant `AffExpr`. Built
+over all operational indexes for full results visibility.
+"""
+function add_expression!(
+    container::SingleOptimizationContainer,
+    ::WeightedEnergyShareDemand,
+    p::PSIP.Portfolio,
+    requirements::Vector{T},
+    ::RequirementEnergyShare,
+) where {T <: PSIP.EnergyShareRequirements}
+    time_mapping = get_time_mapping(container)
+    operational_indexes = get_operational_indexes(time_mapping)
+    operational_weights = get_operational_weights(container)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    time_stamps = get_time_stamps(time_mapping)
+
+    requirement_names = [PSIP.get_name(r) for r in requirements]
+    expression = add_expression_container!(
+        container,
+        WeightedEnergyShareDemand(),
+        T,
+        requirement_names,
+        operational_indexes,
+    )
+
+    for req in requirements
+        req_name = PSIP.get_name(req)
+        demands = _contributing_demands(p, req)
+        for op_ix in operational_indexes
+            weight = operational_weights[op_ix]
+            time_slices = consecutive_slices[op_ix]
+            demand_expr = JuMP.AffExpr(0.0)
+            for d in demands
+                time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+                # Load Data is in MW
+                ts_data = TimeSeries.values(time_series.data)
+                first_tstamp = time_stamps[first(time_slices)]
+                first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+                if first_tstamp != first_ts_tstamp
+                    @error(
+                        "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(PSIP.get_name(d)) does not match with the expected representative day $op_ix"
+                    )
+                end
+                _add_to_jump_expression!(demand_expr, weight * sum(ts_data))
+            end
+            expression[req_name, op_ix] = demand_expr
+        end
+    end
+    return
+end
+
+"""
 For each EnergyShareRequirements policy, add one linear constraint over the
 representative slices of the investment period containing `target_year`:
 
     sum_{op_ix} WeightedEnergyShareGeneration[policy, op_ix]
         >= generation_fraction_requirement
-           * sum_{r, op_ix} WeightedEnergyDemand[r, op_ix]
+           * sum_{op_ix} WeightedEnergyShareDemand[policy, op_ix]
 
-where `op_ix` ranges over the target period's operational slices and `r` over the
-policy's eligible regions. Both sides reuse the always-on weighted-energy
-expressions, so the share is a true (weighted) energy ratio. Errors if an
-eligible region is not present in the `WeightedEnergyDemand` axis (e.g. a zone
-name under a nodal model).
+where `op_ix` ranges over the target period's operational slices. Both sides reuse
+the per-policy weighted-energy expressions built in the argument stage, so the
+share is a true (weighted) energy ratio.
 """
 function add_constraints!(
     container::SingleOptimizationContainer,
@@ -142,8 +239,7 @@ function add_constraints!(
 ) where {T <: PSIP.EnergyShareRequirements}
     time_mapping = get_time_mapping(container)
     share_gen = get_expression(container, WeightedEnergyShareGeneration(), T)
-    demand = get_expression(container, WeightedEnergyDemand(), PSIP.Portfolio)
-    demand_regions = axes(demand, 1)
+    share_demand = get_expression(container, WeightedEnergyShareDemand(), T)
 
     requirement_names = [PSIP.get_name(r) for r in requirements]
     con = add_constraints_container!(
@@ -158,18 +254,6 @@ function add_constraints!(
         fraction = PSIP.get_generation_fraction_requirement(req)
         target_year = PSIP.get_target_year(req)
         op_indexes = _energy_share_operational_indexes(time_mapping, target_year)
-        region_names = PSIP.get_name.(PSIP.get_eligible_regions(req))
-
-        for region_name in region_names
-            if !(region_name in demand_regions)
-                error(
-                    "EnergyShareRequirement '$(req_name)' references region " *
-                    "'$(region_name)' which is not in the WeightedEnergyDemand axis " *
-                    "$(collect(demand_regions)). Ensure demand data is assigned to the " *
-                    "regions/nodes used by the network model.",
-                )
-            end
-        end
 
         lhs = JuMP.@expression(
             get_jump_model(container),
@@ -177,7 +261,7 @@ function add_constraints!(
         )
         rhs = JuMP.@expression(
             get_jump_model(container),
-            fraction * sum(demand[r, op_ix] for r in region_names, op_ix in op_indexes)
+            fraction * sum(share_demand[req_name, op_ix] for op_ix in op_indexes)
         )
 
         con[req_name] = JuMP.@constraint(get_jump_model(container), lhs >= rhs)

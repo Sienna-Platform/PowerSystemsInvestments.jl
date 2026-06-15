@@ -86,6 +86,7 @@ export CumulativeInverterCapacity
 export WeightedEnergyGeneration
 export WeightedEnergyDemand
 export WeightedEnergyShareGeneration
+export WeightedEnergyShareDemand
 
 ### Functions ###
 # methods
@@ -276,6 +277,7 @@ include("technology_models/technology_constructors/branch_constructor.jl")
 include("technology_models/technology_constructors/constructor_validations.jl")
 # Requirement Models #
 include("requirement_models/requirement_constructor.jl")
+include("requirement_models/requirement_utils.jl")
 include("requirement_models/energy_share_requirement.jl")
 # Objective Function #
 include("technology_models/technologies/common/objective_function/common_financial.jl")
