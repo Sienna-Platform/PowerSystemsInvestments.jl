@@ -247,7 +247,10 @@ function has_container_key(
     ::Type{T},
     ::Type{U},
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: AuxVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
+) where {
+    T <: AuxVariableType,
+    U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement},
+}
     key = AuxVarKey(T, U, meta)
     return haskey(container.aux_variables, key)
 end
@@ -312,7 +315,10 @@ function add_variable_container!(
     ::T,
     ::Type{U};
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: SparseVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
+) where {
+    T <: SparseVariableType,
+    U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement},
+}
     var_key = VariableKey(T, U, meta)
     _assign_container!(container.variables, var_key, _get_pwl_variables_container())
     return container.variables[var_key]

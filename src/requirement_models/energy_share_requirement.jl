@@ -39,13 +39,7 @@ function construct_requirement!(
     names_to_model_map::Dict{String, TechnologyModel},
 ) where {T <: PSIP.EnergyShareRequirements, B <: RequirementEnergyShare}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
-    add_constraints!(
-        container,
-        EnergyShareRequirementConstraint(),
-        p,
-        requirements,
-        B(),
-    )
+    add_constraints!(container, EnergyShareRequirementConstraint(), p, requirements, B())
     return
 end
 
@@ -113,7 +107,11 @@ function add_expression!(
                 ops_meta = string(get_operations_formulation(tech_model))
                 weighted_gen =
                     get_expression(container, WeightedEnergyGeneration(), D, ops_meta)
-                _add_to_jump_expression!(share_expr, weighted_gen[resource_name, op_ix], 1.0)
+                _add_to_jump_expression!(
+                    share_expr,
+                    weighted_gen[resource_name, op_ix],
+                    1.0,
+                )
             end
             expression[req_name, op_ix] = share_expr
         end
@@ -179,8 +177,7 @@ function add_constraints!(
         )
         rhs = JuMP.@expression(
             get_jump_model(container),
-            fraction *
-            sum(demand[r, op_ix] for r in region_names, op_ix in op_indexes)
+            fraction * sum(demand[r, op_ix] for r in region_names, op_ix in op_indexes)
         )
 
         con[req_name] = JuMP.@constraint(get_jump_model(container), lhs >= rhs)

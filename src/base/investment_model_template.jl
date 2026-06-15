@@ -153,11 +153,7 @@ function set_requirement_model!(
     requirement_type::Type{<:PSIP.Requirement},
     formulation::Type{<:RequirementFormulation},
 )
-    set_requirement_model!(
-        template,
-        names,
-        RequirementModel(requirement_type, formulation),
-    )
+    set_requirement_model!(template, names, RequirementModel(requirement_type, formulation))
     return
 end
 

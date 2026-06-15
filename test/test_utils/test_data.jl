@@ -507,14 +507,10 @@ function test_hydro_portfolio()
         financial_data=tech_financials(),
     )
 
-    ts_demand_2030 = SingleTimeSeries(
-        "ops_demand",
-        TimeArray(tstamp_2030_ops, fill(100.0, 24)),
-    )
-    ts_demand_2035 = SingleTimeSeries(
-        "ops_demand",
-        TimeArray(tstamp_2035_ops, fill(120.0, 24)),
-    )
+    ts_demand_2030 =
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0, 24)))
+    ts_demand_2035 =
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(120.0, 24)))
 
     t_demand = DemandRequirement{PowerLoad}(
         name="demand",
@@ -600,14 +596,10 @@ function test_hydro_basic_dispatch_portfolio()
         financial_data=tech_financials(),
     )
 
-    ts_demand_2030 = SingleTimeSeries(
-        "ops_demand",
-        TimeArray(tstamp_2030_ops, fill(100.0, 24)),
-    )
-    ts_demand_2035 = SingleTimeSeries(
-        "ops_demand",
-        TimeArray(tstamp_2035_ops, fill(120.0, 24)),
-    )
+    ts_demand_2030 =
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0, 24)))
+    ts_demand_2035 =
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(120.0, 24)))
 
     t_demand = DemandRequirement{PowerLoad}(
         name="demand",
@@ -713,14 +705,10 @@ function test_constrained_hydro_portfolio()
         financial_data=tech_financials(),
     )
 
-    ts_demand_2030 = SingleTimeSeries(
-        "ops_demand",
-        TimeArray(tstamp_2030_ops, fill(100.0, 24)),
-    )
-    ts_demand_2035 = SingleTimeSeries(
-        "ops_demand",
-        TimeArray(tstamp_2035_ops, fill(100.0, 24)),
-    )
+    ts_demand_2030 =
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0, 24)))
+    ts_demand_2035 =
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(100.0, 24)))
 
     t_demand = DemandRequirement{PowerLoad}(
         name="demand",

@@ -14,7 +14,11 @@ function add_variable_cost!(
     devices::Vector{T},
     ::V,
     tech_model::String,
-) where {T <: PSIP.SupplyTechnology, U <: ActivePowerVariable, V <: Union{BasicDispatch, BasicDispatchWithBudget}}
+) where {
+    T <: PSIP.SupplyTechnology,
+    U <: ActivePowerVariable,
+    V <: Union{BasicDispatch, BasicDispatchWithBudget},
+}
     for d in devices
         op_cost_data = PSIP.get_operation_costs(d)
         _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)

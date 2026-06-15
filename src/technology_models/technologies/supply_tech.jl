@@ -185,9 +185,7 @@ function add_expression!(
             weight = operational_weights[op_ix]
             expression[name, op_ix] = JuMP.@expression(
                 get_jump_model(container),
-                weight *
-                mult *
-                sum(variable[name, t] for t in consecutive_slices[op_ix])
+                weight * mult * sum(variable[name, t] for t in consecutive_slices[op_ix])
             )
         end
     end
@@ -396,10 +394,12 @@ function add_constraints!(
     V <: ActivePowerVariable,
     S <: BasicDispatch,
     X <: TechnologyModel,
-} where {D <: Union{
-    PSIP.SupplyTechnology{PSY.RenewableDispatch},
-    PSIP.SupplyTechnology{PSY.HydroDispatch},
-}}
+} where {
+    D <: Union{
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIP.SupplyTechnology{PSY.HydroDispatch},
+    },
+}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)

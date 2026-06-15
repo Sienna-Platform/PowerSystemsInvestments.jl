@@ -36,10 +36,8 @@ get_attributes(m::RequirementModel) = m.attributes
 Default (empty) attributes for a requirement model. Override per
 `(requirement_type, formulation)` pair where needed.
 """
-get_default_attributes(
-    ::Type{<:PSIP.Requirement},
-    ::Type{<:RequirementFormulation},
-) = Dict{String, Any}()
+get_default_attributes(::Type{<:PSIP.Requirement}, ::Type{<:RequirementFormulation}) =
+    Dict{String, Any}()
 
 function RequirementModel(
     ::Type{D},
