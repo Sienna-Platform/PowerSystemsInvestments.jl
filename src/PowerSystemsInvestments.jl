@@ -14,6 +14,9 @@ export SingleInstanceSolve
 ### Technology Models ###
 export TechnologyModel
 
+### Requirement Models ###
+export RequirementModel
+
 ### Capital Model ###
 export DiscountedCashFlow
 
@@ -40,11 +43,15 @@ export CyclicalStorageDispatch
 export ChronologicalColocatedDispatch
 export CyclicalColocatedDispatch
 
+### Requirement Formulations ###
+export RequirementEnergyShare
+
 ### Transport Formulations ###
 export SingleRegionBalanceModel
 export MultiRegionBalanceModel
 export NodalBalanceModel
 export NodalBalanceConstraint
+export EnergyShareRequirementConstraint
 export HydroEnergyBudgetConstraint
 
 ### Variables ###
@@ -76,12 +83,16 @@ export CumulativeEnergyCapacity
 export CumulativeSolarCapacity
 export CumulativeWindCapacity
 export CumulativeInverterCapacity
+export WeightedEnergyGeneration
+export WeightedEnergyDemand
+export WeightedEnergyShareGeneration
 
 ### Functions ###
 # methods
 export build!
 # Template exports
 export set_technology_model!
+export set_requirement_model!
 # Model Exports
 export solve!
 export get_initial_conditions
@@ -220,6 +231,8 @@ include("base/expressions.jl")
 include("base/settings.jl")
 include("base/solution_algorithms.jl")
 include("base/technology_model.jl")
+include("requirement_models/requirement_formulations.jl")
+include("base/requirement_model.jl")
 include("base/investment_model_template.jl")
 include("base/time_mapping.jl")
 include("base/objective_function.jl")
@@ -261,6 +274,9 @@ include("technology_models/technology_constructors/storage_constructor.jl")
 include("technology_models/technology_constructors/colocated_constructor.jl")
 include("technology_models/technology_constructors/branch_constructor.jl")
 include("technology_models/technology_constructors/constructor_validations.jl")
+# Requirement Models #
+include("requirement_models/requirement_constructor.jl")
+include("requirement_models/energy_share_requirement.jl")
 # Objective Function #
 include("technology_models/technologies/common/objective_function/common_financial.jl")
 include("technology_models/technologies/common/objective_function/common_capital.jl")
