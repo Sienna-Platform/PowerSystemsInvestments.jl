@@ -43,13 +43,7 @@ function construct_requirement!(
     names_to_model_map::Dict{String, TechnologyModel},
 ) where {T <: PSIP.EnergyShareRequirements, B <: RequirementEnergyShare}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
-    add_constraints!(
-        container,
-        EnergyShareRequirementConstraint(),
-        p,
-        requirements,
-        B(),
-    )
+    add_constraints!(container, EnergyShareRequirementConstraint(), p, requirements, B())
     return
 end
 
