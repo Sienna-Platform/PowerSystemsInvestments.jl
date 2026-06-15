@@ -113,6 +113,9 @@ function construct_technologies!(
         transport_model,
     )
 
+    # WeightedEnergyGeneration
+    add_expression!(container, WeightedEnergyGeneration(), devices, C())
+
     return
 end
 

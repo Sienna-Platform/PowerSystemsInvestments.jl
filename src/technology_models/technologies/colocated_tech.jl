@@ -39,6 +39,8 @@ get_variable_multiplier(::ActiveOutPowerVariable, ::Type{PSIP.ColocatedSupplySto
 
 get_expression_multiplier(::EnergyBalance, ::ActiveOutPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::EnergyBalance, ::ActiveInPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = -1.0
+get_expression_multiplier(::WeightedEnergyGeneration, ::ActiveOutPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = 1.0
+get_expression_multiplier(::WeightedEnergyGeneration, ::ActiveInPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 
