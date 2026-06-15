@@ -173,6 +173,31 @@
     @test length(IS.Optimization.list_variable_names(res)) == 23
     @test length(IS.Optimization.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
+
+    # Weighted-energy expressions are always created, even with no requirements.
+    container = PSIN.get_optimization_container(m)
+    expr_keys = PSIN.get_expression_keys(container)
+    @test PSIN.ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) in expr_keys
+    @test PSIN.ExpressionKey(
+        WeightedEnergyGeneration,
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        "BasicDispatch",
+    ) in expr_keys
+    @test PSIN.ExpressionKey(
+        WeightedEnergyGeneration,
+        PSIP.StorageTechnology{EnergyReservoirStorage},
+        "ChronologicalStorageDispatch",
+    ) in expr_keys
+    @test PSIN.ExpressionKey(
+        WeightedEnergyGeneration,
+        ColocatedSupplyStorageTechnology{RenewableDispatch},
+        "ChronologicalColocatedDispatch",
+    ) in expr_keys
+    # The aggregation expression is policy-specific, so it must NOT exist here.
+    @test !any(
+        IS.Optimization.get_entry_type(k) == WeightedEnergyShareGeneration for
+        k in expr_keys
+    )
 end
 
 @testset "check_conflict_status — DenseAxisArray" begin
@@ -545,4 +570,174 @@ end
         dispatch_p2_max = maximum(filter(r -> r.time_index in 25:48, hydro_rows).value)
         @test dispatch_p2_max <= cap_factor * cap_p2 + tol
     end
+end
+
+@testset "Build and solve 2 Zone Portfolio with EnergyShareRequirement" begin
+    p_5bus, op_days = test_2_zone_portfolio()
+
+    # Attach an energy-share policy to the existing portfolio: wind must supply at
+    # least 30% of Zone_2 demand over the operational horizon.
+    wind = PSIP.get_technology(
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        p_5bus,
+        "wind",
+    )
+    zone2 = only(
+        z for z in PSIP.get_regions(PSIP.Zone, p_5bus) if PSIP.get_name(z) == "Zone_2"
+    )
+
+    fraction = 0.3
+    esr = PSIP.EnergyShareRequirements(;
+        name="wind_share",
+        id=1,
+        available=true,
+        target_year=2030,
+        generation_fraction_requirement=fraction,
+        eligible_resources=[wind],
+        eligible_regions=[zone2],
+    )
+    PSIP.add_requirement!(p_5bus, esr)
+
+    weights = [365 * 5, 365 * 5]
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    capital = DiscountedCashFlow(0.07, Year(2025), periods)
+    operations = OperationalRepresentativeDays(op_days, weights)
+    feasibility = RepresentativePeriods(Vector{Vector{Dates}}())
+
+    template = InvestmentModelTemplate(
+        capital,
+        operations,
+        feasibility,
+        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+    )
+
+    set_technology_model!(
+        template,
+        ["demand1", "demand2"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["wind"],
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal"],
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["test_branch"],
+        PSIP.AggregateTransportTechnology{PSY.ACBranch},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+
+    # NEW: register the requirement model
+    set_requirement_model!(
+        template,
+        ["wind_share"],
+        PSIP.EnergyShareRequirements,
+        RequirementEnergyShare,
+    )
+
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+
+    container = PSIN.get_optimization_container(m)
+    @test haskey(
+        PSIN.get_constraints(container),
+        PSIN.ConstraintKey(
+            PSIN.EnergyShareRequirementConstraint,
+            PSIP.EnergyShareRequirements,
+        ),
+    )
+
+    # The policy targets target_year=2030, which maps to the first investment period
+    # (2030-2034) -> operational slice op_ix=1 -> time steps 1:24. Both sides of the
+    # constraint carry the same representative-day weight for op_ix=1, so the weight
+    # cancels and the check reduces to comparing 2030 wind generation against the
+    # 2030 Zone_2 demand.
+    wind_df = read_variable(
+        m,
+        PSIN.VariableKey(
+            ActivePowerVariable,
+            PSIP.SupplyTechnology{PSY.RenewableDispatch},
+            "BasicDispatch",
+        ),
+    )
+    wind_rows = filter(r -> r.name == "wind", wind_df)
+    total_wind_2030 = sum(filter(r -> r.time_index in 1:24, wind_rows).value)
+
+    demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand2")
+    d_2030 = IS.get_time_series(
+        IS.SingleTimeSeries, demand2, "ops_demand"; year="2030", rep_day=1,
+    )
+    total_demand_2030 = sum(TimeSeries.values(d_2030.data))
+
+    tol = 1e-4
+    @test total_wind_2030 >= fraction * total_demand_2030 - tol
+
+    # --- Weighted-energy expressions -------------------------------------------------
+    # op_ix=1 (2030 representative day) carries weight 365*5.
+    weight_1 = 365 * 5
+
+    # WeightedEnergyGeneration[wind, op_ix=1] == weight * Σ_t P[wind, t in 1:24].
+    weg_df = read_expression(
+        m,
+        PSIN.ExpressionKey(
+            WeightedEnergyGeneration,
+            PSIP.SupplyTechnology{PSY.RenewableDispatch},
+            "BasicDispatch",
+        ),
+    )
+    weg_wind_1 =
+        only(filter(r -> r.name == "wind" && r.time_index == 1, weg_df)).value
+    @test isapprox(weg_wind_1, weight_1 * total_wind_2030; atol=1e-2)
+
+    # WeightedEnergyDemand[Zone_2, op_ix=1] == weight * Σ ops_demand (demand2 is Zone_2).
+    wed_df = read_expression(
+        m,
+        PSIN.ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio),
+    )
+    wed_zone2_1 =
+        only(filter(r -> r.name == "Zone_2" && r.time_index == 1, wed_df)).value
+    @test isapprox(wed_zone2_1, weight_1 * total_demand_2030; atol=1e-2)
+
+    # WeightedEnergyShareGeneration["wind_share", op_ix=1] == WEG[wind, op_ix=1]
+    # (single eligible resource).
+    wesg_df = read_expression(
+        m,
+        PSIN.ExpressionKey(
+            WeightedEnergyShareGeneration,
+            PSIP.EnergyShareRequirements,
+        ),
+    )
+    wesg_1 =
+        only(filter(r -> r.name == "wind_share" && r.time_index == 1, wesg_df)).value
+    @test isapprox(wesg_1, weg_wind_1; atol=1e-2)
 end
