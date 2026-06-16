@@ -479,11 +479,11 @@ function test_hydro_portfolio()
     hydro_budget_vals = fill(0.5, 24)
     ts_hydro_budget_2030 = SingleTimeSeries(;
         data=TimeArray(tstamp_2030_ops, hydro_budget_vals),
-        name="hydro_budget",
+        name="ops_hydro_budget",
     )
     ts_hydro_budget_2035 = SingleTimeSeries(;
         data=TimeArray(tstamp_2035_ops, hydro_budget_vals),
-        name="hydro_budget",
+        name="ops_hydro_budget",
     )
 
     t_hydro = SupplyTechnology{HydroDispatch}(;
@@ -656,11 +656,11 @@ function test_constrained_hydro_portfolio()
     hydro_budget_vals = fill(0.05, 24)
     ts_hydro_budget_2030 = SingleTimeSeries(;
         data=TimeArray(tstamp_2030_ops, hydro_budget_vals),
-        name="hydro_budget",
+        name="ops_hydro_budget",
     )
     ts_hydro_budget_2035 = SingleTimeSeries(;
         data=TimeArray(tstamp_2035_ops, hydro_budget_vals),
-        name="hydro_budget",
+        name="ops_hydro_budget",
     )
 
     t_hydro = SupplyTechnology{HydroDispatch}(;

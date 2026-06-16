@@ -671,7 +671,7 @@ function add_constraints!(
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
-            budget_ts = retrieve_ops_time_series(d, op_ix, time_mapping, "hydro_budget")
+            budget_ts = retrieve_ops_time_series(d, op_ix, time_mapping, "ops_hydro_budget")
             budget_vals = TimeSeries.values(budget_ts.data)
             total_budget_fraction = sum(budget_vals)
             con_budget[name, op_ix] = JuMP.@constraint(
