@@ -16,5 +16,10 @@ Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TimeSeries = "9e3dc215-6440-5c97-bce1-76c03772f85e"
 
+[sources]
+InfrastructureSystems = {rev = "IS4", url = "https://github.com/Sienna-Platform/InfrastructureSystems.jl.git"}
+PowerSystemsInvestments = {path = ".."}
+PowerSystemsInvestmentsPortfolios = {path = "../../PowerSystemsInvestmentsPortfolios.jl"}
+
 [compat]
 julia = "^1.6"
