@@ -58,9 +58,12 @@ function test_2_zone_portfolio()
     ####################
 
     tech_financials() = TechnologyFinancialData(;
-        interest_rate=0.04,
         capital_recovery_period=30,
         technology_base_year=2025,
+        debt_fraction=0.6,
+        debt_rate=0.04,
+        return_on_equity=0.10,
+        tax_rate=0.21,
     )
 
     thermals = collect(get_components(ThermalStandard, sys))
@@ -92,16 +95,13 @@ function test_2_zone_portfolio()
     )
 
     t_th = SupplyTechnology{ThermalStandard}(;
-        base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.ST,
         capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
         id=1,
         available=true,
         name="cheap_thermal",
-        initial_capacity=0.0,
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
-        balancing_topology="Region",
         operation_costs=ThermalGenerationCost(
             variable=CostCurve(LinearCurve(cheap_th_var_cost)),
             fixed=0.0,
@@ -116,16 +116,13 @@ function test_2_zone_portfolio()
     )
 
     t_th_mid = SupplyTechnology{ThermalStandard}(;
-        base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.ST,
         capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
         id=3,
         available=true,
         name="mid_thermal",
-        initial_capacity=0.0,
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
-        balancing_topology="Region",
         operation_costs=ThermalGenerationCost(
             variable=CostCurve(LinearCurve(cheap_th_var_cost)),
             fixed=0.0,
@@ -140,16 +137,13 @@ function test_2_zone_portfolio()
     )
 
     t_th_exp = SupplyTechnology{ThermalStandard}(;
-        base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.ST,
         capital_costs=LinearCurve(coal_new_capex * 1000.0),
         id=2,
         available=true,
         name="expensive_thermal",
-        initial_capacity=initial_cap_exp,
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
-        balancing_topology="Region",
         operation_costs=ThermalGenerationCost(
             variable=CostCurve(LinearCurve(exp_th_var_cost)),
             fixed=0.0,
@@ -200,12 +194,10 @@ function test_2_zone_portfolio()
     ts_wind_2030 = SingleTimeSeries(;
         data=TimeArray(tstamp_2030_ops, ts_wind_2030_data),
         name="ops_variable_cap_factor",
-        scaling_factor_multiplier=get_initial_capacity,
     )
     ts_wind_2035 = SingleTimeSeries(;
         data=TimeArray(tstamp_2035_ops, ts_wind_2035_data),
         name="ops_variable_cap_factor",
-        scaling_factor_multiplier=get_initial_capacity,
     )
 
     ts_wind_inv_capex = SingleTimeSeries(
@@ -214,16 +206,13 @@ function test_2_zone_portfolio()
     )
 
     t_re = SupplyTechnology{RenewableDispatch}(;
-        base_power=1.0, # Natural Units
         prime_mover_type=PrimeMovers.WT,
         capital_costs=LinearCurve(wind_capex * 1000.0), # to $/MW
         id=3,
         available=true,
         name="wind",
-        initial_capacity=initial_cap_wind,
         fuel=[ThermalFuels.OTHER],
         power_systems_type="RenewableDispatch",
-        balancing_topology="Region",
         operation_costs=ThermalGenerationCost(
             variable=CostCurve(LinearCurve(0.0)),
             fixed=wind_op_cost,
@@ -244,31 +233,22 @@ function test_2_zone_portfolio()
     stor_kwh_capex = 745.25 #$/kW
     t_stor = StorageTechnology{EnergyReservoirStorage}(;
         name="test_storage",
-        base_power=1.0,
         id=1,
         region=[z1],
         storage_tech=StorageTech.LIB,
-        existing_capacity_energy=0.0,
-        existing_capacity_power=0.0,
-        capacity_power_limits=(0.0, 300.0),
-        capacity_energy_limits=(0.0, 1000.0),
+        capacity_limits_discharge=(min=0.0, max=300.0),
+        capacity_limits_energy=(min=0.0, max=1000.0),
         power_systems_type="EnergyReservoirStorage",
-        balancing_topology="Region",
         prime_mover_type=PrimeMovers.BT,
         available=true,
-        capital_costs_power=LinearCurve(stor_kw_capex * 1000),
+        capital_costs_discharge=LinearCurve(stor_kw_capex * 1000),
         capital_costs_energy=LinearCurve(stor_kwh_capex * 1000),
-        operation_costs_energy=StorageCost(
+        operation_costs=StorageCost(
             charge_variable_cost=CostCurve(LinearCurve(0.0)),
             discharge_variable_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
         ),
-        operation_costs_power=StorageCost(
-            charge_variable_cost=CostCurve(LinearCurve(0.0)),
-            discharge_variable_cost=CostCurve(LinearCurve(0.0)),
-            fixed=0.0,
-        ),
-        unit_size_power=10.0,
+        unit_size_discharge=10.0,
         unit_size_energy=10.0,
         financial_data=tech_financials(),
     )
@@ -297,9 +277,9 @@ function test_2_zone_portfolio()
 
     # Data added in MW
     ts_demand_2030 =
-        SingleTimeSeries("ops_peak_load", TimeArray(tstamp_2030_ops, ts_load_2030))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, ts_load_2030))
     ts_demand_2035 =
-        SingleTimeSeries("ops_peak_load", TimeArray(tstamp_2035_ops, ts_load_2035))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, ts_load_2035))
 
     t_demand1 = DemandRequirement{PowerLoad}(
         name="demand1",
@@ -342,12 +322,10 @@ function test_2_zone_portfolio()
     ts_col_wind_2030 = SingleTimeSeries(;
         data=TimeArray(tstamp_2030_ops, ts_wind_2030_data),
         name="ops_wind_variable_cap_factor",
-        scaling_factor_multiplier=get_existing_capacity_wind,
     )
     ts_col_wind_2035 = SingleTimeSeries(;
         data=TimeArray(tstamp_2035_ops, ts_wind_2035_data),
         name="ops_wind_variable_cap_factor",
-        scaling_factor_multiplier=get_existing_capacity_wind,
     )
 
     ts_col_wind_inv_capex = SingleTimeSeries(
@@ -358,12 +336,10 @@ function test_2_zone_portfolio()
     ts_col_solar_2030 = SingleTimeSeries(;
         data=TimeArray(tstamp_2030_ops, ts_solar),
         name="ops_solar_variable_cap_factor",
-        scaling_factor_multiplier=get_existing_capacity_solar,
     )
     ts_col_solar_2035 = SingleTimeSeries(;
         data=TimeArray(tstamp_2035_ops, ts_solar),
         name="ops_solar_variable_cap_factor",
-        scaling_factor_multiplier=get_existing_capacity_solar,
     )
 
     ts_col_solar_inv_capex = SingleTimeSeries(
@@ -379,22 +355,16 @@ function test_2_zone_portfolio()
         id=10,
         power_systems_type="EnergyReservoirStorage",
         region=[z1],
-        balancing_topology="Region",
-        base_power=1.0,
         financial_data=tech_financials(),
         # Solar #
-        existing_capacity_solar=0.0,
         operation_costs_solar=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
         capital_costs_solar=LinearCurve(pv_capex * 1000.0), # to $/MW
         capacity_limits_solar=(min=0.0, max=1e8),
         # Wind # 
-        existing_capacity_wind=0.0,
         operation_costs_wind=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
         capital_costs_wind=LinearCurve(wind_capex * 1000.0), # to $/MW
         capacity_limits_wind=(min=0.0, max=1e8),
         # Storage #
-        existing_capacity_energy=0.0,
-        existing_capacity_power=0.0,
         efficiency_storage=(in=0.93, out=0.93),
         operation_costs_power=StorageCost(
             charge_variable_cost=CostCurve(LinearCurve(0.0)),
@@ -414,25 +384,22 @@ function test_2_zone_portfolio()
         operation_costs_inverter=LoadCost(CostCurve(LinearCurve(0.0)), 0.0),
         capital_costs_inverter=LinearCurve(inverter_capex),
         inverter_efficiency=1.0,
-        existing_capacity_inverter=0.0,
     )
 
     ####################
     ##### Transmission #####
     #####################
 
-    line = AggregateTransportTechnology{ACBranch}(
+    line = AggregateTransportTechnology{ACBranch}(;
         name="test_branch",
         start_region=z1,
         end_region=z2,
-        existing_line_capacity=100,
-        max_new_capacity=900,
+        capacity_limits=(min=0, max=1000),
         line_loss=0.05,
-        capital_cost=LinearCurve(5000.0),
+        capital_costs=LinearCurve(5000.0),
         available=true,
         power_systems_type="TransportTechnology",
         id=1,
-        base_power=1.0,
         financial_data=tech_financials(),
     )
 
@@ -478,4 +445,303 @@ function test_2_zone_portfolio()
     PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2030; year="2030", rep_day=1)
     PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2035; year="2035", rep_day=2)
     return p_5bus, [tstamp_2030_ops, tstamp_2035_ops]
+end
+
+function test_hydro_portfolio()
+    discount_rate = 0.07
+    inflation_rate = 0.05
+    interest_rate = 0.04
+
+    tech_financials() = TechnologyFinancialData(;
+        capital_recovery_period=30,
+        technology_base_year=2025,
+        debt_fraction=0.6,
+        debt_rate=0.04,
+        return_on_equity=0.10,
+        tax_rate=0.21,
+    )
+
+    tstamp_2030_ops = collect(
+        DateTime("1/1/2030  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2030  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+    tstamp_2035_ops = collect(
+        DateTime("1/1/2035  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2035  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+
+    z1 = Zone(name="Zone_1", id=1)
+
+    hydro_budget_vals = fill(0.5, 24)
+    ts_hydro_budget_2030 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2030_ops, hydro_budget_vals),
+        name="hydro_budget",
+    )
+    ts_hydro_budget_2035 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2035_ops, hydro_budget_vals),
+        name="hydro_budget",
+    )
+
+    t_hydro = SupplyTechnology{HydroDispatch}(;
+        prime_mover_type=PrimeMovers.HY,
+        capital_costs=LinearCurve(2000.0 * 1000.0),
+        id=1,
+        available=true,
+        name="hydro",
+        fuel=[ThermalFuels.OTHER],
+        power_systems_type="HydroDispatch",
+        operation_costs=ThermalGenerationCost(
+            variable=CostCurve(LinearCurve(0.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+        capacity_limits=(0.0, 500.0),
+        outage_factor=0.95,
+        region=[z1],
+        unit_size=50.0,
+        financial_data=tech_financials(),
+    )
+
+    ts_demand_2030 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2030_ops, fill(100.0, 24)),
+    )
+    ts_demand_2035 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2035_ops, fill(120.0, 24)),
+    )
+
+    t_demand = DemandRequirement{PowerLoad}(
+        name="demand",
+        id=1,
+        available=true,
+        power_systems_type="PowerLoad",
+        region=[z1],
+        value_of_lost_load=0.0,
+    )
+
+    p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
+    PSIP.set_name!(p, "hydro_test")
+    add_region!(p, z1)
+    add_technology!(p, t_hydro)
+    add_technology!(p, t_demand)
+
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+
+    return p, [tstamp_2030_ops, tstamp_2035_ops]
+end
+
+function test_hydro_basic_dispatch_portfolio()
+    discount_rate = 0.07
+    inflation_rate = 0.05
+    interest_rate = 0.04
+
+    tech_financials() = TechnologyFinancialData(;
+        capital_recovery_period=30,
+        technology_base_year=2025,
+        debt_fraction=0.6,
+        debt_rate=0.04,
+        return_on_equity=0.10,
+        tax_rate=0.21,
+    )
+
+    tstamp_2030_ops = collect(
+        DateTime("1/1/2030  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2030  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+    tstamp_2035_ops = collect(
+        DateTime("1/1/2035  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2035  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+
+    z1 = Zone(name="Zone_1", id=1)
+
+    # Flat 80% cap factor — well within capacity limits so model is always feasible
+    cap_factor_vals = fill(0.8, 24)
+    ts_cap_factor_2030 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2030_ops, cap_factor_vals),
+        name="ops_variable_cap_factor",
+    )
+    ts_cap_factor_2035 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2035_ops, cap_factor_vals),
+        name="ops_variable_cap_factor",
+    )
+
+    t_hydro = SupplyTechnology{HydroDispatch}(;
+        prime_mover_type=PrimeMovers.HY,
+        capital_costs=LinearCurve(2000.0 * 1000.0),
+        id=1,
+        available=true,
+        name="hydro",
+        fuel=[ThermalFuels.OTHER],
+        power_systems_type="HydroDispatch",
+        operation_costs=ThermalGenerationCost(
+            variable=CostCurve(LinearCurve(0.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+        capacity_limits=(0.0, 500.0),
+        outage_factor=0.95,
+        region=[z1],
+        unit_size=50.0,
+        financial_data=tech_financials(),
+    )
+
+    ts_demand_2030 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2030_ops, fill(100.0, 24)),
+    )
+    ts_demand_2035 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2035_ops, fill(120.0, 24)),
+    )
+
+    t_demand = DemandRequirement{PowerLoad}(
+        name="demand",
+        id=1,
+        available=true,
+        power_systems_type="PowerLoad",
+        region=[z1],
+        value_of_lost_load=0.0,
+    )
+
+    p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
+    PSIP.set_name!(p, "hydro_basic_dispatch_test")
+    add_region!(p, z1)
+    add_technology!(p, t_hydro)
+    add_technology!(p, t_demand)
+
+    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+
+    return p, [tstamp_2030_ops, tstamp_2035_ops]
+end
+
+function test_constrained_hydro_portfolio()
+    discount_rate = 0.07
+    inflation_rate = 0.05
+    interest_rate = 0.04
+
+    tech_financials() = TechnologyFinancialData(;
+        capital_recovery_period=30,
+        technology_base_year=2025,
+        debt_fraction=0.6,
+        debt_rate=0.04,
+        return_on_equity=0.10,
+        tax_rate=0.21,
+    )
+
+    tstamp_2030_ops = collect(
+        DateTime("1/1/2030  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2030  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+    tstamp_2035_ops = collect(
+        DateTime("1/1/2035  0:00:00", "d/m/y  H:M:S"):Hour(1):DateTime(
+            "1/1/2035  23:00:00",
+            "d/m/y  H:M:S",
+        ),
+    )
+
+    z1 = Zone(name="Zone_1", id=1)
+
+    hydro_budget_vals = fill(0.05, 24)
+    ts_hydro_budget_2030 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2030_ops, hydro_budget_vals),
+        name="hydro_budget",
+    )
+    ts_hydro_budget_2035 = SingleTimeSeries(;
+        data=TimeArray(tstamp_2035_ops, hydro_budget_vals),
+        name="hydro_budget",
+    )
+
+    t_hydro = SupplyTechnology{HydroDispatch}(;
+        prime_mover_type=PrimeMovers.HY,
+        capital_costs=LinearCurve(2000.0 * 1000.0),
+        id=1,
+        available=true,
+        name="hydro",
+        fuel=[ThermalFuels.OTHER],
+        power_systems_type="HydroDispatch",
+        operation_costs=ThermalGenerationCost(
+            variable=CostCurve(LinearCurve(0.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+        capacity_limits=(0.0, 500.0),
+        outage_factor=0.95,
+        region=[z1],
+        unit_size=50.0,
+        financial_data=tech_financials(),
+    )
+
+    t_thermal = SupplyTechnology{ThermalStandard}(;
+        prime_mover_type=PrimeMovers.ST,
+        capital_costs=LinearCurve(3000.0 * 1000.0),
+        id=2,
+        available=true,
+        name="backup_thermal",
+        fuel=[ThermalFuels.COAL],
+        power_systems_type="ThermalStandard",
+        operation_costs=ThermalGenerationCost(
+            variable=CostCurve(LinearCurve(50.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+        capacity_limits=(0.0, 1e8),
+        outage_factor=0.95,
+        region=[z1],
+        unit_size=100.0,
+        financial_data=tech_financials(),
+    )
+
+    ts_demand_2030 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2030_ops, fill(100.0, 24)),
+    )
+    ts_demand_2035 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2035_ops, fill(100.0, 24)),
+    )
+
+    t_demand = DemandRequirement{PowerLoad}(
+        name="demand",
+        id=1,
+        available=true,
+        power_systems_type="PowerLoad",
+        region=[z1],
+        value_of_lost_load=0.0,
+    )
+
+    p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
+    PSIP.set_name!(p, "hydro_constrained_test")
+    add_region!(p, z1)
+    add_technology!(p, t_hydro)
+    add_technology!(p, t_thermal)
+    add_technology!(p, t_demand)
+
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
+    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+
+    return p, [tstamp_2030_ops, tstamp_2035_ops]
 end

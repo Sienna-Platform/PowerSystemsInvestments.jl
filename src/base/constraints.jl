@@ -24,7 +24,14 @@ struct SingleRegionBalanceConstraint <: ConstraintType end
 
 struct MultiRegionBalanceConstraint <: ConstraintType end
 
+struct NodalBalanceConstraint <: ISOPT.ConstraintType end
+
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end
+struct HydroEnergyBudgetConstraint <: OperationVariableLimitsConstraintType end
+
+struct FlowActivePowerLowerBoundConstraint <: OperationVariableLimitsConstraintType end
+
+struct FlowActivePowerUpperBoundConstraint <: OperationVariableLimitsConstraintType end
 
 struct OutputActivePowerVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
 

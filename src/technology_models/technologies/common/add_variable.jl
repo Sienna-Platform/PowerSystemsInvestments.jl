@@ -85,6 +85,62 @@ function add_variable!(
     container::OptimizationContainer,
     variable_type::T,
     devices::U,
+    formulation::V,
+) where {
+    T <: InvestmentVariableType,
+    U <: Vector{D},
+    V <: BinaryInvestment,
+} where {D <: PSIP.Technology}
+    @assert !isempty(devices)
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(V)
+
+    names = [PSIP.get_name(d) for d in devices]
+    check_duplicate_names(names, container, variable_type, D)
+
+    # Create continuous BuildCapacity variable container (0 ≤ capacity ≤ max_capacity)
+    variable = add_variable_container!(
+        container,
+        variable_type,
+        D,
+        names,
+        time_steps,
+        meta=tech_model,
+    )
+
+    for t in time_steps, d in devices
+        name = PSY.get_name(d)
+        max_capacity = PSIP.get_capacity_limits(d).max
+
+        # Internal binary decision variable (0 or 1) — NOT stored in PSINV container
+        binary_decision = JuMP.@variable(
+            get_jump_model(container),
+            base_name = "$(T)_binary_$(D)_{$(name), $(t)}",
+            binary = true,
+        )
+
+        variable[name, t] = JuMP.@variable(
+            get_jump_model(container),
+            base_name = "$(T)_$(D)_{$(name), $(t)}",
+            lower_bound = 0.0,
+        )
+        JuMP.set_upper_bound(variable[name, t], max_capacity)
+
+        # Linking constraint: BuildCapacity = BinaryDecision × max_capacity
+        JuMP.@constraint(
+            get_jump_model(container),
+            variable[name, t] == binary_decision * max_capacity,
+        )
+    end
+
+    return
+end
+
+function add_variable!(
+    container::SingleOptimizationContainer,
+    variable_type::T,
+    devices::U,
     formulation::S,
 ) where {
     T <: OperationsVariableType,

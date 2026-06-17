@@ -7,11 +7,10 @@ function amortize_overnight_term_to_base_year_dollars(
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
-    interest_rate = PSIP.get_interest_rate(financials)
+    wacc = PSIP.get_wacc(financials)
     tech_base_year = PSIP.get_technology_base_year(financials)
     capital_recovery_period = PSIP.get_capital_recovery_period(financials)
-    capital_recovery_factor =
-        interest_rate / (1 - (1 + interest_rate)^(-(capital_recovery_period)))
+    capital_recovery_factor = wacc / (1 - (1 + wacc)^(-(capital_recovery_period)))
     lump_amortized_payments =
         (1 - (1 + discount_rate)^(-(capital_recovery_period))) / discount_rate
     discount_factor = 1 / (1 + discount_rate)

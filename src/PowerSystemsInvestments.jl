@@ -29,9 +29,11 @@ export RepresentativePeriods
 export StaticLoadInvestment
 export ContinuousInvestment
 export IntegerInvestment
+export BinaryInvestment
 
 ### Operation Formulations ###
 export BasicDispatch
+export BasicDispatchWithBudget
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
 export CyclicalStorageDispatch
@@ -41,6 +43,9 @@ export CyclicalColocatedDispatch
 ### Transport Formulations ###
 export SingleRegionBalanceModel
 export MultiRegionBalanceModel
+export NodalBalanceModel
+export NodalBalanceConstraint
+export HydroEnergyBudgetConstraint
 
 ### Variables ###
 export BuildCapacity
@@ -80,6 +85,7 @@ export set_technology_model!
 # Model Exports
 export solve!
 export get_initial_conditions
+export get_infeasibility_conflict
 export serialize_problem
 export serialize_results
 #Results interfaces
@@ -101,7 +107,6 @@ import PowerSystemsInvestmentsPortfolios
 import Dates
 import PowerModels
 import DataStructures
-import PowerNetworkMatrices
 import PrettyTables
 import TimeSeries
 import Logging
@@ -116,7 +121,6 @@ const PSY = PowerSystems
 const MOI = MathOptInterface
 const PSIP = PowerSystemsInvestmentsPortfolios
 const PM = PowerModels
-const PNM = PowerNetworkMatrices
 const MOPFM = MOI.FileFormats.Model
 
 using DocStringExtensions
@@ -192,6 +196,35 @@ const OptimizationProblemResults = IOM.OptimizationProblemOutputs
 const export_results = IOM.export_outputs
 const serialize_results = IOM.serialize_outputs
 
+#TODO: Confirm all of these are accounted for in IOM and then remove commented out imports below
+#     should_export_expression
+# import InfrastructureSystems.Optimization:
+#     get_entry_type, get_component_type, get_output_dir
+# import InfrastructureSystems.Optimization:
+#     read_results_with_keys,
+#     deserialize_key,
+#     encode_key_as_string,
+#     encode_keys_as_strings,
+#     should_write_resulting_value,
+#     convert_result_to_natural_units,
+#     to_matrix,
+#     get_store_container_type
+# import InfrastructureSystems.Optimization:
+#     OptimizationProblemResults, OptimizationProblemResultsExport, OptimizerStats
+# import InfrastructureSystems.Optimization:
+#     list_variable_names, list_aux_variable_names, list_dual_names, list_expression_names
+# import InfrastructureSystems.Optimization:
+#     read_optimizer_stats,
+#     get_optimizer_stats,
+#     export_results,
+#     serialize_results,
+#     get_timestamps,
+#     get_model_base_power,
+#     get_objective_value,
+#     read_variable,
+#     read_dual,
+#     read_expression
+
 import TimerOutputs
 
 ####
@@ -228,7 +261,11 @@ include("base/serialization.jl")
 # Solve Instance #
 include("model_build/SingleInstanceSolve.jl")
 # Utils #
-include("utils/printing.jl")
+@static if pkgversion(PrettyTables).major == 2
+    include("utils/printing_pt_v2.jl")
+else
+    include("utils/printing_pt_v3.jl")
+end
 include("utils/logging.jl")
 include("utils/psip_utils.jl")
 # Technology Models #
@@ -242,6 +279,7 @@ include("technology_models/technologies/branch_tech.jl")
 # Network #
 include("network_models/singleregion_model.jl")
 include("network_models/multiregion_model.jl")
+include("network_models/nodal_model.jl")
 include("network_models/transport_constructor.jl")
 # Constructors #
 include("technology_models/technology_constructors/supply_constructor.jl")

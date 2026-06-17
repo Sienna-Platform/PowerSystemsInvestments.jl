@@ -24,9 +24,8 @@ const JuMPAffineExpressionVector = Vector{GAE}
 const PROBLEM_LOG_FILENAME = "investment_problem.log"
 
 # Enums
-ModelBuildStatus = IS.Optimization.ModelBuildStatus
-
-RunStatus = IS.Simulation.RunStatus
+const ModelBuildStatus = ISOPT.ModelBuildStatus
+const RunStatus = IS.Simulation.RunStatus
 
 # PSI-specific: more retries than IOM default
 const MAX_OPTIMIZE_TRIES = 10

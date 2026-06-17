@@ -498,6 +498,40 @@ function _make_system_expressions!(
     return
 end
 
+function _make_system_expressions!(
+    container::OptimizationContainer,
+    ::Type{NodalBalanceModel},
+    port::PSIP.Portfolio,
+)
+    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    container.expressions = Dict(
+        ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
+            _make_container_array(nodes, time_steps),
+        ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
+            _make_container_array(nodes, time_steps),
+    )
+    return
+end
+
+function _make_system_expressions!(
+    container::OptimizationContainer,
+    ::Type{NodalBalanceModel},
+    port::PSIP.Portfolio,
+)
+    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    container.expressions = Dict(
+        ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
+            _make_container_array(nodes, time_steps),
+        ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
+            _make_container_array(nodes, time_steps),
+    )
+    return
+end
+
 function initialize_system_expressions!(
     container::OptimizationContainer,
     transport_model::TransportModel{T},
@@ -512,6 +546,15 @@ function initialize_system_expressions!(
     transport_model::TransportModel{T},
     port::PSIP.Portfolio,
 ) where {T <: MultiRegionBalanceModel}
+    _make_system_expressions!(container, T, port)
+    return
+end
+
+function initialize_system_expressions!(
+    container::SingleOptimizationContainer,
+    transport_model::TransportModel{T},
+    port::PSIP.Portfolio,
+) where {T <: NodalBalanceModel}
     _make_system_expressions!(container, T, port)
     return
 end
@@ -746,6 +789,53 @@ end
 function write_optimizer_stats!(container::OptimizationContainer)
     write_optimizer_stats!(get_optimizer_stats(container), get_jump_model(container))
     return
+end
+
+function compute_conflict!(container::SingleOptimizationContainer)
+    jump_model = get_jump_model(container)
+    settings = get_settings(container)
+    JuMP.unset_silent(jump_model)
+    jump_model.is_model_dirty = false
+    conflict = container.infeasibility_conflict
+    empty!(conflict)
+    try
+        JuMP.compute_conflict!(jump_model)
+        conflict_status = MOI.get(jump_model, MOI.ConflictStatus())
+        if conflict_status != MOI.CONFLICT_FOUND
+            @error "No conflict could be found for the model. Status: $conflict_status"
+            if !get_optimizer_solve_log_print(settings)
+                JuMP.set_silent(jump_model)
+            end
+            return conflict_status
+        end
+
+        for (key, field_container) in get_constraints(container)
+            conflict_indices = check_conflict_status(jump_model, field_container)
+            if isempty(conflict_indices)
+                @info "Conflict Index returned empty for $key"
+                continue
+            else
+                conflict[ISOPT.encode_key(key)] = conflict_indices
+            end
+        end
+
+        msg = IOBuffer()
+        for (k, v) in conflict
+            PrettyTables.pretty_table(msg, v; header=[k])
+        end
+        @error "Constraints participating in conflict basis (IIS) \n\n$(String(take!(msg)))"
+
+        return conflict_status
+    catch e
+        jump_model.is_model_dirty = true
+        if isa(e, MethodError)
+            @info "Can't compute conflict, check that your optimizer supports conflict refining/IIS"
+        else
+            @error "Can't compute conflict" exception = (e, catch_backtrace())
+        end
+    end
+
+    return MOI.NO_CONFLICT_EXISTS
 end
 
 """
