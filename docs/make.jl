@@ -17,7 +17,7 @@ makedocs(
 )
 
 deploydocs(
-    repo="github.com/NREL-Sienna/PowerSystemsInvestments.git",
+    repo="github.com/Sienna-Platform/PowerSystemsInvestments.git",
     target="build",
     branch="gh-pages",
     devbranch="main",
