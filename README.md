@@ -12,4 +12,4 @@ Contributions to the development and enahancement of PowerSystemsInvestments is 
 
 ## License
 
-PowerSystemsInvestments is released under a BSD [license](https://github.com/Sienna-Platform/PowerSystemsInvestments/blob/main/LICENSE). Sienna PACKAGE has been developed as part of A PROJECT at the U.S. Department of Energy's National Renewable Energy Laboratory ([NREL](https://www.nrel.gov/))
+PowerSystemsInvestments is released under a BSD [license](https://github.com/Sienna-Platform/PowerSystemsInvestments/blob/main/LICENSE). PowerSystemsInvestments.jl has been developed at the U.S. Department of Energy's National Laboratory of the Rockies (formerly known as NREL)([NLR](https://www.nlr.gov/))
