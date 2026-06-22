@@ -38,6 +38,9 @@ function construct_technologies!(
 
     # EnergyBalance
     add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
+
+    # WeightedEnergyGeneration
+    add_expression!(container, WeightedEnergyGeneration(), devices, C())
     return
 end
 
@@ -165,6 +168,9 @@ function construct_technologies!(
     add_variable!(container, ActivePowerVariable(), devices, C())
 
     add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
+
+    # WeightedEnergyGeneration
+    add_expression!(container, WeightedEnergyGeneration(), devices, C())
     return
 end
 

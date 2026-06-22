@@ -52,3 +52,7 @@ struct ColocatedInternalBalanceConstraint <: ISOPT.ConstraintType end
 struct EnergyBalanceConstraint <: ISOPT.ConstraintType end
 
 struct SingleRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
+
+### Requirement Constraints ###
+
+struct EnergyShareRequirementConstraint <: ISOPT.ConstraintType end

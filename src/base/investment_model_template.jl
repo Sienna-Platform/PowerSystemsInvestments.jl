@@ -7,6 +7,7 @@ mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
     transport_model::TransportModel{<:AbstractTransportAggregation}
     technology_models::Dict # TODO: define strict Type for this
     branch_models::Dict # TODO: Decide name for branches: path? corridors? We are using transport for network
+    requirement_models::Dict # policy/requirement models keyed by RequirementModel => Vector{String}
 
     function InvestmentModelTemplate(
         capital_model::CapitalCostModel,
@@ -19,6 +20,7 @@ mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
             operation_model,
             feasibility_model,
             transport_model,
+            Dict(),
             Dict(),
             Dict(),
         )
@@ -39,6 +41,7 @@ InvestmentModelTemplate() = InvestmentModelTemplate(SingleRegionPowerModel)
 
 get_technology_models(template::InvestmentModelTemplate) = template.technology_models
 get_branch_models(template::InvestmentModelTemplate) = template.branch_models
+get_requirement_models(template::InvestmentModelTemplate) = template.requirement_models
 get_transport_model(template::InvestmentModelTemplate) = template.transport_model
 get_transport_formulation(::TransportModel{T}) where {T <: AbstractTransportAggregation} = T
 
@@ -141,6 +144,25 @@ function set_technology_model!(
     },
 )
     _set_model!(template.branch_models, names, model)
+    return
+end
+
+function set_requirement_model!(
+    template::InvestmentModelTemplate,
+    names::Vector{String},
+    requirement_type::Type{<:PSIP.Requirement},
+    formulation::Type{<:RequirementFormulation},
+)
+    set_requirement_model!(template, names, RequirementModel(requirement_type, formulation))
+    return
+end
+
+function set_requirement_model!(
+    template::InvestmentModelTemplate,
+    names::Vector{String},
+    model::RequirementModel{<:PSIP.Requirement, <:RequirementFormulation},
+)
+    _set_model!(template.requirement_models, names, model)
     return
 end
 

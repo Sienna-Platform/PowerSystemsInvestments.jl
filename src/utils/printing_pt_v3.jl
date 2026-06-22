@@ -84,6 +84,28 @@ function _show_method(io::IO, template::InvestmentModelTemplate, backend::Symbol
         title="Technology Models",
         alignment=:l,
     )
+
+    println(io)
+    requirement_labels = ["Requirement Type", "Requirement Name", "Formulation"]
+    table = Matrix{String}(
+        undef,
+        length(template.requirement_models),
+        length(requirement_labels),
+    )
+    for (ix, model) in enumerate(keys(template.requirement_models))
+        table[ix, 1] = string(get_requirement_type(model))
+        table[ix, 2] = only(template.requirement_models[model])
+        table[ix, 3] = string(get_requirement_formulation(model))
+    end
+
+    PrettyTables.pretty_table(
+        io,
+        table;
+        backend=backend,
+        column_labels=requirement_labels,
+        title="Requirement Models",
+        alignment=:l,
+    )
     return
 end
 

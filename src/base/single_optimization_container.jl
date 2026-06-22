@@ -227,7 +227,7 @@ function has_container_key(
     ::Type{T},
     ::Type{U},
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     key = ExpressionKey(T, U, meta)
     return haskey(container.expressions, key)
 end
@@ -237,7 +237,7 @@ function has_container_key(
     ::Type{T},
     ::Type{U},
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     key = VariableKey(T, U, meta)
     return haskey(container.variables, key)
 end
@@ -247,7 +247,10 @@ function has_container_key(
     ::Type{T},
     ::Type{U},
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: AuxVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {
+    T <: AuxVariableType,
+    U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement},
+}
     key = AuxVarKey(T, U, meta)
     return haskey(container.aux_variables, key)
 end
@@ -257,7 +260,7 @@ function has_container_key(
     ::Type{T},
     ::Type{U},
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     key = ConstraintKey(T, U, meta)
     return haskey(container.constraints, key)
 end
@@ -268,7 +271,7 @@ function _add_variable_container!(
     var_key::VariableKey{T, U},
     sparse::Bool,
     axs...,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     if sparse
         var_container = sparse_container_spec(JuMP.VariableRef, axs...)
     else
@@ -285,7 +288,7 @@ function add_variable_container!(
     axs...;
     sparse=false,
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     var_key = VariableKey(T, U, meta)
     return _add_variable_container!(container, var_key, sparse, axs...)
 end
@@ -297,7 +300,7 @@ function add_variable_container!(
     meta::String,
     axs...;
     sparse=false,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     var_key = VariableKey(T, U, meta)
     return _add_variable_container!(container, var_key, sparse, axs...)
 end
@@ -312,7 +315,10 @@ function add_variable_container!(
     ::T,
     ::Type{U};
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: SparseVariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {
+    T <: SparseVariableType,
+    U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement},
+}
     var_key = VariableKey(T, U, meta)
     _assign_container!(container.variables, var_key, _get_pwl_variables_container())
     return container.variables[var_key]
@@ -337,7 +343,7 @@ function get_variable(
     ::T,
     ::Type{U},
     meta::String=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: VariableType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     return get_variable(container, VariableKey(T, U, meta))
 end
 
@@ -364,7 +370,7 @@ function add_constraints_container!(
     axs...;
     sparse=false,
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     cons_key = ConstraintKey(T, U, meta)
     return _add_constraints_container!(container, cons_key, axs...; sparse=sparse)
 end
@@ -389,7 +395,7 @@ function get_constraint(
     ::T,
     ::Type{U},
     meta::String=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: ConstraintType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     return get_constraint(container, ConstraintKey(T, U, meta))
 end
 
@@ -461,7 +467,7 @@ function add_expression_container!(
     axs...;
     sparse=false,
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     expr_key = ExpressionKey(T, U, meta)
     return _add_expression_container!(container, expr_key, GAE, axs...; sparse=sparse)
 end
@@ -488,7 +494,7 @@ function get_expression(
     ::T,
     ::Type{U},
     meta=IS.Optimization.CONTAINER_KEY_EMPTY_META,
-) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio}}
+) where {T <: ExpressionType, U <: Union{PSIP.Technology, PSIP.Portfolio, PSIP.Requirement}}
     return get_expression(container, ExpressionKey(T, U, meta))
 end
 
@@ -548,11 +554,14 @@ function _make_system_expressions!(
 )
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
+    operational_indexes = get_operational_indexes(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array([SINGLE_REGION], time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
             _make_container_array([SINGLE_REGION], time_steps),
+        ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) =>
+            _make_container_array([SINGLE_REGION], operational_indexes),
     )
     return
 end
@@ -565,11 +574,14 @@ function _make_system_expressions!(
     regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
+    operational_indexes = get_operational_indexes(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
+        ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) =>
+            _make_container_array(regions, operational_indexes),
     )
     return
 end
@@ -582,11 +594,14 @@ function _make_system_expressions!(
     nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
+    operational_indexes = get_operational_indexes(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
+        ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) =>
+            _make_container_array(nodes, operational_indexes),
     )
     return
 end
@@ -716,20 +731,15 @@ function build_model!(
         end
     end
 
-    # TODO: 
-    # Requirements Arguments HERE
-    #=
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
-        construct_requirements!(
-            container,
-            sys,
-            ArgumentConstructStage(),
-            get_service_models(template),
-            get_device_models(template),
-            transmission_model,
-        )
-    end
-    =#
+    # Requirements (policies spanning multiple technologies/regions) — argument stage
+    construct_requirements!(
+        container,
+        port,
+        ArgumentConstructStage(),
+        get_requirement_models(template),
+        names_to_model_map,
+        transport_model,
+    )
 
     # Branches Model Arguments #
     for (ix, type_map) in enumerate(br_maps)
@@ -778,20 +788,15 @@ function build_model!(
         end
     end
 
-    # TODO: 
-    # Requirements Model HERE
-    #=
-    TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Requirements" begin
-        construct_requirements!(
-            container,
-            sys,
-            ArgumentConstructStage(),
-            get_service_models(template),
-            get_device_models(template),
-            transmission_model,
-        )
-    end
-    =#
+    # Requirements (policies spanning multiple technologies/regions) — model stage
+    construct_requirements!(
+        container,
+        port,
+        ModelConstructStage(),
+        get_requirement_models(template),
+        names_to_model_map,
+        transport_model,
+    )
 
     # Branches Model Arguments #
     for (ix, type_map) in enumerate(br_maps)
