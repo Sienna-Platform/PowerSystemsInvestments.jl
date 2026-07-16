@@ -61,19 +61,11 @@ function get_existing_capacity_power(
     d::PSIP.StorageTechnology{X},
     p::PSIP.Portfolio,
 ) where {X <: PSY.EnergyReservoirStorage}
-    try
-        # pull out any ExistingCapacity attributes
-        attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
-    catch e
-        @warn "ExistingCapacity attribute not found – returning 0.0"
-        return 0.0
-    end
-
     attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
 
     if length(attrs) != 1
-        @warn length(attrs) > 1 ? "Multiple ExistingCapacity attributes – returning 0.0" :
-              "No ExistingCapacity attribute – returning 0.0"
+        @debug length(attrs) > 1 ? "Multiple ExistingCapacity attributes – returning 0.0" :
+               "No ExistingCapacity attribute – returning 0.0"
         return 0.0
     end
 
@@ -112,20 +104,11 @@ function get_existing_capacity_energy(
     d::PSIP.StorageTechnology{X},
     p::PSIP.Portfolio,
 ) where {X <: PSY.EnergyReservoirStorage}
-    try
-        # TODO: Review why the ExistingCapacity attribute is not being found
-        # pull out any ExistingCapacity attributes
-        attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
-    catch e
-        @warn "ExistingCapacity attribute not found – returning 0.0"
-        return 0.0
-    end
-
     attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
 
     if length(attrs) != 1
-        @warn length(attrs) > 1 ? "Multiple ExistingCapacity attributes – returning 0.0" :
-              "No ExistingCapacity attribute – returning 0.0"
+        @debug length(attrs) > 1 ? "Multiple ExistingCapacity attributes – returning 0.0" :
+               "No ExistingCapacity attribute – returning 0.0"
         return 0.0
     end
 
