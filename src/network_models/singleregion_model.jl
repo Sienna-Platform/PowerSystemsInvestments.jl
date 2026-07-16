@@ -159,7 +159,7 @@ function get_capacity_credits(portfolio::PSIP.Portfolio, system::PSY.System)::Di
                 catch
                     credits[name] = 0.30
                 end
-            elseif gen isa PSY.GenericBattery
+            elseif gen isa PSY.EnergyReservoirStorage
                 credits[name] = 0.90  # Battery/storage
             else
                 # Default for other generator types
