@@ -35,7 +35,7 @@ function _add_cost_to_objective!(
     cost_component = PSY.get_function_data(value_curve)
     proportional_term = PSY.get_proportional_term(cost_component)
     @debug "Cost is assumed to be in natural units: \$/MWh"
-    multiplier = objective_function_multiplier(T(), U())
+    multiplier = objective_function_multiplier(T(), technology, U())
     _add_linearcurve_cost!(
         container,
         T(),
@@ -57,7 +57,7 @@ function _add_cost_to_objective!(
     tech_model::String,
 ) where {T <: InvestmentVariableType, U <: AbstractTechnologyFormulation}
     proportional_term = PSY.get_fixed(om_cost)
-    multiplier = objective_function_multiplier(T(), U())
+    multiplier = objective_function_multiplier(T(), technology, U())
     _add_linearcurve_cost!(
         container,
         T(),

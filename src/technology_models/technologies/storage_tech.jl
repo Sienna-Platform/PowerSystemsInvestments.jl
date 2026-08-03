@@ -29,6 +29,9 @@ get_variable_upper_bound(::StateOfChargeVariable, d::PSIP.StorageTechnology, ::B
 get_variable_multiplier(::ActiveInPowerVariable, ::Type{PSIP.StorageTechnology}) = 1.0
 get_variable_multiplier(::ActiveOutPowerVariable, ::Type{PSIP.StorageTechnology}) = 1.0
 
+objective_function_multiplier(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::IntegerInvestment) = PSIP.get_unit_size_discharge(d)
+objective_function_multiplier(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::IntegerInvestment) = PSIP.get_unit_size_energy(d)
+
 get_expression_multiplier(::EnergyBalance, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::EnergyBalance, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 get_expression_multiplier(::WeightedEnergyGeneration, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 1.0
