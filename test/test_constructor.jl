@@ -420,3 +420,119 @@ end
         ) == -4.0
     end
 end
+
+@testset "Integer Storage Capacity and Costs" begin
+    p_5bus, op_days = test_2_zone_portfolio()
+
+    capital = DiscountedCashFlow(
+        0.07,
+        Year(2025),
+        [
+            (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+            (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+        ],
+    )
+    operations = PSIN.OperationalRepresentativeDays(op_days, [365 * 5, 365 * 5])
+    template = InvestmentModelTemplate(
+        capital,
+        operations,
+        RepresentativePeriods(Vector{Vector{Dates}}()),
+        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+    )
+
+    settings = PSIN.Settings(p_5bus)
+    model = JuMP.Model(HiGHS.Optimizer)
+    container = PSIN.SingleOptimizationContainer(settings, model)
+    PSIN.init_optimization_container!(container, template, p_5bus)
+
+    storage_type = PSIP.StorageTechnology{PSY.EnergyReservoirStorage}
+    storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
+    PSIP.set_unit_size_discharge!(storage, 10.0)
+    PSIP.set_unit_size_energy!(storage, 40.0)
+
+    # Test the capacity and cost methods while integer model construction is unsupported.
+    PSIN.add_variable!(
+        container,
+        PSIN.BuildPowerCapacity(),
+        [storage],
+        PSIN.IntegerInvestment(),
+    )
+    PSIN.add_variable!(
+        container,
+        PSIN.BuildEnergyCapacity(),
+        [storage],
+        PSIN.IntegerInvestment(),
+    )
+    PSIN.add_expression!(
+        container,
+        p_5bus,
+        PSIN.CumulativePowerCapacity(),
+        [storage],
+        PSIN.IntegerInvestment(),
+    )
+    PSIN.add_expression!(
+        container,
+        p_5bus,
+        PSIN.CumulativeEnergyCapacity(),
+        [storage],
+        PSIN.IntegerInvestment(),
+    )
+
+    build_power = PSIN.get_variable(
+        container,
+        PSIN.BuildPowerCapacity(),
+        storage_type,
+        "IntegerInvestment",
+    )
+    build_energy = PSIN.get_variable(
+        container,
+        PSIN.BuildEnergyCapacity(),
+        storage_type,
+        "IntegerInvestment",
+    )
+    cumulative_power = PSIN.get_expression(
+        container,
+        PSIN.CumulativePowerCapacity(),
+        storage_type,
+        "IntegerInvestment",
+    )
+    cumulative_energy = PSIN.get_expression(
+        container,
+        PSIN.CumulativeEnergyCapacity(),
+        storage_type,
+        "IntegerInvestment",
+    )
+    first_investment_time_step =
+        first(PSIN.get_investment_time_steps(container.time_mapping))
+
+    @test JuMP.coefficient(
+        cumulative_power["test_storage", first_investment_time_step],
+        build_power["test_storage", first_investment_time_step],
+    ) == PSIP.get_unit_size_discharge(storage)
+    @test JuMP.coefficient(
+        cumulative_energy["test_storage", first_investment_time_step],
+        build_energy["test_storage", first_investment_time_step],
+    ) == PSIP.get_unit_size_energy(storage)
+
+    PSIN.objective_function!(container, [storage], PSIN.IntegerInvestment())
+    PSIN.update_objective_function!(container)
+
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    power_objective_coefficient =
+        JuMP.coefficient(objective, build_power["test_storage", first_investment_time_step])
+    energy_objective_coefficient = JuMP.coefficient(
+        objective,
+        build_energy["test_storage", first_investment_time_step],
+    )
+    power_capital_cost = PSY.get_proportional_term(
+        PSY.get_function_data(PSIP.get_capital_costs_discharge(storage)),
+    )
+    energy_capital_cost = PSY.get_proportional_term(
+        PSY.get_function_data(PSIP.get_capital_costs_energy(storage)),
+    )
+    @test isapprox(
+        power_objective_coefficient / energy_objective_coefficient,
+        power_capital_cost * PSIP.get_unit_size_discharge(storage) /
+        (energy_capital_cost * PSIP.get_unit_size_energy(storage)),
+    )
+end
