@@ -1,4 +1,4 @@
-abstract type AbstractInvestmentModelTemplate end
+abstract type AbstractInvestmentModelTemplate <: AbstractProblemTemplate end
 
 mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
     capital_model::CapitalCostModel

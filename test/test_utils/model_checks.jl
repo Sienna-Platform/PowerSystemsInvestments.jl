@@ -55,7 +55,7 @@ function check_variable_unbounded(
 end
 
 function check_variable_unbounded(model::InvestmentModel, var_key::PSIN.VariableKey)
-    psi_cont = PSIN.get_optimization_container(model)
+    psi_cont = PSIN.IOM.get_optimization_container(model)
     variable = PSIN.get_variable(psi_cont, var_key)
     for var in variable
         if JuMP.has_lower_bound(var) || JuMP.has_upper_bound(var)
@@ -74,7 +74,7 @@ function check_variable_bounded(
 end
 
 function check_variable_bounded(model::InvestmentModel, var_key::PSIN.VariableKey)
-    psi_cont = PSIN.get_optimization_container(model)
+    psi_cont = PSIN.IOM.get_optimization_container(model)
     variable = PSIN.get_variable(psi_cont, var_key)
     for var in variable
         if !JuMP.has_lower_bound(var) || !JuMP.has_upper_bound(var)
@@ -91,7 +91,7 @@ function check_flow_variable_values(
     device_name::String,
     limit::Float64,
 ) where {T <: PSIN.VariableType, U <: PSIP.Technology}
-    psi_cont = PSIN.get_optimization_container(model)
+    psi_cont = PSIN.IOM.get_optimization_container(model)
     variable = PSIN.get_variable(psi_cont, T(), U)
     for var in variable[device_name, :]
         if !(PSIN.jump_value(var) <= (limit + 1e-2))

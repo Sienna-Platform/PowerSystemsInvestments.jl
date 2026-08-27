@@ -53,7 +53,7 @@ function add_expression!(
     V <: ContinuousInvestment,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -92,7 +92,7 @@ function add_expression!(
     V <: Union{IntegerInvestment, BinaryInvestment},
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -131,7 +131,7 @@ function add_expression!(
     V <: AbstractTechnologyFormulation,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -160,7 +160,7 @@ function add_expression!(
     S <: Union{BasicDispatch, BasicDispatchWithBudget},
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     operational_weights = get_operational_weights(container)
@@ -206,7 +206,7 @@ function add_to_expression!(
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -215,7 +215,7 @@ function add_to_expression!(
     expression = get_expression(container, T(), PSIP.Portfolio)
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        _add_to_jump_expression!(
+        add_proportional_to_jump_expression!(
             expression[SINGLE_REGION, t],
             variable[name, t],
             get_variable_multiplier(W(), D, S()),
@@ -238,7 +238,7 @@ function add_to_expression!(
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -249,7 +249,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         # Only 1 region supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
-        _add_to_jump_expression!(
+        add_proportional_to_jump_expression!(
             expression[region, t],
             variable[name, t],
             get_variable_multiplier(W(), D, S()),
@@ -272,7 +272,7 @@ function add_to_expression!(
     V <: NodalBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -284,7 +284,7 @@ function add_to_expression!(
         # Get each node the technology is assigned to
         for node in PSIP.get_region(d)
             node_name = PSIP.get_name(node)
-            _add_to_jump_expression!(
+            add_proportional_to_jump_expression!(
                 expression[node_name, t],
                 variable[name, t],
                 get_variable_multiplier(W(), D, S()),
@@ -308,7 +308,7 @@ function add_to_expression!(
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     tech_model = string(S)
 
     W = CumulativeCapacity
@@ -324,7 +324,7 @@ function add_to_expression!(
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
-                _add_to_jump_expression!(
+                add_proportional_to_jump_expression!(
                     expression[SINGLE_REGION, t],
                     installed_cap[name, time_step_inv],
                     get_expression_multiplier(W(), D, S()),
@@ -349,7 +349,7 @@ function add_to_expression!(
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.SupplyTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     tech_model = string(S)
 
     W = CumulativeCapacity
@@ -367,7 +367,7 @@ function add_to_expression!(
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
-                _add_to_jump_expression!(
+                add_proportional_to_jump_expression!(
                     expression[region, t],
                     installed_cap[name, time_step_inv],
                     get_expression_multiplier(W(), D, S()),
@@ -400,7 +400,7 @@ function add_constraints!(
         PSIP.SupplyTechnology{PSY.HydroDispatch},
     },
 }
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -463,7 +463,7 @@ function add_constraints!(
     S <: BasicDispatch,
     X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology{PSY.ThermalStandard}}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -512,7 +512,7 @@ function add_constraints!(
     U <: Vector{D},
     V <: CumulativeCapacity,
 } where {D <: PSIP.SupplyTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -593,7 +593,7 @@ function add_constraints!(
     S <: BasicDispatchWithBudget,
     X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology{PSY.HydroDispatch}}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -645,7 +645,7 @@ function add_constraints!(
     S <: BasicDispatchWithBudget,
     X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology{PSY.HydroDispatch}}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
     operational_indexes = get_all_indexes(time_mapping)

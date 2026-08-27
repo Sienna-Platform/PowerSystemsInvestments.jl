@@ -1,13 +1,3 @@
-abstract type SparseVariableType <: VariableType end
-
-abstract type InvestmentVariableType <: VariableType end
-abstract type OperationsVariableType <: VariableType end
-abstract type FeasibilityVariableType <: VariableType end
-
-### Investment Variables ###
-
-abstract type BuildInvestmentVariableType <: InvestmentVariableType end
-
 """
 Total installed capacity for a technology
 """

@@ -106,12 +106,12 @@ end
 get_name(model::InvestmentModel) = model.name
 get_store(model::InvestmentModel) = model.store
 
-function get_optimization_container(model::InvestmentModel)
-    return IOM.get_optimization_container(get_internal(model))
+function IOM.get_optimization_container(model::InvestmentModel)
+    return IOM.IOM.get_optimization_container(get_internal(model))
 end
 
 function get_timestamps(model::InvestmentModel)
-    optimization_container = get_optimization_container(model)
+    optimization_container = IOM.get_optimization_container(model)
     start_time = get_initial_time(optimization_container)
     resolution = get_resolution(model)
     horizon_count = get_time_steps(optimization_container)[end]
@@ -121,25 +121,25 @@ end
 # No Base Power for Portfolio models. Always in Natural Units.
 # TODO: Decide if we will remove base power
 get_problem_base_power(model::InvestmentModel) = 1.0
-get_settings(model::InvestmentModel) = get_optimization_container(model).settings
+get_settings(model::InvestmentModel) = IOM.get_optimization_container(model).settings
 get_optimizer_stats(model::InvestmentModel) =
-    get_optimizer_stats(get_optimization_container(model))
+    get_optimizer_stats(IOM.get_optimization_container(model))
 
 get_status(model::InvestmentModel) = IOM.get_status(get_internal(model))
 get_portfolio(model::InvestmentModel) = model.portfolio
 get_template(model::InvestmentModel) = model.template
 get_time_stamps(model::InvestmentModel) =
-    get_time_stamps(get_time_mapping(get_optimization_container(model)))
+    get_time_stamps(get_time_mapping(IOM.get_optimization_container(model)))
 
 get_store_params(model::InvestmentModel) =
     IOM.get_store_params(get_internal(model))
 get_output_dir(model::InvestmentModel) = IOM.get_output_dir(get_internal(model))
 get_recorder_dir(model::InvestmentModel) = joinpath(get_output_dir(model), "recorder")
 
-get_variables(model::InvestmentModel) = get_variables(get_optimization_container(model))
-get_duals(model::InvestmentModel) = get_duals(get_optimization_container(model))
+get_variables(model::InvestmentModel) = get_variables(IOM.get_optimization_container(model))
+get_duals(model::InvestmentModel) = get_duals(IOM.get_optimization_container(model))
 get_initial_conditions(model::InvestmentModel) =
-    get_initial_conditions(get_optimization_container(model))
+    get_initial_conditions(IOM.get_optimization_container(model))
 
 get_simulation_info(model::InvestmentModel) = model.simulation_info
 get_executions(model::InvestmentModel) = IOM.get_executions(get_internal(model))
@@ -184,7 +184,7 @@ function write_model_dual_results!(
     update_timestamp::Dates.Date,
     export_params::Union{Dict{Symbol, Any}, Nothing},
 ) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
+    container = IOM.get_optimization_container(model)
     model_name = get_name(model)
     if export_params !== nothing
         exports_path = joinpath(export_params[:exports_path], "duals")
@@ -217,7 +217,7 @@ function write_model_variable_results!(
     update_timestamp::Dates.Date,
     export_params::Union{Dict{Symbol, Any}, Nothing},
 ) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
+    container = IOM.get_optimization_container(model)
     model_name = get_name(model)
     if export_params !== nothing
         exports_path = joinpath(export_params[:exports_path], "variables")
@@ -255,7 +255,7 @@ function write_model_aux_variable_results!(
     update_timestamp::Dates.Date,
     export_params::Union{Dict{Symbol, Any}, Nothing},
 ) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
+    container = IOM.get_optimization_container(model)
     model_name = get_name(model)
     if export_params !== nothing
         exports_path = joinpath(export_params[:exports_path], "aux_variables")
@@ -288,7 +288,7 @@ function write_model_expression_results!(
     update_timestamp::Dates.Date,
     export_params::Union{Dict{Symbol, Any}, Nothing},
 ) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
+    container = IOM.get_optimization_container(model)
     model_name = get_name(model)
     if export_params !== nothing
         exports_path = joinpath(export_params[:exports_path], "expressions")
@@ -323,8 +323,8 @@ end
 function init_model_store_params!(model::InvestmentModel)
     base_power = 1.0 # Investment Models should default to Natural Units
     port_uuid = IS.make_uuid()
-    container = get_optimization_container(model)
-    time_mapping = get_time_mapping(container)
+    container = IOM.get_optimization_container(model)
+    time_mapping = IOM.get_time_mapping(container)
     horizon_count = length(get_time_steps(time_mapping))
     resolution = get_resolution(model)
     interval = resolution
@@ -355,8 +355,8 @@ function build_pre_step!(model::InvestmentModel)
         # Initial time are set here because the information is specified in the
         # Simulation Sequence object and not at the problem creation.
         @info "Initializing Optimization Container For an InvestmentModel"
-        init_optimization_container!(
-            get_optimization_container(model),
+        IOM.init_optimization_container!(
+            IOM.get_optimization_container(model),
             get_template(model),
             get_portfolio(model),
         )
@@ -443,15 +443,15 @@ function solve!(
             try
                 initialize_storage!(
                     get_store(model),
-                    get_optimization_container(model),
+                    IOM.get_optimization_container(model),
                     get_store_params(model),
                 )
                 TimerOutputs.@timeit RUN_OPERATION_MODEL_TIMER "Solve" begin
                     @warn "todo: add pre-solve model check back in"
                     #_pre_solve_model_checks(model, optimizer)
                     solve_impl!(model)
-                    container = get_optimization_container(model)
-                    time_mapping = get_time_mapping(container)
+                    container = IOM.get_optimization_container(model)
+                    time_mapping = IOM.get_time_mapping(container)
                     current_time = get_base_date(time_mapping)
 
                     write_results!(get_store(model), model, current_time, current_time)
@@ -488,7 +488,7 @@ function solve!(
 end
 
 function solve_impl!(model::InvestmentModel)
-    container = get_optimization_container(model)
+    container = IOM.get_optimization_container(model)
     status = solve_model!(container, get_portfolio(model))
     set_run_status!(model, status)
     if status != RunStatus.SUCCESSFULLY_FINALIZED
@@ -613,7 +613,7 @@ const _JUMP_MODEL_FILENAME = "jump_model.json"
 
 function serialize_optimization_model(model::InvestmentModel)
     serialize_optimization_model(
-        get_optimization_container(model),
+        IOM.get_optimization_container(model),
         joinpath(get_output_dir(model), _JUMP_MODEL_FILENAME),
     )
     return

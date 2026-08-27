@@ -120,7 +120,7 @@ function add_expression!(
     V <: AbstractTechnologyFormulation,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -163,7 +163,7 @@ function add_constraints!(
     V <: CumulativeInvestmentExpressionType,
     S <: InvestmentTechnologyFormulation,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -208,7 +208,7 @@ function add_constraints!(
     S <: OperationsColocatedFormulation,
     X <: TechnologyModel,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -265,7 +265,7 @@ function add_constraints!(
     S <: OperationsColocatedFormulation,
     X <: TechnologyModel,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -324,7 +324,7 @@ function add_constraints!(
     U <: Vector{D},
     S <: OperationsColocatedFormulation,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -386,7 +386,7 @@ function add_constraints!(
     V <: StateOfChargeVariable,
     S <: ChronologicalColocatedDispatch,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -467,7 +467,7 @@ function add_constraints!(
     V <: StateOfChargeVariable,
     S <: CyclicalColocatedDispatch,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)

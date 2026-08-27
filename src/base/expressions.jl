@@ -1,9 +1,3 @@
-abstract type InvestmentExpressionType <: ExpressionType end
-abstract type OperationsExpressionType <: ExpressionType end
-abstract type FeasibilityExpressionType <: ExpressionType end
-
-abstract type CumulativeInvestmentExpressionType <: InvestmentExpressionType end
-
 struct SupplyTotal <: OperationsExpressionType end
 struct DemandTotal <: OperationsExpressionType end
 struct EnergyBalance <: OperationsExpressionType end

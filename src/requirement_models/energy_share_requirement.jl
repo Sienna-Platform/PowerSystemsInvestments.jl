@@ -116,7 +116,7 @@ function add_expression!(
     ::RequirementEnergyShare,
     names_to_model_map::Dict{String, TechnologyModel},
 ) where {T <: PSIP.EnergyShareRequirements}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
 
     requirement_names = [PSIP.get_name(r) for r in requirements]
@@ -146,7 +146,7 @@ function add_expression!(
                 ops_meta = string(get_operations_formulation(tech_model))
                 weighted_gen =
                     get_expression(container, WeightedEnergyGeneration(), D, ops_meta)
-                _add_to_jump_expression!(
+                add_proportional_to_jump_expression!(
                     share_expr,
                     weighted_gen[resource_name, op_ix],
                     1.0,
@@ -171,7 +171,7 @@ function add_expression!(
     requirements::Vector{T},
     ::RequirementEnergyShare,
 ) where {T <: PSIP.EnergyShareRequirements}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -204,7 +204,7 @@ function add_expression!(
                         "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(PSIP.get_name(d)) does not match with the expected representative day $op_ix"
                     )
                 end
-                _add_to_jump_expression!(demand_expr, weight * sum(ts_data))
+                add_proportional_to_jump_expression!(demand_expr, sum(ts_data), weight)
             end
             expression[req_name, op_ix] = demand_expr
         end
@@ -231,7 +231,7 @@ function add_constraints!(
     requirements::Vector{T},
     ::RequirementEnergyShare,
 ) where {T <: PSIP.EnergyShareRequirements}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     share_gen = get_expression(container, WeightedEnergyShareGeneration(), T)
     share_demand = get_expression(container, WeightedEnergyShareDemand(), T)
 

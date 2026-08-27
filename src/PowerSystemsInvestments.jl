@@ -89,14 +89,12 @@ export WeightedEnergyShareGeneration
 export WeightedEnergyShareDemand
 
 ### Functions ###
-# methods
-export build!
 # Template exports
 export set_technology_model!
 export set_requirement_model!
 # Model Exports
+export build!
 export solve!
-export get_initial_conditions
 export serialize_problem
 export serialize_outputs
 #Results interfaces
@@ -231,6 +229,8 @@ import InfrastructureOptimizationModels:
 import InfrastructureOptimizationModels:
     list_variable_names, list_aux_variable_names, list_dual_names, list_expression_names
 import InfrastructureOptimizationModels:
+    AbstractProblemTemplate,
+    SparseVariableType,
     read_optimizer_stats,
     get_optimizer_stats,
     get_jump_model,
@@ -257,17 +257,75 @@ import InfrastructureOptimizationModels:
     read_dual,
     read_expression,
     get_infeasibility_conflict,
-    stores_time_series_in_memory
+    stores_time_series_in_memory,
+    get_default_attributes,
+    get_default_time_series_names,
+    _set_model!,
+    # Re-export commonly used accessors that don't clash
+    get_horizon,
+    get_optimizer,
+    get_direct_mode_optimizer,
+    get_optimizer_solve_log_print,
+    get_detailed_optimizer_stats,
+    get_calculate_conflict,
+    get_deserialize_initial_conditions,
+    get_store_variable_names,
+    get_check_numerical_bounds,
+    get_ext,
+    set_horizon!,
+    set_resolution!,
+    set_initial_time!,
+    log_values,
+    fix_parameter_value,
+    to_matrix,
+    container_spec,
+    sparse_container_spec,
+    remove_undef!,
+    supports_milp,
+    write_optimizer_stats!,
+    serialize_jump_optimization_model,
+    check_conflict_status,
+    get_column_names,
+    jump_value,
+    tf_html_simple,
+    _show_method,
+    add_constant_to_jump_expression!,
+    add_proportional_to_jump_expression!,
+    add_linear_to_jump_expression!
+import InfrastructureOptimizationModels:
+    TimeMapping, OperationalPeriods, InvestmentIntervals,
+    get_consecutive_slices, get_operational_indexes, get_feasibility_indexes,
+    get_all_indexes, get_time_stamps, get_investment_time_stamps,
+    get_inverse_invest_mapping, get_base_date,
+    get_total_period_count, get_total_operation_period_count,
+    get_total_feasibility_period_count, get_total_investment_period_count,
+    get_time_steps, get_operational_time_steps, get_feasibility_time_steps, get_investment_time_steps,
+    is_feasibility_empty, get_investment_map_to_operational_slices
+import InfrastructureOptimizationModels:
+    InvestmentVariableType, OperationsVariableType, FeasibilityVariableType,
+    BuildInvestmentVariableType, InvestmentExpressionType, OperationsExpressionType, 
+    FeasibilityExpressionType, CumulativeInvestmentExpressionType
+import InfrastructureOptimizationModels:
+    TechnologyModel, RequirementModel,
+    AbstractTechnologyFormulation, InvestmentTechnologyFormulation, OperationsTechnologyFormulation, FeasibilityTechnologyFormulation,
+    RequirementFormulation, get_technology_type, get_investment_formulation, get_operations_formulation, get_feasibility_formulation,
+    get_requirement_type, get_requirement_formulation, get_use_slacks, get_duals
+import InfrastructureOptimizationModels: 
+    InvestmentModel, InvestmentModelStore, SingleInstanceSolve,
+    build!, solve!, get_initial_condition!, get_run_status,
+    Settings, InvestmentSettings, get_portfolio_to_file, get_base_power, get_system_uuid, deserialize_key,
+    get_optimizer_container, get_optimizer_model, get_optimizer_results, get_optimizer_stats, get_optimizer_status,
+    set_investment_data!, InvestmentContainerData
 import TimerOutputs
 
 ####
 # Order Required #
 include("utils/mpi_utils.jl")
-include("utils/jump_utils.jl")
+# include("utils/jump_utils.jl")
 include("base/definitions.jl")
 include("base/simulation.jl")
 # Base #
-include("base/abstract_formulation_types.jl")
+# include("base/abstract_formulation_types.jl")
 include("capital/technology_capital_formulations.jl")
 include("capital/capital_models.jl")
 include("operation/technology_operation_formulations.jl")
@@ -277,30 +335,31 @@ include("base/transport_model.jl")
 include("base/constraints.jl")
 include("base/variables.jl")
 include("base/expressions.jl")
-include("base/settings.jl")
-include("base/solution_algorithms.jl")
-include("base/technology_model.jl")
+# include("base/settings.jl")
+# include("base/solution_algorithms.jl")
+# include("base/technology_model.jl")
 include("requirement_models/requirement_formulations.jl")
-include("base/requirement_model.jl")
+# include("base/requirement_model.jl")
 include("base/investment_model_template.jl")
-include("base/time_mapping.jl")
+# include("base/0.jl")
 include("base/objective_function.jl")
-include("base/investment_container_data.jl")
-include("base/single_optimization_container.jl")
+# include("base/investment_container_data.jl")
+include("base/optimization_container.jl")
 # Investment Model #
-include("investment_model/investment_model_store.jl")
-include("investment_model/investment_model.jl")
+# include("investment_model/investment_model_store.jl")
+# include("investment_model/investment_model.jl")
 include("investment_model/investment_problem_results.jl")
 # Serialization #
 include("base/serialization.jl")
 # Solve Instance #
-include("model_build/SingleInstanceSolve.jl")
+# include("model_build/SingleInstanceSolve.jl")
 # Utils #
-@static if pkgversion(PrettyTables).major == 2
-    include("utils/printing_pt_v2.jl")
-else
-    include("utils/printing_pt_v3.jl")
-end
+# @static if pkgversion(PrettyTables).major == 2
+#     include("utils/printing_pt_v2.jl")
+# else
+#     include("utils/printing_pt_v3.jl")
+# end
+include("utils/printing_pt_v3.jl")
 include("utils/logging.jl")
 include("utils/psip_utils.jl")
 # Technology Models #

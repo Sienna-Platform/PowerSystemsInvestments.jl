@@ -175,7 +175,7 @@
     @test length(PSIN.get_timestamps(res)) == 48
 
     # Weighted-energy expressions are always created, even with no requirements.
-    container = PSIN.get_optimization_container(m)
+    container = PSIN.IOM.get_optimization_container(m)
     expr_keys = PSIN.get_expression_keys(container)
     @test PSIN.ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) in expr_keys
     @test PSIN.ExpressionKey(
@@ -296,7 +296,7 @@ end
 
     # Force infeasibility by setting the RHS of a registered balance constraint to an
     # impossibly large demand value, so the constraint is captured in the IIS conflict dict.
-    container = PSIN.get_optimization_container(m)
+    container = PSIN.IOM.get_optimization_container(m)
     jump_model = PSIN.get_jump_model(container)
     balance_key = first(
         k for k in keys(PSIN.get_constraints(container)) if
@@ -358,7 +358,7 @@ end
         status = build!(model; output_dir=path)
         @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
 
-        container = PSIN.get_optimization_container(model)
+        container = PSIN.IOM.get_optimization_container(model)
 
         @test haskey(
             PSIN.get_constraints(container),
@@ -526,7 +526,7 @@ end
         status = build!(model; output_dir=path)
         @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
 
-        container = PSIN.get_optimization_container(model)
+        container = PSIN.IOM.get_optimization_container(model)
 
         @test haskey(
             PSIN.get_constraints(container),
@@ -663,7 +663,7 @@ end
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
-    container = PSIN.get_optimization_container(m)
+    container = PSIN.IOM.get_optimization_container(m)
     @test haskey(
         PSIN.get_constraints(container),
         PSIN.ConstraintKey(

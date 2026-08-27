@@ -46,21 +46,3 @@ end
 
 # PSI-specific alias
 get_portfolio_to_file(settings::IOM.Settings) = IOM.get_system_to_file(settings)
-
-# Re-export commonly used accessors that don't clash
-get_horizon(settings::IOM.Settings) = IOM.get_horizon(settings)
-get_optimizer(settings::IOM.Settings) = IOM.get_optimizer(settings)
-get_direct_mode_optimizer(settings::IOM.Settings) = IOM.get_direct_mode_optimizer(settings)
-get_optimizer_solve_log_print(settings::IOM.Settings) = IOM.get_optimizer_solve_log_print(settings)
-get_detailed_optimizer_stats(settings::IOM.Settings) = IOM.get_detailed_optimizer_stats(settings)
-get_calculate_conflict(settings::IOM.Settings) = IOM.get_calculate_conflict(settings)
-get_deserialize_initial_conditions(settings::IOM.Settings) = IOM.get_deserialize_initial_conditions(settings)
-get_store_variable_names(settings::IOM.Settings) = IOM.get_store_variable_names(settings)
-get_check_numerical_bounds(settings::IOM.Settings) = IOM.get_check_numerical_bounds(settings)
-get_ext(settings::IOM.Settings) = IOM.get_ext(settings)
-
-set_horizon!(settings::IOM.Settings, horizon::Dates.TimePeriod) = IOM.set_horizon!(settings, horizon)
-set_resolution!(settings::IOM.Settings, resolution::Dates.TimePeriod) = IOM.set_resolution!(settings, resolution)
-set_initial_time!(settings::IOM.Settings, initial_time::Dates.DateTime) = IOM.set_initial_time!(settings, initial_time)
-
-log_values(settings::IOM.Settings) = IOM.log_values(settings)

@@ -45,11 +45,11 @@ end
         TransportModel(SingleRegionBalanceModel, use_slacks=false),
     )
 
-    settings = PSIN.Settings(p_5bus)
+    settings = IOM.Settings(p_5bus)
     model = JuMP.Model(HiGHS.Optimizer)
     container = PSIN.OptimizationContainer(settings, model)
 
-    PSIN.init_optimization_container!(container, template, p_5bus)
+    IOM.init_optimization_container!(container, template, p_5bus)
 
     transport_model = PSIN.get_transport_model(template)
     PSIN.initialize_system_expressions!(container, transport_model, p_5bus)

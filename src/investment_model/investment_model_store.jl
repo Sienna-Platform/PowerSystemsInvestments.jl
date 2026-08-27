@@ -36,7 +36,7 @@ function initialize_storage!(
     container::IOM.AbstractOptimizationContainer,
     params::IOM.AbstractModelStoreParams,
 )
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     if length(get_time_steps(time_mapping)) < 1
         error("The time step count in the optimization container is not defined")
     end

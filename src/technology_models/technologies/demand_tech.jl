@@ -35,7 +35,7 @@ function add_to_expression!(
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
@@ -55,7 +55,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix])
+                add_proportional_to_jump_expression!(expression[SINGLE_REGION, t], ts_data[ix], -1.0)
             end
         end
     end
@@ -75,7 +75,7 @@ function add_to_expression!(
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
@@ -97,7 +97,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix])
+                add_proportional_to_jump_expression!(expression[region, t], ts_data[ix], -1.0)
             end
         end
     end
@@ -116,7 +116,7 @@ function add_to_expression!(
     V <: NodalBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
@@ -138,7 +138,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix])
+                add_proportional_to_jump_expression!(expression[region, t], ts_data[ix], -1.0)
             end
         end
     end
@@ -161,7 +161,7 @@ function add_to_expression!(
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     operational_weights = get_operational_weights(container)
@@ -182,9 +182,10 @@ function add_to_expression!(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
                 )
             end
-            _add_to_jump_expression!(
+            add_proportional_to_jump_expression!(
                 expression[SINGLE_REGION, op_ix],
-                weight * sum(ts_data),
+                sum(ts_data),
+                weight,
             )
         end
     end
@@ -204,7 +205,7 @@ function add_to_expression!(
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     operational_weights = get_operational_weights(container)
@@ -227,7 +228,7 @@ function add_to_expression!(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
                 )
             end
-            _add_to_jump_expression!(expression[region, op_ix], weight * sum(ts_data))
+            add_proportional_to_jump_expression!(expression[region, op_ix], sum(ts_data), weight)
         end
     end
     return
@@ -245,7 +246,7 @@ function add_to_expression!(
     V <: NodalBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     operational_weights = get_operational_weights(container)
@@ -268,7 +269,7 @@ function add_to_expression!(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
                 )
             end
-            _add_to_jump_expression!(expression[region, op_ix], weight * sum(ts_data))
+            add_proportional_to_jump_expression!(expression[region, op_ix], sum(ts_data), weight)
         end
     end
     return
@@ -286,7 +287,7 @@ function add_to_expression!(
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
@@ -306,7 +307,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix])
+                add_proportional_to_jump_expression!(expression[SINGLE_REGION, t], ts_data[ix], -1.0)
             end
         end
     end
@@ -326,7 +327,7 @@ function add_to_expression!(
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
@@ -348,7 +349,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix])
+                add_proportional_to_jump_expression!(expression[region, t], ts_data[ix], -1.0)
             end
         end
     end

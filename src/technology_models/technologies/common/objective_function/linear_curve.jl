@@ -174,7 +174,7 @@ function _add_linearcurve_cost!(
             technology,
             proportional_term,
         )
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
@@ -210,7 +210,7 @@ function _add_linearcurve_cost!(
             technology,
             proportional_term,
         )
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
@@ -240,7 +240,7 @@ function _add_linearcurve_cost!(
     proportional_term::Float64,
     tech_model::String,
 ) where {T <: InvestmentExpressionType}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
@@ -284,7 +284,7 @@ function _add_linearcurve_cost!(
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
     tech_base_year = PSIP.get_technology_base_year(financials)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
 

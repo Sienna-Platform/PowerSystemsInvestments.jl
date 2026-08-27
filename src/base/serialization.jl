@@ -48,7 +48,7 @@ function serialize_problem(model::InvestmentModel; optimizer=nothing)
     else
         portfolio_filename = nothing
     end
-    container = get_optimization_container(model)
+    container = IOM.get_optimization_container(model)
 
     if optimizer === nothing
         optimizer = get_optimizer(get_settings(model))

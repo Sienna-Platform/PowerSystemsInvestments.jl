@@ -34,7 +34,7 @@ end
 
 function Base.getproperty(container::OptimizationContainer, name::Symbol)
     if name === :time_mapping
-        return get_time_mapping(container)
+        return IOM.get_time_mapping(container)
     end
     return getfield(container, name)
 end
@@ -70,7 +70,7 @@ function _finalize_jump_model!(container::OptimizationContainer, settings::IOM.S
     return
 end
 
-function init_optimization_container!(
+function IOM.init_optimization_container!(
     container::OptimizationContainer,
     template::InvestmentModelTemplate,
     portfolio::PSIP.Portfolio,
@@ -90,13 +90,13 @@ function init_optimization_container!(
         feasibility_model.sample_periods,
     )
 
-    set_time_mapping!(container, time_map)
-    set_operational_weights!(container, operation_model.series_weights)
+    IOM.set_time_mapping!(container, time_map)
+    IOM.set_operational_weights!(container, operation_model.series_weights)
     # Set Financial Data in Container from Portfolio
-    set_base_year!(container, PSIP.get_base_year(portfolio))
-    set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
-    set_inflation_rate!(container, PSIP.get_inflation_rate(portfolio))
-    set_interest_rate!(container, PSIP.get_interest_rate(portfolio))
+    IOM.set_base_year!(container, PSIP.get_base_year(portfolio))
+    IOM.set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
+    IOM.set_inflation_rate!(container, PSIP.get_inflation_rate(portfolio))
+    IOM.set_interest_rate!(container, PSIP.get_interest_rate(portfolio))
 
     stats = get_optimizer_stats(container)
     stats.detailed_stats = IOM.get_detailed_optimizer_stats(settings)
@@ -256,41 +256,6 @@ end
 
 ##################################### Expression Container #################################
 
-function _add_to_jump_expression!(
-    expression::T,
-    value::Float64,
-) where {T <: JuMP.AbstractJuMPScalar}
-    JuMP.add_to_expression!(expression, value)
-    return
-end
-
-function _add_to_jump_expression!(
-    expression::T,
-    parameter::Float64,
-    multiplier::Float64,
-) where {T <: JuMP.AbstractJuMPScalar}
-    _add_to_jump_expression!(expression, parameter * multiplier)
-    return
-end
-
-function _add_to_jump_expression!(
-    expression::T,
-    var::JuMP.VariableRef,
-    multiplier::Float64,
-) where {T <: JuMP.AbstractJuMPScalar}
-    JuMP.add_to_expression!(expression, multiplier, var)
-    return
-end
-
-function _add_to_jump_expression!(
-    expression::T,
-    var::JuMP.AffExpr,
-    multiplier::Float64,
-) where {T <: JuMP.AbstractJuMPScalar}
-    JuMP.add_to_expression!(expression, multiplier, var)
-    return
-end
-
 function _add_expression_container!(
     container::OptimizationContainer,
     expr_key::ExpressionKey,
@@ -447,9 +412,9 @@ function _make_system_expressions!(
     container::OptimizationContainer,
     ::Type{SingleRegionBalanceModel},
 )
-    time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
-    operational_indexes = get_operational_indexes(time_mapping)
+    time_mapping = IOM.get_time_mapping(container)
+    time_steps = IOM.get_time_steps(time_mapping)
+    operational_indexes = IOM.get_operational_indexes(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array([SINGLE_REGION], time_steps),
@@ -467,9 +432,9 @@ function _make_system_expressions!(
     port::PSIP.Portfolio,
 )
     regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
-    time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
-    operational_indexes = get_operational_indexes(time_mapping)
+    time_mapping = IOM.get_time_mapping(container)
+    time_steps = IOM.get_time_steps(time_mapping)
+    operational_indexes = IOM.get_operational_indexes(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
@@ -487,8 +452,8 @@ function _make_system_expressions!(
     port::PSIP.Portfolio,
 )
     nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
-    time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
+    time_mapping = IOM.get_time_mapping(container)
+    time_steps = IOM.get_time_steps(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
@@ -504,9 +469,9 @@ function _make_system_expressions!(
     port::PSIP.Portfolio,
 )
     nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
-    time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
-    operational_indexes = get_operational_indexes(time_mapping)
+    time_mapping = IOM.get_time_mapping(container)
+    time_steps = IOM.get_time_steps(time_mapping)
+    operational_indexes = IOM.get_operational_indexes(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
