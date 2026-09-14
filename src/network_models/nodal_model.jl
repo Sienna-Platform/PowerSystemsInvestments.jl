@@ -15,21 +15,36 @@ function add_constraints!(
     expressions = get_expression(container, EnergyBalance(), U)
     constraint = add_constraints_container!(container, T(), U, nodes, time_steps)
 
-    # Create slack variables for power balance violations
     jm = get_jump_model(container)
-    slack_vars = @variable(jm, nodal_balance_slack[n in nodes, t in time_steps] >= 0)
 
-    # Add constraints with slack: expressions[n, t] == slack[n, t]
-    # (slack allows energy imbalance when generation cannot meet demand)
-    for t in time_steps, n in nodes
-        constraint[n, t] =
-            JuMP.@constraint(jm, expressions[n, t] == slack_vars[n, t])
+    # Check if nodal slack is enabled (can be toggled via command line)
+    enable_nodal_slack = try
+        Main.ENABLE_NODAL_SLACK
+    catch
+        true
     end
 
-    # Add slack penalty to objective
-    current_obj = JuMP.objective_function(jm)
-    penalty_cost = sum(slack_vars) * NODAL_BALANCE_SLACK_PENALTY
-    JuMP.set_objective(jm, JuMP.MOI.MIN_SENSE, current_obj + penalty_cost)
+    if enable_nodal_slack
+        # Create slack variables for power balance violations
+        slack_vars = @variable(jm, nodal_balance_slack[n in nodes, t in time_steps] >= 0)
+
+        # Add constraints with slack: expressions[n, t] == slack[n, t]
+        for t in time_steps, n in nodes
+            constraint[n, t] =
+                JuMP.@constraint(jm, expressions[n, t] == slack_vars[n, t])
+        end
+
+        # Add slack penalty to objective
+        current_obj = JuMP.objective_function(jm)
+        penalty_cost = sum(slack_vars) * NODAL_BALANCE_SLACK_PENALTY
+        JuMP.set_objective(jm, JuMP.MOI.MIN_SENSE, current_obj + penalty_cost)
+    else
+        # Hard constraints (original behavior)
+        for t in time_steps, n in nodes
+            constraint[n, t] =
+                JuMP.@constraint(jm, expressions[n, t] == 0)
+        end
+    end
 
     return
 end
