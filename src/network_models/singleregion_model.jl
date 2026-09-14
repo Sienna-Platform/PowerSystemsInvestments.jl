@@ -26,10 +26,24 @@ function add_constraints!(
     time_steps = get_time_steps(time_mapping)
     expressions = get_expression(container, FeasibilitySurplus(), U)
     constraint = add_constraints_container!(container, T(), U, time_steps)
+
+    jm = get_jump_model(container)
+
+    # Create slack variables for energy feasibility violations
+    const ENERGY_FEASIBILITY_SLACK_PENALTY = 1_000_000.0  # $1M/MWh
+    slack_vars = @variable(jm, energy_feasibility_slack[t in time_steps] >= 0)
+
+    # Add constraints with slack: expressions[SINGLE_REGION, t] >= -slack[t]
+    # (negative slack allows energy deficit when generation cannot meet demand)
     for t in time_steps
         constraint[t] =
-            JuMP.@constraint(get_jump_model(container), expressions[SINGLE_REGION, t] >= 0)
+            JuMP.@constraint(jm, expressions[SINGLE_REGION, t] >= -slack_vars[t])
     end
+
+    # Add slack penalty to objective
+    current_obj = JuMP.objective_function(jm)
+    penalty_cost = sum(slack_vars) * ENERGY_FEASIBILITY_SLACK_PENALTY
+    JuMP.set_objective(jm, JuMP.MOI.MIN_SENSE, current_obj + penalty_cost)
 
     return
 end
