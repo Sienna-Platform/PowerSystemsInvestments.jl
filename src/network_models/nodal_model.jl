@@ -69,6 +69,7 @@ function add_constraints!(
 
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
+    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
     expressions = get_expression(container, FeasibilitySurplus(), U)
     constraint = add_constraints_container!(container, T(), U, time_steps)
 
@@ -92,8 +93,9 @@ function add_constraints!(
         # Add constraints with slack: sum over all nodes >= -slack[t]
         # This allows total generation < total load with slack covering the gap
         for t in time_steps
+            total_surplus = sum(expressions[n, t] for n in nodes)
             constraint[t] =
-                JuMP.@constraint(jm, expressions[SINGLE_REGION, t] >= -slack_vars[t])
+                JuMP.@constraint(jm, total_surplus >= -slack_vars[t])
         end
 
         # Store slack variables for penalty accumulation
@@ -103,8 +105,9 @@ function add_constraints!(
     else
         # Hard constraints (original behavior)
         for t in time_steps
+            total_surplus = sum(expressions[n, t] for n in nodes)
             constraint[t] =
-                JuMP.@constraint(jm, expressions[SINGLE_REGION, t] >= 0)
+                JuMP.@constraint(jm, total_surplus >= 0)
         end
     end
 
