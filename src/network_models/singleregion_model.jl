@@ -47,11 +47,9 @@ function add_constraints!(
                 JuMP.@constraint(jm, expressions[SINGLE_REGION, t] >= -slack_vars[t])
         end
 
-        # Add slack penalty to objective without replacing existing penalties
-        penalty_cost = sum(slack_vars) * energy_feasibility_slack_penalty
-        current_obj = JuMP.objective_function(jm)
-        new_obj = current_obj + penalty_cost
-        JuMP.set_objective(jm, JuMP.MOI.MIN_SENSE, new_obj)
+        # Store slack variables for penalty accumulation
+        # NOTE: Objective is set in reserve margin function to accumulate all slack penalties
+        jm.ext[:energy_feasibility_slack] = slack_vars
     else
         # Hard constraints (original behavior)
         for t in time_steps

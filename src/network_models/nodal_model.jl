@@ -36,12 +36,10 @@ function add_constraints!(
                 JuMP.@constraint(jm, expressions[n, t] == slack_pos[n, t] - slack_neg[n, t])
         end
 
-        # Add slack penalty to objective: penalize both directions equally
-        # Rebuild objective to include slack penalties
-        penalty_cost = (sum(slack_pos) + sum(slack_neg)) * NODAL_BALANCE_SLACK_PENALTY
-        current_obj = JuMP.objective_function(jm)
-        new_obj = current_obj + penalty_cost
-        JuMP.set_objective(jm, JuMP.MOI.MIN_SENSE, new_obj)
+        # Store slack variables for penalty accumulation
+        # NOTE: Objective is set in reserve margin function to accumulate all slack penalties
+        jm.ext[:nodal_balance_slack_pos] = slack_pos
+        jm.ext[:nodal_balance_slack_neg] = slack_neg
     else
         # Hard constraints (original behavior)
         for t in time_steps, n in nodes
