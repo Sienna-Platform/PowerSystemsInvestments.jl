@@ -25,18 +25,20 @@ function add_constraints!(
     end
 
     if enable_nodal_slack
-        # Create slack variables for power balance violations
-        slack_vars = @variable(jm, nodal_balance_slack[n in nodes, t in time_steps] >= 0)
+        # Create positive and negative slack variables to handle both over- and under-supply
+        slack_pos = @variable(jm, nodal_balance_slack_pos[n in nodes, t in time_steps] >= 0)
+        slack_neg = @variable(jm, nodal_balance_slack_neg[n in nodes, t in time_steps] >= 0)
 
-        # Add constraints with slack: expressions[n, t] == slack[n, t]
+        # Add constraints with slack: expressions[n, t] == slack_pos[n, t] - slack_neg[n, t]
+        # This allows slack to be positive (over-supply) or negative (under-supply)
         for t in time_steps, n in nodes
             constraint[n, t] =
-                JuMP.@constraint(jm, expressions[n, t] == slack_vars[n, t])
+                JuMP.@constraint(jm, expressions[n, t] == slack_pos[n, t] - slack_neg[n, t])
         end
 
-        # Add slack penalty to objective
+        # Add slack penalty to objective: penalize both directions equally
         current_obj = JuMP.objective_function(jm)
-        penalty_cost = sum(slack_vars) * NODAL_BALANCE_SLACK_PENALTY
+        penalty_cost = (sum(slack_pos) + sum(slack_neg)) * NODAL_BALANCE_SLACK_PENALTY
         JuMP.set_objective(jm, JuMP.MOI.MIN_SENSE, current_obj + penalty_cost)
     else
         # Hard constraints (original behavior)
