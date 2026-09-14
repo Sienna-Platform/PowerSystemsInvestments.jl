@@ -49,7 +49,9 @@ function add_constraints!(
 
         # Add slack penalty to objective without replacing existing penalties
         penalty_cost = sum(slack_vars) * energy_feasibility_slack_penalty
-        JuMP.add_to_expression!(JuMP.objective_function(jm), penalty_cost)
+        current_obj = JuMP.objective_function(jm)
+        new_obj = current_obj + penalty_cost
+        JuMP.set_objective(jm, JuMP.MOI.MIN_SENSE, new_obj)
     else
         # Hard constraints (original behavior)
         for t in time_steps

@@ -37,9 +37,11 @@ function add_constraints!(
         end
 
         # Add slack penalty to objective: penalize both directions equally
-        # Add to existing objective without replacing it
+        # Rebuild objective to include slack penalties
         penalty_cost = (sum(slack_pos) + sum(slack_neg)) * NODAL_BALANCE_SLACK_PENALTY
-        JuMP.add_to_expression!(JuMP.objective_function(jm), penalty_cost)
+        current_obj = JuMP.objective_function(jm)
+        new_obj = current_obj + penalty_cost
+        JuMP.set_objective(jm, JuMP.MOI.MIN_SENSE, new_obj)
     else
         # Hard constraints (original behavior)
         for t in time_steps, n in nodes
