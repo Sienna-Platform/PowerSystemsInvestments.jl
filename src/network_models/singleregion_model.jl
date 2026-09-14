@@ -335,10 +335,18 @@ function add_capacity_adequacy_constraint!(container, portfolio::PSIP.Portfolio,
                 1:1  # Single constraint indexed by 1
             )
 
-            # Add the constraint to the JuMP model and register it
-            constraint_array[1] = JuMP.@constraint(jump_model, capacity_expr >= peak_demand)
+            # Add soft slack to capacity adequacy constraint
+            # This allows undersupply with penalty instead of infeasibility
+            slack_capacity = @variable(jump_model, slack_capacity_adequacy >= 0)
 
-            @info "Capacity adequacy constraint added: existing_capacity=$existing_effective_capacity + weighted_buildcapacity >= peak_demand=$peak_demand"
+            # Add the constraint to the JuMP model and register it
+            # capacity >= peak_demand - slack (allows unmet demand with penalty)
+            constraint_array[1] = JuMP.@constraint(jump_model, capacity_expr >= peak_demand - slack_capacity)
+
+            # Store slack for penalty accumulation (will be used by calling code)
+            jump_model.ext[:capacity_adequacy_slack] = slack_capacity
+
+            @info "Capacity adequacy constraint added: existing_capacity=$existing_effective_capacity + weighted_buildcapacity >= peak_demand=$peak_demand - slack"
         end
     else
         @debug "No BuildCapacity variables found for capacity adequacy constraint"
