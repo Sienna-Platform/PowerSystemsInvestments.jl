@@ -23,5 +23,6 @@ function construct_transport!(
     ::TransportModel{NodalBalanceModel},
 )
     add_constraints!(container, NodalBalanceConstraint, p)
+    add_constraints!(container, SingleRegionBalanceFeasibilityConstraint, p)
     # Note: CapacityAdequacyConstraint is added post-build when variables exist
 end
