@@ -8,8 +8,10 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+InfrastructureCoreOpenAPIModels = "1f5e1c8d-e0cc-4dbf-8c6d-f2a3d2ae70a8"
 InfrastructureOptimizationModels = "bed98974-b02a-5e2f-9ee0-a103f5c45069"
 InfrastructureSystems = "2cd47ed4-ca9b-11e9-27f2-ab636a7671f1"
+InfrastructureTimeSeriesOpenAPIModels = "37a216c8-a490-47cf-89d7-db2cb9618199"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -23,45 +25,50 @@ PowerOpenAPIModels = "0730f07c-cff6-4c3b-a9df-c546153be50a"
 PowerOperationsOpenAPIModels = "a372b6d7-45a2-44c2-8199-6a724b72e8ff"
 PowerSystems = "bcd98974-b02a-5e2f-9ee0-a103f5c450dd"
 PowerSystemsInvestmentsPortfolios = "bed98974-b02a-5e2f-9fe0-a103f8c450dd"
-PowerTimeSeriesOpenAPIModels = "8c2f6a0d-6b0e-4d0a-9d8f-2b5e6a4f9c31"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 TimeSeries = "9e3dc215-6440-5c97-bce1-76c03772f85e"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [sources]
-InfrastructureOptimizationModels = {path = "../InfrastructureOptimizationModels.jl"}
-InfrastructureSystems = {rev = "IS4", url = "https://github.com/Sienna-Platform/InfrastructureSystems.jl.git"}
-PowerCoreOpenAPIModels = {rev = "main", subdir = "PowerCoreOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
-PowerDynamicsOpenAPIModels = {rev = "main", subdir = "PowerDynamicsOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
-PowerInvestmentsOpenAPIModels = {rev = "main", subdir = "PowerInvestmentsOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
-PowerOpenAPIModels = {rev = "main", subdir = "PowerOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
-PowerOperationsOpenAPIModels = {rev = "main", subdir = "PowerOperationsOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
-PowerSystems = {rev = "psy6", url = "https://github.com/Sienna-Platform/PowerSystems.jl.git"}
-PowerSystemsInvestmentsPortfolios = {path = "../PowerSystemsInvestmentsPortfolios.jl"}
-PowerTimeSeriesOpenAPIModels = {rev = "main", subdir = "PowerTimeSeriesOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
+# Without this the test environment resolves the REGISTERED PowerSystemsInvestments-
+# Portfolios instead of the working tree, so local changes are never exercised and the
+# registered package's own compat bounds drive resolution.
+PowerSystemsInvestmentsPortfolios = {url = "https://github.com/Sienna-Platform/InfrastructureSystems.jl.git", rev = "psy6"}
+InfrastructureSystems = {url = "https://github.com/Sienna-Platform/InfrastructureSystems.jl.git", rev = "IS4"}
+PowerSystems = {url = "https://github.com/Sienna-Platform/PowerSystems.jl.git", rev = "psy6"}
+# Branch pins until the OpenAPI packages are registered and the psy6-line branches merge.
+# PowerOperationsOpenAPIModels is unused by PSIP itself and listed only so Pkg can resolve
+# PowerSystems.
+PowerCoreOpenAPIModels = {url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git", rev = "main", subdir = "PowerCoreOpenAPIModels.jl"}
+InfrastructureCoreOpenAPIModels = {url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git", rev = "main", subdir = "InfrastructureCoreOpenAPIModels.jl"}
+InfrastructureTimeSeriesOpenAPIModels = {url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git", rev = "main", subdir = "InfrastructureTimeSeriesOpenAPIModels.jl"}
+PowerDynamicsOpenAPIModels = {url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git", rev = "main", subdir = "PowerDynamicsOpenAPIModels.jl"}
+PowerOpenAPIModels = {url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git", rev = "main", subdir = "PowerOpenAPIModels.jl"}
+PowerOperationsOpenAPIModels = {url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git", rev = "main", subdir = "PowerOperationsOpenAPIModels.jl"}
+PowerInvestmentsOpenAPIModels = {url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git", rev = "main", subdir = "PowerInvestmentsOpenAPIModels.jl"}
 
 [compat]
 DataFrames = "1"
 DataStructures = "~0.18, ~0.19"
 Dates = "1"
 DocStringExtensions = "~v0.9"
-InfrastructureOptimizationModels = "0.1"
-InfrastructureSystems = "^3.1"
+InfrastructureCoreOpenAPIModels = "0.1.0"
+InfrastructureSystems = "3.6.0"
+InfrastructureTimeSeriesOpenAPIModels = "0.1.0"
 JSON3 = "v1.14.0"
 JuMP = "1"
 Logging = "1"
 MathOptInterface = "1"
 OrderedCollections = "1"
-PowerCoreOpenAPIModels = "0.1"
-PowerDynamicsOpenAPIModels = "0.1"
-PowerInvestmentsOpenAPIModels = "0.1"
+PowerCoreOpenAPIModels = "0.1.0"
+PowerDynamicsOpenAPIModels = "0.1.0"
+PowerInvestmentsOpenAPIModels = "0.1.0"
 PowerModels = "^0.21"
-PowerOpenAPIModels = "0.1"
-PowerOperationsOpenAPIModels = "0.1"
-PowerSystems = "5"
-PowerSystemsInvestmentsPortfolios = "0.1"
-PowerTimeSeriesOpenAPIModels = "0.1"
+PowerOpenAPIModels = "0.1.0"
+PowerOperationsOpenAPIModels = "0.1.0"
+PowerSystems = "5.10.0"
+PowerSystemsInvestmentsPortfolios = "0.1.0"
 PrettyTables = "3"
 Serialization = "1"
 TimeSeries = "^0.25"
