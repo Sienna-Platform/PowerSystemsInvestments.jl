@@ -86,7 +86,7 @@
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IOM.ModelBuildStatus.BUILT
     # @show m.internal.container.expressions
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
@@ -165,7 +165,7 @@
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IOM.ModelBuildStatus.BUILT
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemOutputs(m)
@@ -290,7 +290,7 @@ end
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IOM.ModelBuildStatus.BUILT
 
     # Force infeasibility by setting the RHS of a registered balance constraint to an
     # impossibly large demand value, so the constraint is captured in the IIS conflict dict.
@@ -353,7 +353,7 @@ end
 
     mktempdir() do path
         status = build!(model; output_dir=path)
-        @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+        @test status == IOM.ModelBuildStatus.BUILT
 
         container = IOM.get_optimization_container(model)
 
@@ -520,7 +520,7 @@ end
 
     mktempdir() do path
         status = build!(model; output_dir=path)
-        @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+        @test status == IOM.ModelBuildStatus.BUILT
 
         container = IOM.get_optimization_container(model)
 
@@ -655,7 +655,7 @@ end
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IOM.ModelBuildStatus.BUILT
     # @show m.internal.container.expressions
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
