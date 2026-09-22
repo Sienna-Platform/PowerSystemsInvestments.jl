@@ -35,7 +35,7 @@ function construct_technologies!(
     return
 end
 
-function construct_technologies!(
+function chnologies!(
     container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},

@@ -1,6 +1,4 @@
-abstract type AbstractInvestmentModelTemplate <: AbstractProblemTemplate end
-
-mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
+mutable struct InvestmentModelTemplate <: AbstractProblemTemplate
     capital_model::CapitalCostModel
     operation_model::OperationCostModel
     feasibility_model::FeasibilityModel

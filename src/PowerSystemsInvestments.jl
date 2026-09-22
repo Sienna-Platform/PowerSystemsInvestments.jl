@@ -300,7 +300,12 @@ import InfrastructureOptimizationModels:
     get_total_period_count, get_total_operation_period_count,
     get_total_feasibility_period_count, get_total_investment_period_count,
     get_time_steps, get_operational_time_steps, get_feasibility_time_steps, get_investment_time_steps,
-    is_feasibility_empty, get_investment_map_to_operational_slices
+    is_feasibility_empty, get_investment_map_to_operational_slices, get_operational_weights, get_base_year,
+    get_discount_rate, get_inflation_rate, get_status, get_internal, get_run_status, get_store,
+    set_output_dir!, set_status!, set_console_level!, set_file_level!, get_recorders, get_recorder_dir,
+    get_optimization_container, get_template, get_portfolio, get_time_mapping, get_executions, get_variable,
+    ModelStoreParams, set_store_params!, configure_logging, initialize_storage!, get_store_params, is_operation_entry,
+    is_investment_entry, set_run_status!, get_allow_fails, AbstractTransportAggregation, TransportModel, get_use_slacks
 import InfrastructureOptimizationModels:
     InvestmentVariableType, OperationsVariableType, FeasibilityVariableType,
     BuildInvestmentVariableType, InvestmentExpressionType, OperationsExpressionType, 
@@ -311,21 +316,18 @@ import InfrastructureOptimizationModels:
     RequirementFormulation, get_technology_type, get_investment_formulation, get_operations_formulation, get_feasibility_formulation,
     get_requirement_type, get_requirement_formulation, get_use_slacks, get_duals
 import InfrastructureOptimizationModels: 
-    InvestmentModel, InvestmentModelStore, SingleInstanceSolve,
-    build!, solve!, get_initial_condition!, get_run_status,
-    Settings, InvestmentSettings, get_portfolio_to_file, get_base_power, get_system_uuid, deserialize_key,
-    get_optimizer_container, get_optimizer_model, get_optimizer_results, get_optimizer_stats, get_optimizer_status,
-    set_investment_data!, InvestmentContainerData
+    InvestmentModel, InvestmentModelStore,
+    Settings, get_portfolio_to_file, get_base_power, get_system_uuid, deserialize_key,
+    get_optimizer_stats, set_investment_data!, InvestmentContainerData, OptimizationKeyType,
+    LOG_GROUP_OPTIMIZATION_CONTAINER, LOG_GROUP_MODEL_STORE, reset!, built_for_recurrent_solves,
+    init_optimization_container!
 import TimerOutputs
 
 ####
 # Order Required #
 include("utils/mpi_utils.jl")
-# include("utils/jump_utils.jl")
 include("base/definitions.jl")
-include("base/simulation.jl")
 # Base #
-# include("base/abstract_formulation_types.jl")
 include("capital/technology_capital_formulations.jl")
 include("capital/capital_models.jl")
 include("operation/technology_operation_formulations.jl")
@@ -335,32 +337,21 @@ include("base/transport_model.jl")
 include("base/constraints.jl")
 include("base/variables.jl")
 include("base/expressions.jl")
-# include("base/settings.jl")
-# include("base/solution_algorithms.jl")
-# include("base/technology_model.jl")
+include("base/solution_algorithms.jl")
 include("requirement_models/requirement_formulations.jl")
-# include("base/requirement_model.jl")
 include("base/investment_model_template.jl")
-# include("base/0.jl")
 include("base/objective_function.jl")
-# include("base/investment_container_data.jl")
 include("base/optimization_container.jl")
 # Investment Model #
-# include("investment_model/investment_model_store.jl")
-# include("investment_model/investment_model.jl")
+include("investment_model/investment_model_store.jl")
+include("investment_model/investment_model.jl")
 include("investment_model/investment_problem_results.jl")
 # Serialization #
 include("base/serialization.jl")
 # Solve Instance #
-# include("model_build/SingleInstanceSolve.jl")
+include("model_build/SingleInstanceSolve.jl")
 # Utils #
-# @static if pkgversion(PrettyTables).major == 2
-#     include("utils/printing_pt_v2.jl")
-# else
-#     include("utils/printing_pt_v3.jl")
-# end
 include("utils/printing_pt_v3.jl")
-include("utils/logging.jl")
 include("utils/psip_utils.jl")
 # Technology Models #
 include("technology_models/technologies/common/add_variable.jl")

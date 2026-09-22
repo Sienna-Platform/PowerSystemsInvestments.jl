@@ -26,7 +26,7 @@ function psin_constraint_test(
     model::InvestmentModel,
     constraint_keys::Vector{<:PSIN.ConstraintKey},
 )
-    constraints = PSIN.get_constraints(model)
+    constraints = IOM.get_constraints(model)
     for con in constraint_keys
         if get(constraints, con, nothing) !== nothing
             @test true
@@ -91,7 +91,7 @@ function check_flow_variable_values(
     device_name::String,
     limit::Float64,
 ) where {T <: PSIN.VariableType, U <: PSIP.Technology}
-    psi_cont = PSIN.IOM.get_optimization_container(model)
+    psi_cont = IOM.get_optimization_container(model)
     variable = PSIN.get_variable(psi_cont, T(), U)
     for var in variable[device_name, :]
         if !(PSIN.jump_value(var) <= (limit + 1e-2))

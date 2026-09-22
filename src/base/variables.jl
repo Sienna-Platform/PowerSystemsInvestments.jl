@@ -72,11 +72,3 @@ struct ActivePowerSolarVariable <: OperationsVariableType end
 Struct to dispatch the creation of bidirectional Active Power Flow Variables
 """
 struct FlowActivePowerVariable <: OperationsVariableType end
-
-is_operation_entry(::Type{<:VariableType}) = error()
-is_operation_entry(::Type{<:OperationsVariableType}) = true
-is_operation_entry(::Type{<:InvestmentVariableType}) = false
-
-is_investment_entry(::Type{<:VariableType}) = error()
-is_investment_entry(::Type{<:OperationsVariableType}) = false
-is_investment_entry(::Type{<:InvestmentVariableType}) = true

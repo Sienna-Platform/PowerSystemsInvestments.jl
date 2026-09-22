@@ -234,7 +234,7 @@ function build_pre_step!(model::InvestmentModel)
             get_template(model),
             get_portfolio(model),
         )
-        @info "Initializing InvestmentModelStoreParams"
+        @info "Initializing ModelStoreParams"
         init_model_store_params!(model)
         set_status!(model, ModelBuildStatus.IN_PROGRESS)
     end
@@ -286,6 +286,31 @@ function build!(
         close(logger)
     end
     return get_status(model)
+end
+
+function reset!(model::InvestmentModel{<:AbstractInvestmentProblem})
+    was_built_for_recurrent_solves = built_for_recurrent_solves(model)
+    if was_built_for_recurrent_solves
+        IOM.set_execution_count!(model, 0)
+    end
+    port = IOM.get_portfolio(model)
+    IOM.set_container!(
+        get_internal(model),
+        OptimizationContainer(
+            port,
+            get_settings(model),
+            nothing,
+            IS.SingleTimeSeries
+        ),
+    )
+    get_optimization_container(model).built_for_recurrent_solves =
+        was_built_for_recurrent_solves
+    internal = get_internal(model)
+    IOM.set_initial_conditions_model_container!(internal, nothing)
+    IOM.empty_time_series_cache!(model)
+    empty!(get_store(model))
+    set_status!(model, ModelBuildStatus.EMPTY)
+    return
 end
 
 function solve!(
@@ -405,6 +430,9 @@ function _read_col_name(axes)
 end
 
 function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
+    @show "====================="
+    @show key
+    @show "====================="
     store_data = read_results(get_store(model), key)  # OrderedDict{Date, DenseAxisArray{Float64,2}}
     frames = DataFrames.DataFrame[]
     t_offset = 0

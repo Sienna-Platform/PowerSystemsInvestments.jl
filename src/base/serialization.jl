@@ -60,7 +60,7 @@ function serialize_problem(model::InvestmentModel; optimizer=nothing)
         portfolio_filename,
         get_settings(model),
         typeof(model),
-        string(get_name(model)),
+        string(IOM.get_name(model)),
         OptimizerAttributes(model, optimizer),
     )
     bin_file_name = joinpath(get_output_dir(model), _SERIALIZED_MODEL_FILENAME)

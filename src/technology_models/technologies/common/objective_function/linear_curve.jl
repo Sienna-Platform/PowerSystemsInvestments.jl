@@ -90,7 +90,7 @@ function _add_cost_to_objective!(
     ::U,
     tech_model::String,
 ) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
-    cost_curve = PSY.get_variable(om_cost)
+    cost_curve = PSY.get_variable_operation_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
     multiplier = objective_function_multiplier(T(), U())

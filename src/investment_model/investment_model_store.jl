@@ -37,6 +37,9 @@ end
 
 function read_results(store::InvestmentModelStore, key::OptimizationContainerKey;)
     container = getfield(store, get_store_container_type(key))
+    for k in keys(container)
+        @show k
+    end
     data = container[key]
     # Return a copy because callers may mutate it.
     return deepcopy(data)

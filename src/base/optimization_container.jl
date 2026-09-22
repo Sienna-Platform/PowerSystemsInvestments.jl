@@ -1,8 +1,5 @@
 """
 PSI-specific methods on OptimizationContainer.
-
-Investment-specific fields (TimeMapping, financial data) are stored in InvestmentContainerData,
-accessed via the container's settings.ext dictionary.
 """
 
 function OptimizationContainer(
@@ -37,76 +34,6 @@ function Base.getproperty(container::OptimizationContainer, name::Symbol)
         return IOM.get_time_mapping(container)
     end
     return getfield(container, name)
-end
-
-
-function _finalize_jump_model!(container::OptimizationContainer, settings::IOM.Settings)
-    @debug "Instantiating the JuMP model" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
-
-    if IOM.get_direct_mode_optimizer(settings)
-        optimizer = () -> MOI.instantiate(IOM.get_optimizer(settings))
-        container.JuMPmodel = JuMP.direct_model(optimizer())
-    elseif IOM.get_optimizer(settings) === nothing
-        @debug "The optimization model has no optimizer attached" _group =
-            LOG_GROUP_OPTIMIZATION_CONTAINER
-    else
-        JuMP.set_optimizer(get_jump_model(container), IOM.get_optimizer(settings))
-    end
-
-    JuMPmodel = get_jump_model(container)
-
-    JuMP.set_string_names_on_creation(JuMPmodel, IOM.get_store_variable_names(settings))
-
-    @debug begin
-        JuMP.set_string_names_on_creation(JuMPmodel, true)
-    end
-    if IOM.get_optimizer_solve_log_print(settings)
-        JuMP.unset_silent(JuMPmodel)
-        @debug "optimizer unset to silent" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
-    else
-        JuMP.set_silent(JuMPmodel)
-        @debug "optimizer set to silent" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
-    end
-    return
-end
-
-function IOM.init_optimization_container!(
-    container::OptimizationContainer,
-    template::InvestmentModelTemplate,
-    portfolio::PSIP.Portfolio,
-)
-    # The order of operations matter
-    transport_model = get_transport_model(template)
-    settings = get_settings(container)
-
-    # Update Time Mapping
-    capital_model = get_capital_model(template)
-    operation_model = get_operation_model(template)
-    feasibility_model = get_feasibility_model(template)
-
-    time_map = TimeMapping(
-        capital_model.investment_years,
-        operation_model.representative_series,
-        feasibility_model.sample_periods,
-    )
-
-    IOM.set_time_mapping!(container, time_map)
-    IOM.set_operational_weights!(container, operation_model.series_weights)
-    # Set Financial Data in Container from Portfolio
-    IOM.set_base_year!(container, PSIP.get_base_year(portfolio))
-    IOM.set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
-    IOM.set_inflation_rate!(container, PSIP.get_inflation_rate(portfolio))
-    IOM.set_interest_rate!(container, PSIP.get_interest_rate(portfolio))
-
-    stats = get_optimizer_stats(container)
-    stats.detailed_stats = IOM.get_detailed_optimizer_stats(settings)
-
-    _finalize_jump_model!(container, settings)
-    return
-end
-
-function check_optimization_container(container::OptimizationContainer)
-    return
 end
 
 function _assign_container!(container::Union{Dict, OrderedDict}, key::OptimizationContainerKey, value)
@@ -435,7 +362,7 @@ function _make_system_expressions!(
     time_mapping = IOM.get_time_mapping(container)
     time_steps = IOM.get_time_steps(time_mapping)
     operational_indexes = IOM.get_operational_indexes(time_mapping)
-    container.expressions = Dict(
+    container.expressions = OrderedDict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
@@ -701,7 +628,7 @@ function build_model!(
     @debug "Total operation count $(get_jump_model(container).operator_counter)" _group =
         LOG_GROUP_OPTIMIZATION_CONTAINER
 
-    check_optimization_container(container)
+    IOM.check_optimization_container(container)
     return
 end
 

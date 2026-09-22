@@ -25,7 +25,7 @@ function retrieve_ops_time_series(d::PSIP.Technology, op_ix::Int, time_mapping::
     ts_name = get_default_time_series_names(typeof(d))
     first_t = first(get_consecutive_slices(time_mapping)[op_ix])
     year = string(Dates.Year(get_time_stamps(time_mapping)[first_t]).value)
-    return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; year=year, rep_day=op_ix)
+    return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; features=Dict("year"=>year, "rep_day"=>op_ix))
 end
 
 function retrieve_ops_time_series(
@@ -36,7 +36,7 @@ function retrieve_ops_time_series(
 )
     first_t = first(get_consecutive_slices(time_mapping)[op_ix])
     year = string(Dates.Year(get_time_stamps(time_mapping)[first_t]).value)
-    return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; year=year, rep_day=op_ix)
+    return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; features=Dict("year"=>year, "rep_day"=>op_ix))
 end
 
 # Defaults for a system-less model (a `nothing` "system"): let the generic `Settings` and

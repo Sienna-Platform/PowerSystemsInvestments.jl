@@ -77,9 +77,8 @@
         BasicDispatchFeasibility,
     )
 
-    m = InvestmentModel(
+    m = InvestmentModel{SingleInstanceSolve}(
         template,
-        SingleInstanceSolve,
         p_5bus;
         optimizer=HiGHS.Optimizer,
         portfolio_to_file=false,
@@ -88,6 +87,7 @@
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    # @show m.internal.container.expressions
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemOutputs(m)
@@ -156,9 +156,8 @@
         BasicDispatchFeasibility,
     )
 
-    m = InvestmentModel(
+    m = InvestmentModel{SingleInstanceSolve}(
         template,
-        SingleInstanceSolve,
         p_5bus;
         optimizer=HiGHS.Optimizer,
         portfolio_to_file=false,
@@ -175,20 +174,20 @@
     @test length(PSIN.get_timestamps(res)) == 48
 
     # Weighted-energy expressions are always created, even with no requirements.
-    container = PSIN.IOM.get_optimization_container(m)
+    container = IOM.get_optimization_container(m)
     expr_keys = PSIN.get_expression_keys(container)
-    @test PSIN.ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) in expr_keys
-    @test PSIN.ExpressionKey(
+    @test IOM.ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) in expr_keys
+    @test IOM.ExpressionKey(
         WeightedEnergyGeneration,
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
         "BasicDispatch",
     ) in expr_keys
-    @test PSIN.ExpressionKey(
+    @test IOM.ExpressionKey(
         WeightedEnergyGeneration,
         PSIP.StorageTechnology{EnergyReservoirStorage},
         "ChronologicalStorageDispatch",
     ) in expr_keys
-    @test PSIN.ExpressionKey(
+    @test IOM.ExpressionKey(
         WeightedEnergyGeneration,
         ColocatedSupplyStorageTechnology{RenewableDispatch},
         "ChronologicalColocatedDispatch",
@@ -281,9 +280,8 @@ end
         BasicDispatchFeasibility,
     )
 
-    m = InvestmentModel(
+    m = InvestmentModel{SingleInstanceSolve}(
         template,
-        SingleInstanceSolve,
         p_5bus;
         optimizer=HiGHS.Optimizer,
         calculate_conflict=true,
@@ -296,13 +294,13 @@ end
 
     # Force infeasibility by setting the RHS of a registered balance constraint to an
     # impossibly large demand value, so the constraint is captured in the IIS conflict dict.
-    container = PSIN.IOM.get_optimization_container(m)
+    container = IOM.get_optimization_container(m)
     jump_model = PSIN.get_jump_model(container)
     balance_key = first(
-        k for k in keys(PSIN.get_constraints(container)) if
+        k for k in keys(IOM.get_constraints(container)) if
         PSIN.get_entry_type(k) == PSIN.MultiRegionBalanceConstraint
     )
-    balance_con = PSIN.get_constraints(container)[balance_key]
+    balance_con = IOM.get_constraints(container)[balance_key]
     JuMP.set_normalized_rhs(first(balance_con), 1e18)
 
     @test solve!(m; export_optimization_problem=false) == PSIN.RunStatus.FAILED
@@ -345,9 +343,8 @@ end
         BasicDispatchFeasibility,
     )
 
-    model = InvestmentModel(
+    model = InvestmentModel{SingleInstanceSolve}(
         template,
-        SingleInstanceSolve,
         p_hydro,
         nothing;
         optimizer=HiGHS.Optimizer,
@@ -358,10 +355,10 @@ end
         status = build!(model; output_dir=path)
         @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
 
-        container = PSIN.IOM.get_optimization_container(model)
+        container = IOM.get_optimization_container(model)
 
         @test haskey(
-            PSIN.get_constraints(container),
+            IOM.get_constraints(container),
             PSIN.ConstraintKey(
                 PSIN.ActivePowerLimitsConstraint,
                 PSIP.SupplyTechnology{PSY.HydroDispatch},
@@ -370,7 +367,7 @@ end
         )
 
         @test haskey(
-            PSIN.get_constraints(container),
+            IOM.get_constraints(container),
             PSIN.ConstraintKey(
                 HydroEnergyBudgetConstraint,
                 PSIP.SupplyTechnology{PSY.HydroDispatch},
@@ -428,9 +425,8 @@ end
         BasicDispatchFeasibility,
     )
 
-    model = InvestmentModel(
+    model = InvestmentModel{SingleInstanceSolve}(
         template,
-        SingleInstanceSolve,
         p_tight,
         nothing;
         optimizer=HiGHS.Optimizer,
@@ -439,6 +435,7 @@ end
 
     mktempdir() do path
         build!(model; output_dir=path)
+        # @show model.internal.container.expressions
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
@@ -453,7 +450,7 @@ end
 
         cap_df = read_expression(
             model,
-            PSIN.ExpressionKey(
+            IOM.ExpressionKey(
                 CumulativeCapacity,
                 PSIP.SupplyTechnology{PSY.HydroDispatch},
                 "ContinuousInvestment",
@@ -513,9 +510,8 @@ end
         BasicDispatchFeasibility,
     )
 
-    model = InvestmentModel(
+    model = InvestmentModel{SingleInstanceSolve}(
         template,
-        SingleInstanceSolve,
         p_hydro,
         nothing;
         optimizer=HiGHS.Optimizer,
@@ -526,10 +522,10 @@ end
         status = build!(model; output_dir=path)
         @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
 
-        container = PSIN.IOM.get_optimization_container(model)
+        container = IOM.get_optimization_container(model)
 
         @test haskey(
-            PSIN.get_constraints(container),
+            IOM.get_constraints(container),
             PSIN.ConstraintKey(
                 PSIN.ActivePowerLimitsConstraint,
                 PSIP.SupplyTechnology{PSY.HydroDispatch},
@@ -552,7 +548,7 @@ end
         )
         cap_df = read_expression(
             model,
-            PSIN.ExpressionKey(
+            IOM.ExpressionKey(
                 PSIN.CumulativeCapacity,
                 PSIP.SupplyTechnology{PSY.HydroDispatch},
                 "ContinuousInvestment",
@@ -650,9 +646,8 @@ end
         RequirementEnergyShare,
     )
 
-    m = InvestmentModel(
+    m = InvestmentModel{SingleInstanceSolve}(
         template,
-        SingleInstanceSolve,
         p_5bus;
         optimizer=HiGHS.Optimizer,
         portfolio_to_file=false,
@@ -661,11 +656,13 @@ end
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    # @show m.internal.container.expressions
+
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
-    container = PSIN.IOM.get_optimization_container(m)
+    container = IOM.get_optimization_container(m)
     @test haskey(
-        PSIN.get_constraints(container),
+        IOM.get_constraints(container),
         PSIN.ConstraintKey(
             PSIN.EnergyShareRequirementConstraint,
             PSIP.EnergyShareRequirements,
@@ -692,8 +689,8 @@ end
         IS.SingleTimeSeries,
         demand2,
         "ops_demand";
-        year="2030",
-        rep_day=1,
+        features = Dict("year"=>"2030",
+                        "rep_day"=>1),
     )
     total_demand_2030 = sum(TimeSeries.values(d_2030.data))
 
@@ -707,7 +704,7 @@ end
     # WeightedEnergyGeneration[wind, op_ix=1] == weight * Σ_t P[wind, t in 1:24].
     weg_df = read_expression(
         m,
-        PSIN.ExpressionKey(
+        IOM.ExpressionKey(
             WeightedEnergyGeneration,
             PSIP.SupplyTechnology{PSY.RenewableDispatch},
             "BasicDispatch",
@@ -717,7 +714,7 @@ end
     @test isapprox(weg_wind_1, weight_1 * total_wind_2030; atol=1e-2)
 
     # WeightedEnergyDemand[Zone_2, op_ix=1] == weight * Σ ops_demand (demand2 is Zone_2).
-    wed_df = read_expression(m, PSIN.ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio))
+    wed_df = read_expression(m, IOM.ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio))
     wed_zone2_1 = only(filter(r -> r.name == "Zone_2" && r.time_index == 1, wed_df)).value
     @test isapprox(wed_zone2_1, weight_1 * total_demand_2030; atol=1e-2)
 
@@ -725,7 +722,7 @@ end
     # (single eligible resource).
     wesg_df = read_expression(
         m,
-        PSIN.ExpressionKey(WeightedEnergyShareGeneration, PSIP.EnergyShareRequirements),
+        IOM.ExpressionKey(WeightedEnergyShareGeneration, PSIP.EnergyShareRequirements),
     )
     wesg_1 = only(filter(r -> r.name == "wind_share" && r.time_index == 1, wesg_df)).value
     @test isapprox(wesg_1, weg_wind_1; atol=1e-2)
@@ -734,7 +731,7 @@ end
     # (single contributing load, demand2).
     wesd_df = read_expression(
         m,
-        PSIN.ExpressionKey(WeightedEnergyShareDemand, PSIP.EnergyShareRequirements),
+        IOM.ExpressionKey(WeightedEnergyShareDemand, PSIP.EnergyShareRequirements),
     )
     wesd_1 = only(filter(r -> r.name == "wind_share" && r.time_index == 1, wesd_df)).value
     @test isapprox(wesd_1, weight_1 * total_demand_2030; atol=1e-2)
