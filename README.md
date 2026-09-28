@@ -1,10 +1,15 @@
 # PowerSystemsInvestments.jl
 
-[![main - CI](https://github.com/Sienna-Platform/PowerSystemsInvestments.jl/workflows/main%20-%20CI/badge.svg)](https://github.com/Sienna-Platform/PowerSystemsInvestments.jl/actions/workflows/main-tests.yml)
-[![codecov](https://codecov.io/gh/Sienna-Platform/PowerSystemsInvestments.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/Sienna-Platform/PowerSystemsInvestments.jl)
-[![Documentation Build](https://github.com/Sienna-Platform/PowerSystemsInvestments.jl/workflows/Documentation/badge.svg?)](https://sienna-platform.github.io/PowerSystemsInvestments.jl/stable)
-[<img src="https://img.shields.io/badge/slack-@Sienna/PSINV.svg?logo=slack">](https://join.slack.com/t/core-sienna/shared_invite/zt-glam9vdu-o8A9TwZTZqqNTKHa7q3BpQ)
-[![PowerSystemsInvestments.jl Downloads](https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/PowerSystemsInvestments)](https://pkgs.genieframework.com?packages=PowerSystemsInvestments)
+| **Documentation** | **Build Status** |
+|:---:|:---:|
+| [![][docs-sienna-img]][docs-sienna-url] [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] | [![main - CI](https://github.com/Sienna-Platform/PowerSystemsInvestments.jl/workflows/main%20-%20CI/badge.svg)](https://github.com/Sienna-Platform/PowerSystemsInvestments.jl/actions/workflows/main-tests.yml) [![codecov](https://codecov.io/gh/Sienna-Platform/PowerSystemsInvestments.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/Sienna-Platform/PowerSystemsInvestments.jl) [<img src="https://img.shields.io/badge/slack-@Sienna/PSINV.svg?logo=slack">](https://join.slack.com/t/core-sienna/shared_invite/zt-glam9vdu-o8A9TwZTZqqNTKHa7q3BpQ) [![PowerSystemsInvestments.jl Downloads](https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/PowerSystemsInvestments)](https://pkgs.genieframework.com?packages=PowerSystemsInvestments) |
+
+[docs-sienna-img]: https://img.shields.io/badge/Central_Sienna_docs-blue.svg
+[docs-sienna-url]: https://sienna-platform.github.io/Sienna/SiennaDocs/docs/build/index/
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://sienna-platform.github.io/PowerSystemsInvestments.jl/stable/
+[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
+[docs-dev-url]: https://sienna-platform.github.io/PowerSystemsInvestments.jl/dev/
 
 ## Development
 
