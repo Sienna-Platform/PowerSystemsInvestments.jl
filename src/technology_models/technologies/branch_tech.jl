@@ -1,4 +1,7 @@
 #! format: off
+_supported_investment_formulations(::Type{<:PSIP.AggregateTransportTechnology}) = (ContinuousInvestment,)
+_supported_investment_formulations(::Type{<:PSIP.NodalACTransportTechnology}) = (ContinuousInvestment,)
+
 get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = get_max_new_capacity(d)
 get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::ContinuousInvestment) = false

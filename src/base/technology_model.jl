@@ -64,6 +64,30 @@ get_feasibility_formulation(
     C <: FeasibilityTechnologyFormulation,
 } = C
 
+_supported_investment_formulations(::Type{<:PSIP.Technology}) = nothing
+
+function _check_investment_formulation(
+    ::Type{D},
+    ::Type{A},
+) where {D <: PSIP.Technology, A <: InvestmentTechnologyFormulation}
+    supported_formulations = _supported_investment_formulations(D)
+    isnothing(supported_formulations) && return
+    any(A <: formulation for formulation in supported_formulations) && return
+
+    supported_names = if isempty(supported_formulations)
+        "none"
+    else
+        join(nameof.(supported_formulations), ", ")
+    end
+
+    throw(
+        ArgumentError(
+            "$(nameof(A)) is currently not supported for $(nameof(D)). " *
+            "Supported investment formulations: $supported_names.",
+        ),
+    )
+end
+
 function TechnologyModel(
     ::Type{D},
     ::Type{A},
@@ -78,13 +102,13 @@ function TechnologyModel(
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,
 }
+    _check_investment_formulation(D, A)
+
     attributes_ = get_default_attributes(D, A, B, C)
     for (k, v) in attributes
         attributes_[k] = v
     end
 
-    # TODO: Implement check for technologies
-    #_check_technology_formulation(D, A, B, C)
     # TODO: new is only defined for inner constructors, replace for now but we might want to reorganize this file later
     #new{D, B, C}(use_slacks, duals, time_series_names, attributes_, nothing)
     return TechnologyModel{D, A, B, C}(use_slacks, duals, attributes_)

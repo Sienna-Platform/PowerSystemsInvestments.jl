@@ -1,4 +1,6 @@
 #! format: off
+_supported_investment_formulations(::Type{<:PSIP.SupplyTechnology}) = (ContinuousInvestment,)
+
 get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
 get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).min
 get_variable_binary(::BuildCapacity, d::PSIP.SupplyTechnology, ::ContinuousInvestment) = false

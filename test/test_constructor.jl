@@ -20,6 +20,15 @@
     @test PSIN.get_objective_expression(test_obj) == 10.0 * x^2 + 5.0 * x + 60.0
 end
 
+@testset "Investment Formulation Validation" begin
+    @test_throws ArgumentError PSIN.TechnologyModel(
+        PSIP.StorageTechnology{PSY.EnergyReservoirStorage},
+        PSIN.BinaryInvestment,
+        PSIN.CyclicalStorageDispatch,
+        PSIN.BasicDispatchFeasibility,
+    )
+end
+
 @testset "Constructor" begin
     p_5bus, op_days = test_2_zone_portfolio()
 
@@ -71,6 +80,15 @@ end
         PSIN.BasicDispatch,
         PSIN.BasicDispatchFeasibility,
     )
+    storage_type = PSIP.StorageTechnology{PSY.EnergyReservoirStorage}
+    storage_model = PSIN.TechnologyModel(
+        storage_type,
+        PSIN.ContinuousInvestment,
+        PSIN.CyclicalStorageDispatch,
+        PSIN.BasicDispatchFeasibility,
+    )
+    storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
+    PSIP.set_duration_limits!(storage, (min=2.0, max=4.0))
 
     # Argument Stage
 
@@ -214,6 +232,19 @@ end
     @test length(e["cheap_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
 
+    # StorageTechnology{EnergyReservoirStorage}
+    PSIN.construct_technologies!(
+        container,
+        p_5bus,
+        ["test_storage"],
+        PSIN.ArgumentConstructStage(),
+        capital,
+        storage_type,
+        PSIN.ContinuousInvestment,
+        transport_model,
+        [storage_model],
+    )
+
     # Model Stage
 
     #DemandRequirement{PowerLoad}
@@ -320,4 +351,72 @@ end
           length(PSIN.get_investment_time_steps(container.time_mapping))
     @test length(c["cheap_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
+
+    # StorageTechnology{EnergyReservoirStorage}
+    PSIN.construct_technologies!(
+        container,
+        p_5bus,
+        ["test_storage"],
+        PSIN.ModelConstructStage(),
+        capital,
+        storage_type,
+        PSIN.ContinuousInvestment,
+        transport_model,
+        [storage_model],
+    )
+
+    lower_duration = PSIN.get_constraint(
+        container,
+        PSIN.StorageDurationLowerBoundConstraint(),
+        storage_type,
+        "ContinuousInvestment",
+    )
+    upper_duration = PSIN.get_constraint(
+        container,
+        PSIN.StorageDurationUpperBoundConstraint(),
+        storage_type,
+        "ContinuousInvestment",
+    )
+    build_power = PSIN.get_variable(
+        container,
+        PSIN.BuildPowerCapacity(),
+        storage_type,
+        "ContinuousInvestment",
+    )
+    build_energy = PSIN.get_variable(
+        container,
+        PSIN.BuildEnergyCapacity(),
+        storage_type,
+        "ContinuousInvestment",
+    )
+    investment_time_steps = PSIN.get_investment_time_steps(container.time_mapping)
+
+    @test length(lower_duration["test_storage", :]) == length(investment_time_steps)
+    @test length(upper_duration["test_storage", :]) == length(investment_time_steps)
+
+    final_time_step = last(investment_time_steps)
+    lower_constraint = lower_duration["test_storage", final_time_step]
+    upper_constraint = upper_duration["test_storage", final_time_step]
+    @test JuMP.constraint_object(lower_constraint).set isa
+          MathOptInterface.GreaterThan{Float64}
+    @test JuMP.constraint_object(upper_constraint).set isa
+          MathOptInterface.LessThan{Float64}
+    for t in investment_time_steps
+        @test JuMP.normalized_coefficient(
+            lower_constraint,
+            build_energy["test_storage", t],
+        ) == 1.0
+        @test JuMP.normalized_coefficient(
+            lower_constraint,
+            build_power["test_storage", t],
+        ) == -2.0
+        @test JuMP.normalized_coefficient(
+            upper_constraint,
+            build_energy["test_storage", t],
+        ) == 1.0
+        @test JuMP.normalized_coefficient(
+            upper_constraint,
+            build_power["test_storage", t],
+        ) == -4.0
+    end
 end

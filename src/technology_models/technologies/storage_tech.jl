@@ -1,5 +1,7 @@
 #! format: off
 
+_supported_investment_formulations(::Type{<:PSIP.StorageTechnology}) = (ContinuousInvestment,)
+
 get_variable_upper_bound(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = nothing
 get_variable_lower_bound(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_upper_bound(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = nothing
@@ -747,6 +749,85 @@ function add_constraints!(
             end
         end
     end
+end
+
+# Storage duration constraints
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::StorageDurationLowerBoundConstraint,
+    devices::U,
+    formulation::S,
+) where {
+    U <: Vector{D},
+    S <: ContinuousInvestment,
+} where {D <: PSIP.StorageTechnology}
+    time_steps = get_investment_time_steps(get_time_mapping(container))
+    tech_model = string(S)
+    device_names = PSIP.get_name.(devices)
+    constraints = add_constraints_container!(
+        container,
+        StorageDurationLowerBoundConstraint(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+    cumulative_power =
+        get_expression(container, CumulativePowerCapacity(), D, tech_model)
+    cumulative_energy =
+        get_expression(container, CumulativeEnergyCapacity(), D, tech_model)
+
+    for d in devices
+        name = PSIP.get_name(d)
+        minimum_duration = PSIP.get_duration_limits(d).min
+        for t in time_steps
+            constraints[name, t] = JuMP.@constraint(
+                get_jump_model(container),
+                cumulative_energy[name, t] >=
+                minimum_duration * cumulative_power[name, t]
+            )
+        end
+    end
+    return
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::StorageDurationUpperBoundConstraint,
+    devices::U,
+    formulation::S,
+) where {
+    U <: Vector{D},
+    S <: ContinuousInvestment,
+} where {D <: PSIP.StorageTechnology}
+    time_steps = get_investment_time_steps(get_time_mapping(container))
+    tech_model = string(S)
+    device_names = PSIP.get_name.(devices)
+    constraints = add_constraints_container!(
+        container,
+        StorageDurationUpperBoundConstraint(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+    cumulative_power =
+        get_expression(container, CumulativePowerCapacity(), D, tech_model)
+    cumulative_energy =
+        get_expression(container, CumulativeEnergyCapacity(), D, tech_model)
+
+    for d in devices
+        name = PSIP.get_name(d)
+        maximum_duration = PSIP.get_duration_limits(d).max
+        for t in time_steps
+            constraints[name, t] = JuMP.@constraint(
+                get_jump_model(container),
+                cumulative_energy[name, t] <=
+                maximum_duration * cumulative_power[name, t]
+            )
+        end
+    end
+    return
 end
 
 # Maximum cumulative capacity

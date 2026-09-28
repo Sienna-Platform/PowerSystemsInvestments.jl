@@ -152,7 +152,19 @@ function construct_technologies!(
         B(),
     )
 
-    # TODO: Implement Constraints on Ratio Energy vs Power
+    # Duration constraints
+    add_constraints!(
+        container,
+        StorageDurationLowerBoundConstraint(),
+        devices,
+        B(),
+    )
+    add_constraints!(
+        container,
+        StorageDurationUpperBoundConstraint(),
+        devices,
+        B(),
+    )
     return
 end
 

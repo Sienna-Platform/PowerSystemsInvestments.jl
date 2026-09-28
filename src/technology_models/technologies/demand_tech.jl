@@ -1,3 +1,6 @@
+_supported_investment_formulations(::Type{<:PSIP.DemandRequirement}) =
+    (StaticLoadInvestment,)
+
 function get_default_time_series_names(::Type{U}) where {U <: PSIP.DemandRequirement}
     # TODO: We need to discuss about an API for timeseries names for users
     return "ops_demand"
