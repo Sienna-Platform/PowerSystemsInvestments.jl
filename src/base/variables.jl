@@ -83,6 +83,15 @@ Struct to dispatch the creation of bidirectional Active Power Flow Variables
 """
 struct FlowActivePowerVariable <: OperationsVariableType end
 
+"""
+Amount of installed capacity that has been committed for dispatch at a timepoint
+"""
+struct CommittedCapacityVariable <: OperationsVariableType end
+
+struct ShutDownCapacityVariable <: OperationsVariableType end
+
+struct StartUpCapacityVariable <: OperationsVariableType end
+
 is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
 is_operation_entry(::Type{<:OperationsVariableType}) = true
 is_operation_entry(::Type{<:InvestmentVariableType}) = false

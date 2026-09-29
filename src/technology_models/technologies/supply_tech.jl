@@ -499,6 +499,328 @@ function add_constraints!(
     return
 end
 
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+    tech_model_vector::Vector{X},
+) where {
+    T <: ActivePowerLimitsConstraint,
+    U <: Vector{D},
+    V <: ActivePowerVariable,
+    S <: ContinuousThermalCommitment,
+    X <: TechnologyModel,
+} where {D <: PSIP.SupplyTechnology{PSY.ThermalStandard}}
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+    device_names = PSIP.get_name.(devices)
+    con_ub = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+    active_power = get_variable(container, V(), D, tech_model)
+    operational_indexes = get_all_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+
+    for (ix, d) in enumerate(devices)
+        name = PSIP.get_name(d)
+        tech_model = tech_model_vector[ix]
+        committed_cap = get_variable(container, CommittedCapacityVariable(), D, tech_model)
+        for op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            for t in time_slices
+                # TODO: add lower bound for the minimum dispatch value from PSIP
+                con_ub[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    active_power[name, t] <= committed_cap[name, t]
+                )
+            end
+        end
+    end
+    return
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+    tech_model_vector::Vector{X},
+) where {
+    T <: CommittedCapacityLimitConstraint,
+    U <: Vector{D},
+    V <: CommittedCapacityVariable,
+    S <: ContinuousThermalCommitment,
+    X <: TechnologyModel,
+} where {D <: PSIP.SupplyTechnology{PSY.ThermalStandard}}
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+    device_names = PSIP.get_name.(devices)
+    con_ub = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+    committed_cap = get_variable(container, V(), D, tech_model)
+    operational_indexes = get_all_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+
+    for (ix, d) in enumerate(devices)
+        # Get outage derating factors
+        outage_factors = PSIP.get_outage_factors()
+        forced_derating = 1-outage_factors.forced
+        planned_derating = 1-outage_factors.planned
+
+        name = PSIP.get_name(d)
+        tech_model = tech_model_vector[ix]
+        committed_cap = get_variable(container, CommittedCapacityVariable(), D, tech_model)
+        for op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            time_step_inv = inverse_invest_mapping[op_ix]
+            inv_model = string(get_investment_formulation(tech_model))
+            installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+            for t in time_slices
+                con_ub[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    committed_cap[name, t] <= forced_derating * planned_derating * installed_cap[name, time_step_inv]
+                )
+            end
+        end
+    end
+    return
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+    tech_model_vector::Vector{X},
+) where {
+    T <: MinimumUpTimeConstraint,
+    U <: Vector{D},
+    V <: CommittedCapacityVariable,
+    S <: ContinuousThermalCommitment,
+    X <: TechnologyModel,
+} where {D <: PSIP.SupplyTechnology{PSY.ThermalStandard}}
+    # TODO: Determine if I need to set bounds for the StartUp and ShutDown variables
+    # I probably do, can just limit them by the installed capacity of the device
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+    device_names = PSIP.get_name.(devices)
+    con_soc = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+    committed_cap = get_variable(container, V(), D, tech_model)
+    operational_indexes = get_all_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+
+    for (ix, d) in enumerate(devices)
+        name = PSIP.get_name(d)
+        min_up_time = PSIP.get_time_limits(d).up
+        tech_model = tech_model_vector[ix]
+        start_up_cap = get_variable(container, StartUpCapacityVariable(), D, tech_model)
+        for stage in get_investment_time_steps(time_mapping)
+            stage_operational_indexes = investment_to_operational_ixs[stage]
+            first_operational_index = first(stage_operational_indexes)
+            for op_ix in stage_operational_indexes
+                time_slices = consecutive_slices[op_ix]
+                if length(time_slices) == 1
+                    # Essentially ignoring this constraint if this is the only
+                    # timestep in the set of consecutive time slices
+                    timestep_length = 8760
+                else
+                    tstamp_first = time_stamps[time_slices[1]]
+                    tstamp_second = time_stamps[time_slices[2]]
+                    timestep_length = Dates.Hour(tstamp_second - tstamp_first).value
+                end
+                #round to the nearest whole number of timesteps
+                num_time_steps = round(Int, min_up_time / timestep_length)
+                for (ix, t) in enumerate(time_slices)
+                    # First representative day and first time point
+                    if first_operational_index == op_ix && ix == 1
+                        con_soc[name, t] = JuMP.@constraint(
+                            get_jump_model(container),
+                            committed_cap[name, t] >= 0
+                        )
+                    # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
+                    else
+                        con_soc[name, t] = JuMP.@constraint(
+                            get_jump_model(container),
+                            committed_cap[name, t] >= sum(start_up_cap[name, t-i] for i in 1:num_time_steps)
+                        )
+                    end
+                end
+            end
+        end
+    end
+    return
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+    tech_model_vector::Vector{X},
+) where {
+    T <: MinimumDownTimeConstraint,
+    U <: Vector{D},
+    V <: CommittedCapacityVariable,
+    S <: ContinuousThermalCommitment,
+    X <: TechnologyModel,
+} where {D <: PSIP.SupplyTechnology{PSY.ThermalStandard}}
+    # TODO: Determine if I need to set bounds for the StartUp and ShutDown variables
+    # I probably do, can just limit them by the installed capacity of the device
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+    device_names = PSIP.get_name.(devices)
+    con_soc = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+    committed_cap = get_variable(container, V(), D, tech_model)
+    operational_indexes = get_all_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+
+    for (ix, d) in enumerate(devices)
+        name = PSIP.get_name(d)
+        min_down_time = PSIP.get_time_limits(d).down
+        tech_model = tech_model_vector[ix]
+        shut_down_cap = get_variable(container, ShutDownCapacityVariable(), D, tech_model)
+        inv_model = string(get_investment_formulation(tech_model))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        for stage in get_investment_time_steps(time_mapping)
+            stage_operational_indexes = investment_to_operational_ixs[stage]
+            first_operational_index = first(stage_operational_indexes)
+            for op_ix in stage_operational_indexes
+                time_slices = consecutive_slices[op_ix]
+                if length(time_slices) == 1
+                    # Essentially ignoring this constraint if this is the only
+                    # timestep in the set of consecutive time slices
+                    timestep_length = 8760
+                else
+                    tstamp_first = time_stamps[time_slices[1]]
+                    tstamp_second = time_stamps[time_slices[2]]
+                    timestep_length = Dates.Hour(tstamp_second - tstamp_first).value
+                end
+                #round to the nearest whole number of timesteps
+                num_time_steps = round(Int, min_up_time / timestep_length)
+                for (ix, t) in enumerate(time_slices)
+                    # First representative day and first time point
+                    if first_operational_index == op_ix && ix == 1
+                        con_soc[name, t] = JuMP.@constraint(
+                            get_jump_model(container),
+                            committed_cap[name, t] >= 0
+                        )
+                    # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
+                    else
+                        con_soc[name, t] = JuMP.@constraint(
+                            get_jump_model(container),
+                            committed_cap[name, t] <= installed_cap[name, stage] - sum(shut_down_cap[name, t-i] for i in 1:num_time_steps)
+                        )
+                    end
+                end
+            end
+        end
+    end
+    return
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+    tech_model_vector::Vector{X},
+) where {
+    T <: CommittedCapacityTrackingConstraint,
+    U <: Vector{D},
+    V <: CommittedCapacityVariable,
+    S <: ContinuousThermalCommitment,
+    X <: TechnologyModel,
+} where {D <: PSIP.SupplyTechnology{PSY.ThermalStandard}}
+    # TODO: Determine if I need to set bounds for the StartUp and ShutDown variables
+    # I probably do, can just limit them by the installed capacity of the device
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+    device_names = PSIP.get_name.(devices)
+    con_soc = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+    committed_cap = get_variable(container, V(), D, tech_model)
+    operational_indexes = get_all_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+
+    for (ix, d) in enumerate(devices)
+        name = PSIP.get_name(d)
+        tech_model = tech_model_vector[ix]
+        start_up_cap = get_variable(container, StartUpCapacityVariable(), D, tech_model)
+        shut_down_cap = get_variable(container, ShutDownCapacityVariable(), D, tech_model)
+        for stage in get_investment_time_steps(time_mapping)
+            stage_operational_indexes = investment_to_operational_ixs[stage]
+            first_operational_index = first(stage_operational_indexes)
+            for op_ix in stage_operational_indexes
+                time_slices = consecutive_slices[op_ix]
+                for (ix, t) in enumerate(time_slices)
+                    # First representative day and first time point
+                    if first_operational_index == op_ix && ix == 1
+                        # TODO: Decide what to do with the first time step for all the unit commitment stuff
+                        con_soc[name, t] = JuMP.@constraint(
+                            get_jump_model(container),
+                            committed_cap[name, t] >= 0
+                        )
+                    # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
+                    else
+                        con_soc[name, t] = JuMP.@constraint(
+                            get_jump_model(container),
+                            committed_cap[name, t] == committed_cap[name, t-1] + start_up_cap[name, t] - shut_down_cap[name, t]
+                        )
+                    end
+                end
+            end
+        end
+    end
+    return
+end
+
 # Maximum cumulative capacity
 function add_constraints!(
     container::SingleOptimizationContainer,

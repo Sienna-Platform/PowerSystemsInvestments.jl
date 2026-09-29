@@ -638,6 +638,9 @@ function add_constraints!(
             for op_ix in stage_operational_indexes
                 time_slices = consecutive_slices[op_ix]
                 if length(time_slices) == 1
+                    # TODO: Make sure this makes sense mathematically
+                    # You aren't computing a fraction of an hour here you're calculating
+                    # the duration of the timestep, so this may not make sense
                     fraction_of_hour = 1.0
                 else
                     tstamp_first = time_stamps[time_slices[1]]
