@@ -535,12 +535,14 @@ end
 
 function objective_function!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.ColocatedSupplyStorageTechnology, S <: OperationsColocatedFormulation}
     tech_model = string(S)
     add_variable_cost!(
         container,
+        port,
         ActivePowerDischargeVariable(),
         devices,
         formulation,
@@ -548,6 +550,7 @@ function objective_function!(
     )
     add_variable_cost!(
         container,
+        port,
         ActivePowerChargeVariable(),
         devices,
         formulation,
@@ -555,6 +558,7 @@ function objective_function!(
     )
     add_variable_cost!(
         container,
+        port,
         ActivePowerWindVariable(),
         devices,
         formulation,
@@ -562,6 +566,7 @@ function objective_function!(
     )
     add_variable_cost!(
         container,
+        port,
         ActivePowerSolarVariable(),
         devices,
         formulation,
@@ -572,19 +577,90 @@ end
 
 function objective_function!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.ColocatedSupplyStorageTechnology, S <: InvestmentTechnologyFormulation}
     tech_model = string(S)
-    add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildSolarCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildWindCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildInverterCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildSolarCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildWindCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildInverterCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(
+        container,
+        port,
+        BuildEnergyCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildPowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildSolarCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildWindCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildInverterCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildEnergyCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildPowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildSolarCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildWindCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildInverterCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
     return
 end

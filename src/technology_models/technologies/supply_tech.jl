@@ -545,26 +545,36 @@ end
 
 function objective_function!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.SupplyTechnology, S <: Union{BasicDispatch, BasicDispatchWithBudget}}
     tech_model = string(S)
-    add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model)
+    add_variable_cost!(
+        container,
+        port,
+        ActivePowerVariable(),
+        devices,
+        formulation,
+        tech_model,
+    )
     return
 end
 
 function objective_function!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::B,
 ) where {T <: PSIP.SupplyTechnology, B <: InvestmentTechnologyFormulation}
     tech_model = string(B)
-    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(container, port, BuildCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, port, BuildCapacity(), devices, formulation, tech_model)
     return
 end
 function objective_function!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::B,
 ) where {
@@ -572,7 +582,7 @@ function objective_function!(
     B <: InvestmentTechnologyFormulation,
 }
     tech_model = string(B)
-    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(container, port, BuildCapacity(), devices, formulation, tech_model)
     #TODO: Add fixed_om costs for renewables (RenewableGenerationCost does not have fixed cost component?)
     # add_fixed_om_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     return

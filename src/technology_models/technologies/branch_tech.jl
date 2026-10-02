@@ -186,7 +186,11 @@ function add_to_expression!(
         start_region = PSIP.get_name(PSIP.get_start_region(d))
         end_region = PSIP.get_name(PSIP.get_end_region(d))
         losses = PSIP.get_line_loss(d)
-        add_proportional_to_jump_expression!(expression[start_region, t], variable[name, t], -1.0)
+        add_proportional_to_jump_expression!(
+            expression[start_region, t],
+            variable[name, t],
+            -1.0,
+        )
         add_proportional_to_jump_expression!(
             expression[end_region, t],
             variable[name, t],
@@ -345,11 +349,12 @@ end
 
 function objective_function!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.AggregateTransportTechnology, S <: ContinuousInvestment}
     tech_model = string(S)
-    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(container, port, BuildCapacity(), devices, formulation, tech_model)
     # TODO: Decide if we want to include fixed OM cost for Transport Paths
     #add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
     return
@@ -357,11 +362,12 @@ end
 
 function objective_function!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.NodalACTransportTechnology, S <: ContinuousInvestment}
     tech_model = string(S)
-    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(container, port, BuildCapacity(), devices, formulation, tech_model)
     return
 end
 
@@ -393,8 +399,16 @@ function add_to_expression!(
         start_node = PSIP.get_name(PSIP.get_start_node(d))
         end_node = PSIP.get_name(PSIP.get_end_node(d))
         # Flow leaves start node, enters end node (no losses assumed)
-        add_proportional_to_jump_expression!(expression[start_node, t], variable[name, t], -1.0)
-        add_proportional_to_jump_expression!(expression[end_node, t], variable[name, t], 1.0)
+        add_proportional_to_jump_expression!(
+            expression[start_node, t],
+            variable[name, t],
+            -1.0,
+        )
+        add_proportional_to_jump_expression!(
+            expression[end_node, t],
+            variable[name, t],
+            1.0,
+        )
     end
 
     return

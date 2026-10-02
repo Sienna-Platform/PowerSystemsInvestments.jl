@@ -795,30 +795,68 @@ end
 
 function objective_function!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.StorageTechnology, S <: OperationsStorageFormulation}
     tech_model = string(S)
     add_variable_cost!(
         container,
+        port,
         ActiveOutPowerVariable(),
         devices,
         formulation,
         tech_model,
     )
-    add_variable_cost!(container, ActiveInPowerVariable(), devices, formulation, tech_model)
+    add_variable_cost!(
+        container,
+        port,
+        ActiveInPowerVariable(),
+        devices,
+        formulation,
+        tech_model,
+    )
     return
 end
 
 function objective_function!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.StorageTechnology, S <: InvestmentTechnologyFormulation}
     tech_model = string(S)
-    add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(
+        container,
+        port,
+        BuildEnergyCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildPowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildEnergyCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildPowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
     return
 end

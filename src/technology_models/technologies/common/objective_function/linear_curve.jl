@@ -26,6 +26,7 @@ Adds to the cost function cost terms for sum of variables with common factor to 
 """
 function _add_cost_to_objective!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     value_curve::IS.ValueCurve,
@@ -38,6 +39,7 @@ function _add_cost_to_objective!(
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         value_curve,
@@ -49,6 +51,7 @@ end
 
 function _add_cost_to_objective!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     cost_curve::PSY.CostCurve,
@@ -56,12 +59,21 @@ function _add_cost_to_objective!(
     tech_model::String,
 ) where {T <: VariableType, U <: AbstractTechnologyFormulation}
     value_curve = PSY.get_value_curve(cost_curve)
-    return _add_cost_to_objective!(container, T(), technology, value_curve, U(), tech_model)
+    return _add_cost_to_objective!(
+        container,
+        port,
+        T(),
+        technology,
+        value_curve,
+        U(),
+        tech_model,
+    )
 end
 
 #Fixed OM calculated from build capacity
 function _add_cost_to_objective!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -72,6 +84,7 @@ function _add_cost_to_objective!(
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         om_cost,
@@ -84,6 +97,7 @@ end
 #Variable OM from dispatch
 function _add_cost_to_objective!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -96,6 +110,7 @@ function _add_cost_to_objective!(
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         om_cost,
@@ -108,6 +123,7 @@ end
 #Storage Charge cost
 function _add_cost_to_objective!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -123,6 +139,7 @@ function _add_cost_to_objective!(
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         om_cost,
@@ -135,6 +152,7 @@ end
 #Storage Discharge cost
 function _add_cost_to_objective!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -150,6 +168,7 @@ function _add_cost_to_objective!(
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         om_cost,
@@ -162,6 +181,7 @@ end
 # LinearCurve costs for overnight costs and investment decisions
 function _add_linearcurve_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     cost::IS.ValueCurve,
@@ -169,11 +189,7 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: InvestmentVariableType}
     amortized_proportional_term, discount_factor, base_year =
-        amortize_overnight_term_to_base_year_dollars(
-            container,
-            technology,
-            proportional_term,
-        )
+        amortize_overnight_term_to_base_year_dollars(port, technology, proportional_term)
     time_mapping = IOM.get_time_mapping(container)
     inv_tuples = get_investment_time_stamps(time_mapping)
 
@@ -198,6 +214,7 @@ end
 # LinearCurve costs for fixed annual costs
 function _add_linearcurve_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -205,11 +222,7 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: InvestmentVariableType}
     amortized_proportional_term, discount_factor, base_year =
-        amortize_overnight_term_to_base_year_dollars(
-            container,
-            technology,
-            proportional_term,
-        )
+        amortize_overnight_term_to_base_year_dollars(port, technology, proportional_term)
     time_mapping = IOM.get_time_mapping(container)
     inv_tuples = get_investment_time_stamps(time_mapping)
 
@@ -234,6 +247,7 @@ end
 # TODO: Should this use overnight or direct to base year
 function _add_linearcurve_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -241,9 +255,9 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: InvestmentExpressionType}
     time_mapping = IOM.get_time_mapping(container)
-    base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
+    base_year = PSIP.get_base_year(port)
+    discount_rate = PSIP.get_discount_rate(port)
+    inflation_rate = PSIP.get_inflation_rate(port)
     tech_base_year = PSIP.get_technology_base_year(technology)
 
     discount_factor = 1 / (1 + discount_rate)
@@ -273,6 +287,7 @@ end
 # Dispatch for scalar proportional terms
 function _add_linearcurve_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -280,9 +295,9 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: OperationsVariableType}
     financials = PSIP.get_financial_data(technology)
-    base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
+    base_year = PSIP.get_base_year(port)
+    discount_rate = PSIP.get_discount_rate(port)
+    inflation_rate = PSIP.get_inflation_rate(port)
     tech_base_year = PSIP.get_technology_base_year(financials)
     time_mapping = IOM.get_time_mapping(container)
     operational_weights = get_operational_weights(container)

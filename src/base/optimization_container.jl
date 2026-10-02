@@ -12,7 +12,6 @@ function OptimizationContainer(
     # container in sync with IOM's struct and keeps IOM free of any portfolio dependency.
     container =
         IOM.OptimizationContainer(portfolio, settings, jump_model, PSY.SingleTimeSeries)
-    set_investment_data!(container, InvestmentContainerData())
     _register_objective_function!(container.objective_function)
     return container
 end
@@ -23,8 +22,8 @@ function OptimizationContainer(
     settings::IOM.Settings,
     jump_model::Union{Nothing, JuMP.Model},
 )
-    container = IOM.OptimizationContainer(nothing, settings, jump_model, PSY.SingleTimeSeries)
-    set_investment_data!(container, InvestmentContainerData())
+    container =
+        IOM.OptimizationContainer(nothing, settings, jump_model, PSY.SingleTimeSeries)
     _register_objective_function!(container.objective_function)
     return container
 end
@@ -36,7 +35,11 @@ function Base.getproperty(container::OptimizationContainer, name::Symbol)
     return getfield(container, name)
 end
 
-function _assign_container!(container::Union{Dict, OrderedDict}, key::OptimizationContainerKey, value)
+function _assign_container!(
+    container::Union{Dict, OrderedDict},
+    key::OptimizationContainerKey,
+    value,
+)
     if haskey(container, key)
         @error "$(IOM.encode_key(key)) is already stored" sort!(
             IOM.encode_key.(keys(container)),
@@ -439,10 +442,7 @@ end
 
 ################################### Aux Variables and Duals ############################
 
-function calculate_aux_variables!(
-    container::OptimizationContainer,
-    port::PSIP.Portfolio,
-)
+function calculate_aux_variables!(container::OptimizationContainer, port::PSIP.Portfolio)
     aux_vars = get_aux_variables(container)
     for key in keys(aux_vars)
         calculate_aux_variable_value!(container, key, port)
@@ -739,10 +739,7 @@ end
 """
 Exports the OpModel JuMP object in MathOptFormat
 """
-function serialize_optimization_model(
-    container::OptimizationContainer,
-    save_path::String,
-)
+function serialize_optimization_model(container::OptimizationContainer, save_path::String)
     serialize_jump_optimization_model(get_jump_model(container), save_path)
     return
 end
@@ -802,8 +799,7 @@ function serialize_metadata!(container::OptimizationContainer, output_dir::Strin
         encoded_key = encode_key_as_string(key)
         if IOM.has_container_key(container.metadata, encoded_key)
             # Constraints and Duals can store the same key.
-            IS.@assert_op key ==
-                          IOM.get_container_key(container.metadata, encoded_key)
+            IS.@assert_op key == IOM.get_container_key(container.metadata, encoded_key)
         end
         IOM.add_container_key!(container.metadata, encoded_key, key)
     end

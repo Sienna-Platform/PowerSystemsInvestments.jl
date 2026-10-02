@@ -4,6 +4,7 @@
 
 function add_capital_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -15,13 +16,14 @@ function add_capital_cost!(
 }
     for d in devices
         capital_cost_data = PSIP.get_capital_costs(d, IS.NU)
-        _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, capital_cost_data, V(), tech_model)
     end
     return
 end
 
 function add_capital_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -33,13 +35,14 @@ function add_capital_cost!(
 }
     for d in devices
         capital_cost_data = PSIP.get_capital_costs(d, IS.NU)
-        _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, capital_cost_data, V(), tech_model)
     end
     return
 end
 
 function add_capital_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -51,7 +54,7 @@ function add_capital_cost!(
 }
     for d in devices
         capital_cost_data = PSIP.get_capital_costs(d, IS.NU)
-        _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, capital_cost_data, V(), tech_model)
     end
     return
 end
@@ -78,6 +81,7 @@ end
 
 function add_fixed_om_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -89,13 +93,14 @@ function add_fixed_om_cost!(
 }
     for d in devices
         fixed_cost_data = PSIP.get_operation_costs(d, IS.NU)
-        _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
 end
 
 function add_fixed_om_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -107,13 +112,14 @@ function add_fixed_om_cost!(
 }
     for d in devices
         fixed_cost_data = PSIP.get_operation_costs(d, IS.NU)
-        _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
 end
 
 function add_fixed_om_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -125,7 +131,7 @@ function add_fixed_om_cost!(
 }
     for d in devices
         fixed_cost_data = PSIP.get_operation_costs(d, IS.NU)
-        _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
 end
@@ -152,6 +158,7 @@ end
 
 function add_capital_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -163,7 +170,7 @@ function add_capital_cost!(
 }
     for d in devices
         capital_cost_data = PSIP.get_capital_costs_energy(d, IS.NU)
-        _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, capital_cost_data, V(), tech_model)
     end
     return
 end
@@ -174,6 +181,7 @@ end
 
 function add_capital_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -185,7 +193,7 @@ function add_capital_cost!(
 }
     for d in devices
         capital_cost_data = PSIP.get_capital_costs_discharge(d, IS.NU)
-        _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, capital_cost_data, V(), tech_model)
     end
     return
 end
@@ -196,6 +204,7 @@ end
 
 function add_capital_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -207,13 +216,14 @@ function add_capital_cost!(
 }
     for d in devices
         capital_cost_data = get_capital_cost_data(d, U())
-        _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, capital_cost_data, V(), tech_model)
     end
     return
 end
 
 function add_fixed_om_cost!(
     container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::U,
     devices::Vector{T},
     ::V,
@@ -225,7 +235,7 @@ function add_fixed_om_cost!(
 }
     for d in devices
         fixed_cost_data = get_operation_cost_data(d, U())
-        _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
+        _add_cost_to_objective!(container, port, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
 end
