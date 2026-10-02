@@ -28,13 +28,6 @@ function OptimizationContainer(
     return container
 end
 
-function Base.getproperty(container::OptimizationContainer, name::Symbol)
-    if name === :time_mapping
-        return IOM.get_time_mapping(container)
-    end
-    return getfield(container, name)
-end
-
 function _assign_container!(
     container::Union{Dict, OrderedDict},
     key::OptimizationContainerKey,

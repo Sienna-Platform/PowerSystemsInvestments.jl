@@ -220,49 +220,55 @@ const serialize_results = IOM.serialize_outputs
 #     read_dual,
 #     read_expression
 
-import InfrastructureOptimizationModels: get_entry_type, get_component_type, get_output_dir
-import InfrastructureSystems.Optimization: should_write_resulting_value
+# ---- Keys, metadata, (de)serialization ----
 import InfrastructureOptimizationModels:
-    deserialize_key, encode_key_as_string, encode_keys_as_strings, get_store_container_type
-import InfrastructureOptimizationModels:
-    OptimizationProblemOutputs, OptimizationProblemOutputsExport, OptimizerStats
-import InfrastructureOptimizationModels:
-    list_variable_names, list_aux_variable_names, list_dual_names, list_expression_names
+    OptimizationKeyType,
+    get_entry_type,
+    get_component_type,
+    get_store_container_type,
+    get_metadata,
+    deserialize_key,
+    encode_key_as_string,
+    encode_keys_as_strings,
+    should_write_resulting_value
+
+# ---- Model, template, store, build/solve lifecycle ----
 import InfrastructureOptimizationModels:
     AbstractProblemTemplate,
-    SparseVariableType,
-    read_optimizer_stats,
-    get_optimizer_stats,
-    get_jump_model,
-    get_settings,
-    get_variables,
-    get_aux_variables,
-    get_constraints,
-    get_expressions,
-    get_duals,
-    get_metadata,
+    InvestmentModel,
+    InvestmentModelStore,
+    ModelStoreParams,
+    Settings,
+    get_internal,
+    get_optimization_container,
+    get_template,
+    get_portfolio,
+    get_store,
+    get_store_params,
+    set_store_params!,
+    initialize_storage!,
+    init_optimization_container!,
+    built_for_recurrent_solves,
+    reset!,
+    get_status,
+    set_status!,
+    get_run_status,
+    set_run_status!,
+    get_executions,
+    get_allow_fails,
+    configure_logging,
+    get_recorders,
+    get_recorder_dir,
+    set_output_dir!,
+    set_console_level!,
+    set_file_level!,
+    get_output_dir
+
+# ---- Settings accessors ----
+import InfrastructureOptimizationModels:
+    get_horizon,
     get_initial_time,
     get_resolution,
-    get_time_steps,
-    get_objective_expression,
-    is_milp,
-    supports_milp,
-    update_objective_function!,
-    export_outputs,
-    serialize_outputs,
-    get_timestamps,
-    get_model_base_power,
-    get_objective_value,
-    read_variable,
-    read_dual,
-    read_expression,
-    get_infeasibility_conflict,
-    stores_time_series_in_memory,
-    get_default_attributes,
-    get_default_time_series_names,
-    _set_model!,
-    # Re-export commonly used accessors that don't clash
-    get_horizon,
     get_optimizer,
     get_direct_mode_optimizer,
     get_optimizer_solve_log_print,
@@ -271,31 +277,40 @@ import InfrastructureOptimizationModels:
     get_deserialize_initial_conditions,
     get_store_variable_names,
     get_check_numerical_bounds,
+    get_portfolio_to_file,
     get_ext,
     set_horizon!,
     set_resolution!,
     set_initial_time!,
-    log_values,
-    fix_parameter_value,
-    to_matrix,
-    container_spec,
-    sparse_container_spec,
-    remove_undef!,
+    log_values
+
+# ---- Optimization container accessors ----
+import InfrastructureOptimizationModels:
+    get_jump_model,
+    get_settings,
+    get_variable,
+    get_variables,
+    get_aux_variables,
+    get_constraints,
+    get_expressions,
+    get_duals,
+    get_objective_expression,
+    get_infeasibility_conflict,
+    get_base_power,
+    get_model_base_power,
+    get_problem_base_power,
+    get_system_uuid,
+    is_milp,
     supports_milp,
-    write_optimizer_stats!,
-    serialize_jump_optimization_model,
-    check_conflict_status,
-    get_column_names,
-    jump_value,
-    tf_html_simple,
-    _show_method,
-    add_constant_to_jump_expression!,
-    add_proportional_to_jump_expression!,
-    add_linear_to_jump_expression!
+    stores_time_series_in_memory,
+    update_objective_function!
+
+# ---- Time mapping ----
 import InfrastructureOptimizationModels:
     TimeMapping,
     OperationalPeriods,
     InvestmentIntervals,
+    get_time_mapping,
     get_consecutive_slices,
     get_operational_indexes,
     get_feasibility_indexes,
@@ -304,6 +319,7 @@ import InfrastructureOptimizationModels:
     get_investment_time_stamps,
     get_inverse_invest_mapping,
     get_base_date,
+    get_operational_weights,
     get_total_period_count,
     get_total_operation_period_count,
     get_total_feasibility_period_count,
@@ -313,37 +329,11 @@ import InfrastructureOptimizationModels:
     get_feasibility_time_steps,
     get_investment_time_steps,
     is_feasibility_empty,
-    get_investment_map_to_operational_slices,
-    get_operational_weights,
-    get_status,
-    get_internal,
-    get_run_status,
-    get_store,
-    set_output_dir!,
-    set_status!,
-    set_console_level!,
-    set_file_level!,
-    get_recorders,
-    get_recorder_dir,
-    get_optimization_container,
-    get_template,
-    get_portfolio,
-    get_time_mapping,
-    get_executions,
-    get_variable,
-    ModelStoreParams,
-    set_store_params!,
-    configure_logging,
-    initialize_storage!,
-    get_store_params,
-    is_operation_entry,
-    is_investment_entry,
-    set_run_status!,
-    get_allow_fails,
-    AbstractTransportAggregation,
-    TransportModel,
-    get_use_slacks
+    get_investment_map_to_operational_slices
+
+# ---- Variable / expression types ----
 import InfrastructureOptimizationModels:
+    SparseVariableType,
     InvestmentVariableType,
     OperationsVariableType,
     FeasibilityVariableType,
@@ -351,7 +341,11 @@ import InfrastructureOptimizationModels:
     InvestmentExpressionType,
     OperationsExpressionType,
     FeasibilityExpressionType,
-    CumulativeInvestmentExpressionType
+    CumulativeInvestmentExpressionType,
+    is_operation_entry,
+    is_investment_entry
+
+# ---- Technology / requirement / transport models ----
 import InfrastructureOptimizationModels:
     TechnologyModel,
     RequirementModel,
@@ -360,6 +354,8 @@ import InfrastructureOptimizationModels:
     OperationsTechnologyFormulation,
     FeasibilityTechnologyFormulation,
     RequirementFormulation,
+    AbstractTransportAggregation,
+    TransportModel,
     get_technology_type,
     get_investment_formulation,
     get_operations_formulation,
@@ -367,22 +363,54 @@ import InfrastructureOptimizationModels:
     get_requirement_type,
     get_requirement_formulation,
     get_use_slacks,
-    get_duals
+    get_default_attributes,
+    get_default_time_series_names,
+    _set_model!
+
+# ---- Container construction / JuMP helpers ----
 import InfrastructureOptimizationModels:
-    InvestmentModel,
-    InvestmentModelStore,
-    Settings,
-    get_portfolio_to_file,
-    get_base_power,
-    get_system_uuid,
-    deserialize_key,
+    container_spec,
+    sparse_container_spec,
+    remove_undef!,
+    get_column_names,
+    jump_value,
+    fix_parameter_value,
+    to_matrix,
+    add_constant_to_jump_expression!,
+    add_proportional_to_jump_expression!,
+    add_linear_to_jump_expression!
+
+# ---- Results, outputs, serialization ----
+import InfrastructureOptimizationModels:
+    OptimizationProblemOutputs,
+    OptimizationProblemOutputsExport,
+    OptimizerStats,
     get_optimizer_stats,
-    OptimizationKeyType,
-    LOG_GROUP_OPTIMIZATION_CONTAINER,
-    LOG_GROUP_MODEL_STORE,
-    reset!,
-    built_for_recurrent_solves,
-    init_optimization_container!
+    read_optimizer_stats,
+    write_optimizer_stats!,
+    list_variable_names,
+    list_aux_variable_names,
+    list_dual_names,
+    list_expression_names,
+    list_keys,
+    list_variable_keys,
+    list_aux_variable_keys,
+    list_dual_keys,
+    list_expression_keys,
+    read_variable,
+    read_dual,
+    read_expression,
+    read_aux_variable,
+    get_timestamps,
+    get_objective_value,
+    export_outputs,
+    serialize_outputs,
+    serialize_jump_optimization_model,
+    check_conflict_status
+
+# ---- Logging & printing ----
+import InfrastructureOptimizationModels:
+    LOG_GROUP_OPTIMIZATION_CONTAINER, LOG_GROUP_MODEL_STORE, tf_html_simple, _show_method
 import TimerOutputs
 
 ####
