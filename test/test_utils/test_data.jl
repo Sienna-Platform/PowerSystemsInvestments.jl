@@ -66,7 +66,7 @@ function test_2_zone_portfolio()
     )
 
     thermals = collect(get_components(ThermalStandard, sys))
-    var_cost = PSY.get_variable.((get_operation_cost.((thermals))))
+    var_cost = PSY.get_variable_operation_cost.((get_operation_cost.((thermals))))
     op_cost = PSY.get_proportional_term.(get_value_curve.(var_cost))
 
     cheap_th_ixs = 2:4
@@ -101,7 +101,7 @@ function test_2_zone_portfolio()
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(cheap_th_var_cost)),
+            variable_operation_cost=CostCurve(LinearCurve(cheap_th_var_cost)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
@@ -121,7 +121,7 @@ function test_2_zone_portfolio()
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(cheap_th_var_cost)),
+            variable_operation_cost=CostCurve(LinearCurve(cheap_th_var_cost)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
@@ -141,7 +141,7 @@ function test_2_zone_portfolio()
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(exp_th_var_cost)),
+            variable_operation_cost=CostCurve(LinearCurve(exp_th_var_cost)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
@@ -160,7 +160,7 @@ function test_2_zone_portfolio()
     renewables = collect(get_components(RenewableDispatch, sys))
     wind_op_costs =
         get_proportional_term.(
-            get_value_curve.(PSY.get_variable.((get_operation_cost.((renewables)))))
+            get_value_curve.(PSY.get_variable_operation_cost.((get_operation_cost.((renewables)))))
         )
     wind_op_cost = mean(wind_op_costs)
     initial_cap_wind = sum(get_max_active_power.(renewables, Ref(IS.NU)))
@@ -209,7 +209,7 @@ function test_2_zone_portfolio()
         fuel=[ThermalFuels.OTHER],
         power_systems_type="RenewableDispatch",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(0.0)),
+            variable_operation_cost=CostCurve(LinearCurve(0.0)),
             fixed=wind_op_cost,
             start_up=0.0,
             shut_down=0.0,
@@ -419,21 +419,21 @@ function test_2_zone_portfolio()
     PSIP.add_time_series!(p_5bus, t_th, ts_th_cheap_inv_capex)
     PSIP.add_time_series!(p_5bus, t_th_exp, ts_th_exp_inv_capex)
 
-    PSIP.add_time_series!(p_5bus, t_re, ts_wind_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, t_re, ts_wind_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p_5bus, t_re, ts_wind_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p_5bus, t_re, ts_wind_2035; features = Dict("year"=>"2035", "rep_day"=>2))
     PSIP.add_time_series!(p_5bus, t_re, ts_wind_inv_capex)
 
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_2035; features = Dict("year"=>"2035", "rep_day"=>2))
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_2035; features = Dict("year"=>"2035", "rep_day"=>2))
     PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_inv_capex)
     PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_inv_capex)
 
-    PSIP.add_time_series!(p_5bus, t_demand1, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, t_demand1, ts_demand_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p_5bus, t_demand1, ts_demand_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p_5bus, t_demand1, ts_demand_2035; features = Dict("year"=>"2035", "rep_day"=>2))
+    PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2035; features = Dict("year"=>"2035", "rep_day"=>2))
     return p_5bus, [tstamp_2030_ops, tstamp_2035_ops]
 end
 
@@ -484,7 +484,7 @@ function test_hydro_portfolio()
         fuel=[ThermalFuels.OTHER],
         power_systems_type="HydroDispatch",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(0.0)),
+            variable_operation_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
@@ -515,10 +515,10 @@ function test_hydro_portfolio()
     add_technology!(p, t_hydro)
     add_technology!(p, t_demand)
 
-    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; features = Dict("year"=>"2035", "rep_day"=>2))
+    PSIP.add_time_series!(p, t_demand, ts_demand_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p, t_demand, ts_demand_2035; features = Dict("year"=>"2035", "rep_day"=>2))
 
     return p, [tstamp_2030_ops, tstamp_2035_ops]
 end
@@ -571,7 +571,7 @@ function test_hydro_basic_dispatch_portfolio()
         fuel=[ThermalFuels.OTHER],
         power_systems_type="HydroDispatch",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(0.0)),
+            variable_operation_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
@@ -602,10 +602,10 @@ function test_hydro_basic_dispatch_portfolio()
     add_technology!(p, t_hydro)
     add_technology!(p, t_demand)
 
-    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2035; features = Dict("year"=>"2035", "rep_day"=>2))
+    PSIP.add_time_series!(p, t_demand, ts_demand_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p, t_demand, ts_demand_2035; features = Dict("year"=>"2035", "rep_day"=>2))
 
     return p, [tstamp_2030_ops, tstamp_2035_ops]
 end
@@ -657,7 +657,7 @@ function test_constrained_hydro_portfolio()
         fuel=[ThermalFuels.OTHER],
         power_systems_type="HydroDispatch",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(0.0)),
+            variable_operation_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
@@ -677,7 +677,7 @@ function test_constrained_hydro_portfolio()
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(50.0)),
+            variable_operation_cost=CostCurve(LinearCurve(50.0)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
@@ -709,10 +709,10 @@ function test_constrained_hydro_portfolio()
     add_technology!(p, t_thermal)
     add_technology!(p, t_demand)
 
-    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; features = Dict("year"=>"2035", "rep_day"=>2))
+    PSIP.add_time_series!(p, t_demand, ts_demand_2030; features = Dict("year"=>"2030", "rep_day"=>1))
+    PSIP.add_time_series!(p, t_demand, ts_demand_2035; features = Dict("year"=>"2035", "rep_day"=>2))
 
     return p, [tstamp_2030_ops, tstamp_2035_ops]
 end

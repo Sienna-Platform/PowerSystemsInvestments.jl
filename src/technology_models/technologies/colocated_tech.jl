@@ -107,7 +107,7 @@ end
 ################## Expressions ###################
 
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     ::S, # variable type
@@ -120,7 +120,7 @@ function add_expression!(
     V <: AbstractTechnologyFormulation,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -152,7 +152,7 @@ end
 ################### Constraints ##################
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -163,7 +163,7 @@ function add_constraints!(
     V <: CumulativeInvestmentExpressionType,
     S <: InvestmentTechnologyFormulation,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -193,7 +193,7 @@ end
 
 # TODO: ActivePowerLimits for each type
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     ::W,
@@ -208,7 +208,7 @@ function add_constraints!(
     S <: OperationsColocatedFormulation,
     X <: TechnologyModel,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -247,7 +247,7 @@ end
 
 # Limits for renewables #
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     ::W,
@@ -265,7 +265,7 @@ function add_constraints!(
     S <: OperationsColocatedFormulation,
     X <: TechnologyModel,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -315,7 +315,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     devices::U,
     formulation::S,
@@ -324,7 +324,7 @@ function add_constraints!(
     U <: Vector{D},
     S <: OperationsColocatedFormulation,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -375,7 +375,7 @@ end
 
 ### Storage Balance ####
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -386,7 +386,7 @@ function add_constraints!(
     V <: StateOfChargeVariable,
     S <: ChronologicalColocatedDispatch,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -456,7 +456,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -467,7 +467,7 @@ function add_constraints!(
     V <: StateOfChargeVariable,
     S <: CyclicalColocatedDispatch,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -534,13 +534,15 @@ end
 # These functions are custom implementations of the cost data. In the file objective_functions.jl there are default implementations. Define these only if needed.
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.ColocatedSupplyStorageTechnology, S <: OperationsColocatedFormulation}
     tech_model = string(S)
     add_variable_cost!(
         container,
+        port,
         ActivePowerDischargeVariable(),
         devices,
         formulation,
@@ -548,6 +550,7 @@ function objective_function!(
     )
     add_variable_cost!(
         container,
+        port,
         ActivePowerChargeVariable(),
         devices,
         formulation,
@@ -555,6 +558,7 @@ function objective_function!(
     )
     add_variable_cost!(
         container,
+        port,
         ActivePowerWindVariable(),
         devices,
         formulation,
@@ -562,6 +566,7 @@ function objective_function!(
     )
     add_variable_cost!(
         container,
+        port,
         ActivePowerSolarVariable(),
         devices,
         formulation,
@@ -571,20 +576,91 @@ function objective_function!(
 end
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.ColocatedSupplyStorageTechnology, S <: InvestmentTechnologyFormulation}
     tech_model = string(S)
-    add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildSolarCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildWindCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildInverterCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildSolarCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildWindCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildInverterCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(
+        container,
+        port,
+        BuildEnergyCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildPowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildSolarCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildWindCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildInverterCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildEnergyCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildPowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildSolarCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildWindCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildInverterCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
     return
 end

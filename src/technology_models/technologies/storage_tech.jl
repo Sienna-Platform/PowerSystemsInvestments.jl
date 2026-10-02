@@ -68,7 +68,7 @@ get_existing_capacity_energy(d::PSIP.StorageTechnology, p::PSIP.Portfolio) =
 ################## Expressions ###################
 
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -79,7 +79,7 @@ function add_expression!(
     V <: AbstractTechnologyFormulation,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -107,7 +107,7 @@ function add_expression!(
 end
 
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -118,7 +118,7 @@ function add_expression!(
     V <: AbstractTechnologyFormulation,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -147,7 +147,7 @@ end
 
 # PowerCap for IntegerInvestment
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -158,7 +158,7 @@ function add_expression!(
     V <: IntegerInvestment,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -188,7 +188,7 @@ end
 
 # EnergyCap for Integer decisions in Storage
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -199,7 +199,7 @@ function add_expression!(
     V <: IntegerInvestment,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -231,7 +231,7 @@ end
 # storage and co-located technologies. Net discharge = out - in. Created for
 # every such technology regardless of whether any requirement uses it.
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::S,
@@ -241,7 +241,7 @@ function add_expression!(
     S <: Union{OperationsStorageFormulation, OperationsColocatedFormulation},
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     operational_weights = get_operational_weights(container)
@@ -279,7 +279,7 @@ function add_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -293,7 +293,7 @@ function add_to_expression!(
     W <: SingleRegionBalanceModel,
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -302,7 +302,7 @@ function add_to_expression!(
 
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        _add_to_jump_expression!(
+        add_proportional_to_jump_expression!(
             expression[SINGLE_REGION, t],
             variable[name, t],
             get_expression_multiplier(T(), V(), d, S()),
@@ -313,7 +313,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -327,7 +327,7 @@ function add_to_expression!(
     W <: NodalBalanceModel,
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -338,7 +338,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         # Only 1 region (node) supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
-        _add_to_jump_expression!(
+        add_proportional_to_jump_expression!(
             expression[region, t],
             variable[name, t],
             get_expression_multiplier(T(), V(), d, S()),
@@ -349,7 +349,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -363,7 +363,7 @@ function add_to_expression!(
     W <: MultiRegionBalanceModel,
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -374,7 +374,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         # Only 1 region supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
-        _add_to_jump_expression!(
+        add_proportional_to_jump_expression!(
             expression[region, t],
             variable[name, t],
             get_expression_multiplier(T(), V(), d, S()),
@@ -385,7 +385,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -399,7 +399,7 @@ function add_to_expression!(
     W <: SingleRegionBalanceModel,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -408,7 +408,7 @@ function add_to_expression!(
 
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        _add_to_jump_expression!(
+        add_proportional_to_jump_expression!(
             expression[SINGLE_REGION, t],
             variable[name, t],
             get_expression_multiplier(T(), V(), d, S()),
@@ -418,7 +418,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -432,7 +432,7 @@ function add_to_expression!(
     W <: MultiRegionBalanceModel,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -443,7 +443,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         # Only 1 region supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
-        _add_to_jump_expression!(
+        add_proportional_to_jump_expression!(
             expression[region, t],
             variable[name, t],
             get_expression_multiplier(T(), V(), d, S()),
@@ -453,7 +453,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     expression_type::T,
     var::V,
     devices::U,
@@ -467,7 +467,7 @@ function add_to_expression!(
     W <: NodalBalanceModel,
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -478,7 +478,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         # Only 1 region (node) supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
-        _add_to_jump_expression!(
+        add_proportional_to_jump_expression!(
             expression[region, t],
             variable[name, t],
             get_expression_multiplier(T(), V(), d, S()),
@@ -490,7 +490,7 @@ end
 ################### Constraints ##################
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -506,7 +506,7 @@ function add_constraints!(
     S <: OperationsStorageFormulation,
     X <: TechnologyModel,
 } where {D <: PSIP.StorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -544,7 +544,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -557,7 +557,7 @@ function add_constraints!(
     S <: OperationsStorageFormulation,
     X <: TechnologyModel,
 } where {D <: PSIP.StorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -594,7 +594,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -605,7 +605,7 @@ function add_constraints!(
     V <: StateOfChargeVariable,
     S <: ChronologicalStorageDispatch,
 } where {D <: PSIP.StorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -675,7 +675,7 @@ function add_constraints!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -686,7 +686,7 @@ function add_constraints!(
     V <: StateOfChargeVariable,
     S <: CyclicalStorageDispatch,
 } where {D <: PSIP.StorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -751,7 +751,7 @@ end
 
 # Maximum cumulative capacity
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -762,7 +762,7 @@ function add_constraints!(
     V <: Union{CumulativePowerCapacity, CumulativeEnergyCapacity},
     S <: InvestmentTechnologyFormulation,
 } where {D <: PSIP.StorageTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -794,31 +794,69 @@ end
 # These functions are custom implementations of the cost data. In the file objective_functions.jl there are default implementations. Define these only if needed.
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.StorageTechnology, S <: OperationsStorageFormulation}
     tech_model = string(S)
     add_variable_cost!(
         container,
+        port,
         ActiveOutPowerVariable(),
         devices,
         formulation,
         tech_model,
     )
-    add_variable_cost!(container, ActiveInPowerVariable(), devices, formulation, tech_model)
+    add_variable_cost!(
+        container,
+        port,
+        ActiveInPowerVariable(),
+        devices,
+        formulation,
+        tech_model,
+    )
     return
 end
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.StorageTechnology, S <: InvestmentTechnologyFormulation}
     tech_model = string(S)
-    add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(
+        container,
+        port,
+        BuildEnergyCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_capital_cost!(
+        container,
+        port,
+        BuildPowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildEnergyCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        port,
+        BuildPowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
     return
 end

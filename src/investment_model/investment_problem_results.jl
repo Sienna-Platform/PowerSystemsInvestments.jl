@@ -31,7 +31,7 @@ function OptimizationProblemOutputs(model::InvestmentModel)
         parameter_values,
         expression_values,
         optimizer_stats,
-        get_metadata(get_optimization_container(model)),
+        get_metadata(IOM.get_optimization_container(model)),
         IS.strip_module_name(typeof(model)),
         mkpath(joinpath(get_output_dir(model), "results")),
         get_output_dir(model),

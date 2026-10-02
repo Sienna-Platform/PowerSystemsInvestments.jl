@@ -25,7 +25,8 @@ Adds to the cost function cost terms for sum of variables with common factor to 
   - cost_component::PSY.CostCurve{PSY.LinearCurve} : container for cost to be associated with variable
 """
 function _add_cost_to_objective!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     value_curve::IS.ValueCurve,
@@ -38,6 +39,7 @@ function _add_cost_to_objective!(
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         value_curve,
@@ -48,7 +50,8 @@ function _add_cost_to_objective!(
 end
 
 function _add_cost_to_objective!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     cost_curve::PSY.CostCurve,
@@ -56,12 +59,21 @@ function _add_cost_to_objective!(
     tech_model::String,
 ) where {T <: VariableType, U <: AbstractTechnologyFormulation}
     value_curve = PSY.get_value_curve(cost_curve)
-    return _add_cost_to_objective!(container, T(), technology, value_curve, U(), tech_model)
+    return _add_cost_to_objective!(
+        container,
+        port,
+        T(),
+        technology,
+        value_curve,
+        U(),
+        tech_model,
+    )
 end
 
 #Fixed OM calculated from build capacity
 function _add_cost_to_objective!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -72,6 +84,7 @@ function _add_cost_to_objective!(
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         om_cost,
@@ -83,19 +96,21 @@ end
 
 #Variable OM from dispatch
 function _add_cost_to_objective!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
 ) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
-    cost_curve = PSY.get_variable(om_cost)
+    cost_curve = PSY.get_variable_operation_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         om_cost,
@@ -107,7 +122,8 @@ end
 
 #Storage Charge cost
 function _add_cost_to_objective!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -123,6 +139,7 @@ function _add_cost_to_objective!(
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         om_cost,
@@ -134,7 +151,8 @@ end
 
 #Storage Discharge cost
 function _add_cost_to_objective!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -150,6 +168,7 @@ function _add_cost_to_objective!(
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
+        port,
         T(),
         technology,
         om_cost,
@@ -161,7 +180,8 @@ end
 
 # LinearCurve costs for overnight costs and investment decisions
 function _add_linearcurve_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     cost::IS.ValueCurve,
@@ -169,12 +189,8 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: InvestmentVariableType}
     amortized_proportional_term, discount_factor, base_year =
-        amortize_overnight_term_to_base_year_dollars(
-            container,
-            technology,
-            proportional_term,
-        )
-    time_mapping = get_time_mapping(container)
+        amortize_overnight_term_to_base_year_dollars(port, technology, proportional_term)
+    time_mapping = IOM.get_time_mapping(container)
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
@@ -197,7 +213,8 @@ end
 
 # LinearCurve costs for fixed annual costs
 function _add_linearcurve_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -205,12 +222,8 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: InvestmentVariableType}
     amortized_proportional_term, discount_factor, base_year =
-        amortize_overnight_term_to_base_year_dollars(
-            container,
-            technology,
-            proportional_term,
-        )
-    time_mapping = get_time_mapping(container)
+        amortize_overnight_term_to_base_year_dollars(port, technology, proportional_term)
+    time_mapping = IOM.get_time_mapping(container)
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
@@ -233,17 +246,18 @@ end
 
 # TODO: Should this use overnight or direct to base year
 function _add_linearcurve_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
     proportional_term::Float64,
     tech_model::String,
 ) where {T <: InvestmentExpressionType}
-    time_mapping = get_time_mapping(container)
-    base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
+    time_mapping = IOM.get_time_mapping(container)
+    base_year = PSIP.get_base_year(port)
+    discount_rate = PSIP.get_discount_rate(port)
+    inflation_rate = PSIP.get_inflation_rate(port)
     tech_base_year = PSIP.get_technology_base_year(technology)
 
     discount_factor = 1 / (1 + discount_rate)
@@ -272,7 +286,8 @@ end
 
 # Dispatch for scalar proportional terms
 function _add_linearcurve_cost!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
@@ -280,11 +295,11 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: OperationsVariableType}
     financials = PSIP.get_financial_data(technology)
-    base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
+    base_year = PSIP.get_base_year(port)
+    discount_rate = PSIP.get_discount_rate(port)
+    inflation_rate = PSIP.get_inflation_rate(port)
     tech_base_year = PSIP.get_technology_base_year(financials)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
 
@@ -314,7 +329,7 @@ end
 
 # Add proportional terms to objective function and expression
 function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::VariableOMCost,
     technology::PSIP.Technology,
@@ -343,7 +358,7 @@ end
 
 # Add proportional terms to objective function and expression
 function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::FixedOperationModelCost,
     technology::PSIP.Technology,
@@ -372,7 +387,7 @@ end
 
 # Add proportional terms to objective function and expression
 function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::CapitalCost,
     technology::PSIP.Technology,
@@ -400,7 +415,7 @@ function _add_linearcurve_variable_term_to_model!(
 end
 
 function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::CapitalCost,
     technology::PSIP.Technology,
@@ -428,7 +443,7 @@ function _add_linearcurve_variable_term_to_model!(
 end
 
 function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::CapitalCost,
     technology::PSIP.Technology,
@@ -456,7 +471,7 @@ function _add_linearcurve_variable_term_to_model!(
 end
 
 function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::CapitalCost,
     technology::PSIP.Technology,
@@ -484,7 +499,7 @@ function _add_linearcurve_variable_term_to_model!(
 end
 
 function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::CapitalCost,
     technology::PSIP.Technology,
@@ -512,7 +527,7 @@ function _add_linearcurve_variable_term_to_model!(
 end
 
 function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::CapitalCost,
     technology::PSIP.Technology,
