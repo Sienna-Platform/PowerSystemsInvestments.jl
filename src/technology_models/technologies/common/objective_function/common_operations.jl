@@ -1,6 +1,7 @@
 #! format: off
 
 objective_function_multiplier(::ISOPT.VariableType, ::AbstractTechnologyFormulation)=OBJECTIVE_FUNCTION_POSITIVE
+objective_function_multiplier(::ISOPT.ExpressionType, ::AbstractTechnologyFormulation)=OBJECTIVE_FUNCTION_POSITIVE
 
 #! format: on
 

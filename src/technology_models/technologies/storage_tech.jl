@@ -824,7 +824,6 @@ function objective_function!(
     tech_model = string(S)
     add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativePowerCapacity(), devices, formulation, tech_model)
     return
 end

@@ -68,6 +68,11 @@ get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildWindCap
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildSolarCapacity) = PSIP.get_operation_costs_solar(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildInverterCapacity) = PSIP.get_operation_costs_inverter(d)
 
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity) = PSIP.get_operation_costs_storage(d)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity) = PSIP.get_operation_costs_wind(d)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity) = PSIP.get_operation_costs_solar(d)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = PSIP.get_operation_costs_inverter(d)
+
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerChargeVariable) = PSIP.get_operation_costs_storage(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerDischargeVariable) = PSIP.get_operation_costs_storage(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerWindVariable) = PSIP.get_operation_costs_wind(d)
@@ -582,10 +587,9 @@ function objective_function!(
     add_capital_cost!(container, BuildSolarCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildWindCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildInverterCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildSolarCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildWindCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildInverterCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativePowerCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativeSolarCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativeWindCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativeInverterCapacity(), devices, formulation, tech_model)
     return
 end

@@ -562,7 +562,7 @@ function objective_function!(
 ) where {T <: PSIP.SupplyTechnology, B <: InvestmentTechnologyFormulation}
     tech_model = string(B)
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
     return
 end
 function objective_function!(
@@ -575,7 +575,7 @@ function objective_function!(
 }
     tech_model = string(B)
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
     return
 end
 

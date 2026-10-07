@@ -26,6 +26,28 @@ function add_constraints!(
     #   slack_dn  > 0  → over-supply (surplus)
     # Both are penalized in the objective so they stay at zero wherever the
     # balance can feasibly be met; any nonzero slack pinpoints an unservable node.
+    # The penalty is weighted like a variable cost: by the representative-day weight, over
+    # the years of the investment period, discounted to the base year.
+    operational_weights = get_operational_weights(container)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    investment_time_stamps = get_investment_time_stamps(time_mapping)
+    base_year = get_base_year(container)
+    discount_rate = get_discount_rate(container)
+    discount_factor = 1.0 / (1.0 + discount_rate)
+    years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
+    penalty = Dict{Int, Float64}()
+    for op_ix in get_operational_indexes(time_mapping)
+        inv_tuple = investment_time_stamps[inverse_invest_mapping[op_ix]]
+        period_factor = investment_period_annuity_factor(discount_rate, inv_tuple)
+        for t in consecutive_slices[op_ix]
+            penalty[t] =
+                BALANCE_SLACK_PENALTY *
+                period_factor *
+                operational_weights[op_ix] *
+                discount_factor^(years[t] - base_year)
+        end
+    end
     store_names = get_store_variable_names(get_settings(container))
     slack_up = add_variable_container!(container, BalanceSlackUp(), U, nodes, time_steps)
     slack_dn = add_variable_container!(container, BalanceSlackDown(), U, nodes, time_steps)
@@ -46,7 +68,7 @@ function add_constraints!(
             JuMP.@constraint(jump_model, expressions[n, t] + up - dn == 0)
         add_to_objective_operations_expression!(
             container,
-            (up + dn) * BALANCE_SLACK_PENALTY,
+            (up + dn) * get(penalty, t, BALANCE_SLACK_PENALTY),
         )
     end
 

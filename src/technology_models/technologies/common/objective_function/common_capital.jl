@@ -114,7 +114,7 @@ function add_fixed_om_cost!(
     tech_model::String,
 ) where {
     T <: PSIP.SupplyTechnology,
-    U <: BuildCapacity,
+    U <: CumulativeCapacity,
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
@@ -124,6 +124,7 @@ function add_fixed_om_cost!(
     return
 end
 
+# Storage fixed OM is charged on power capacity only.
 function add_fixed_om_cost!(
     container::SingleOptimizationContainer,
     ::U,
@@ -132,25 +133,7 @@ function add_fixed_om_cost!(
     tech_model::String,
 ) where {
     T <: PSIP.StorageTechnology,
-    U <: BuildEnergyCapacity,
-    V <: InvestmentTechnologyFormulation,
-}
-    for d in devices
-        fixed_cost_data = PSIP.get_operation_costs(d)
-        _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
-    end
-    return
-end
-
-function add_fixed_om_cost!(
-    container::SingleOptimizationContainer,
-    ::U,
-    devices::Vector{T},
-    ::V,
-    tech_model::String,
-) where {
-    T <: PSIP.StorageTechnology,
-    U <: BuildPowerCapacity,
+    U <: CumulativePowerCapacity,
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
@@ -269,7 +252,7 @@ function add_fixed_om_cost!(
     tech_model::String,
 ) where {
     T <: PSIP.ColocatedSupplyStorageTechnology,
-    U <: BuildInvestmentVariableType,
+    U <: CumulativeInvestmentExpressionType,
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices

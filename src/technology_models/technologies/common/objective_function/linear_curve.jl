@@ -50,7 +50,7 @@ function _add_cost_to_objective!(
     return
 end
 
-#Fixed OM calculated from build capacity
+#Fixed OM calculated from cumulative capacity
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
     ::T,
@@ -58,7 +58,7 @@ function _add_cost_to_objective!(
     om_cost::PSY.OperationalCost,
     ::U,
     tech_model::String,
-) where {T <: InvestmentVariableType, U <: AbstractTechnologyFormulation}
+) where {T <: CumulativeInvestmentExpressionType, U <: AbstractTechnologyFormulation}
     proportional_term = PSY.get_fixed(om_cost)
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
@@ -186,7 +186,9 @@ function _add_linearcurve_cost!(
     return
 end
 
-# LinearCurve costs for fixed annual costs
+# LinearCurve costs for fixed annual costs. The annual payments on the cumulative capacity of
+# each investment period are converted to a lump sum at the start of the period and then
+# discounted to the base year.
 function _add_linearcurve_cost!(
     container::SingleOptimizationContainer,
     ::T,
@@ -194,43 +196,7 @@ function _add_linearcurve_cost!(
     om_cost::PSY.OperationalCost,
     proportional_term::Float64,
     tech_model::String,
-) where {T <: InvestmentVariableType}
-    amortized_proportional_term, discount_factor, base_year =
-        amortize_overnight_term_to_base_year_dollars(
-            container,
-            technology,
-            proportional_term,
-        )
-    time_mapping = get_time_mapping(container)
-    inv_tuples = get_investment_time_stamps(time_mapping)
-
-    for t in get_investment_time_steps(time_mapping)
-        inv_date = inv_tuples[t]
-        year = Dates.value.(Dates.Year.(inv_date[1]))
-        future_to_present_value = discount_factor^(year - base_year)
-        npv_proportional_term = amortized_proportional_term * future_to_present_value
-        _add_linearcurve_variable_term_to_model!(
-            container,
-            T(),
-            FixedOperationModelCost(),
-            technology,
-            npv_proportional_term,
-            t,
-            tech_model,
-        )
-    end
-    return
-end
-
-# TODO: Should this use overnight or direct to base year
-function _add_linearcurve_cost!(
-    container::SingleOptimizationContainer,
-    ::T,
-    technology::PSIP.Technology,
-    om_cost::PSY.OperationalCost,
-    proportional_term::Float64,
-    tech_model::String,
-) where {T <: InvestmentExpressionType}
+) where {T <: CumulativeInvestmentExpressionType}
     time_mapping = get_time_mapping(container)
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
@@ -245,13 +211,15 @@ function _add_linearcurve_cost!(
         inv_tuple = inv_tuples[t]
         year = Dates.value.(Dates.Year.(inv_tuple[1]))
         future_to_present_value = discount_factor^(year - base_year)
+        period_payments =
+            proportional_term * investment_period_annuity_factor(discount_rate, inv_tuple)
         npv_proportional_term =
-            proportional_term * dollars_to_base_year * future_to_present_value
+            period_payments * dollars_to_base_year * future_to_present_value
 
         _add_linearcurve_variable_term_to_model!(
             container,
             T(),
-            VariableOMCost(),
+            FixedOperationModelCost(),
             technology,
             npv_proportional_term,
             t,
@@ -289,9 +257,7 @@ function _add_linearcurve_cost!(
         weight = operational_weights[op_ix]
         stage = inverse_invest_mapping[op_ix]
         inv_tuple = investment_time_stamps[stage]
-        num_years =
-            Dates.value(Dates.Year(inv_tuple[2])) - Dates.value(Dates.Year(inv_tuple[1])) +
-            1
+        period_factor = investment_period_annuity_factor(discount_rate, inv_tuple)
         for t in consecutive_slices[op_ix]
             future_to_present_value = discount_factor^(years[t] - base_year)
             npv_proportional_term =
@@ -301,7 +267,7 @@ function _add_linearcurve_cost!(
                 T(),
                 VariableOMCost(),
                 technology,
-                num_years * weight * npv_proportional_term,
+                period_factor * weight * npv_proportional_term,
                 t,
                 tech_model,
             )
@@ -348,7 +314,7 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: InvestmentVariableType}
+) where {T <: CumulativeInvestmentExpressionType}
     linear_cost = _add_proportional_term!(
         container,
         T(),
