@@ -61,7 +61,7 @@ function add_expression!(
     S <: AbstractTechnologyFormulation,
     U <: Vector{D},
 } where {D <: PSIP.AggregateTransportTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
@@ -132,7 +132,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.AggregateTransportTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
@@ -257,6 +257,7 @@ function add_constraints!(
             )
         end
     end
+    return
 end
 
 # Maximum cumulative capacity for NodalACTransportTechnology
@@ -298,6 +299,7 @@ function add_constraints!(
             )
         end
     end
+    return
 end
 
 ########################### Objective Function Calls#############################################
@@ -339,7 +341,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: NodalBalanceModel,
 } where {D <: PSIP.NodalACTransportTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
@@ -425,6 +427,7 @@ function add_constraints!(
             end
         end
     end
+    return
 end
 
 # ============================================================================
@@ -442,7 +445,7 @@ function add_expression!(
     S <: AbstractTechnologyFormulation,
     U <: Vector{D},
 } where {D <: PSIP.NodalACTransportTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)

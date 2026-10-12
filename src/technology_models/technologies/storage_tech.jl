@@ -54,7 +54,7 @@ function add_expression!(
     U <: Vector{D},
     V <: AbstractTechnologyFormulation,
 } where {D <: PSIP.StorageTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
@@ -94,7 +94,7 @@ function add_expression!(
     U <: Vector{D},
     V <: AbstractTechnologyFormulation,
 } where {D <: PSIP.StorageTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
@@ -135,7 +135,7 @@ function add_expression!(
     U <: Vector{D},
     V <: IntegerInvestment,
 } where {D <: PSIP.StorageTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
@@ -177,7 +177,7 @@ function add_expression!(
     U <: Vector{D},
     V <: IntegerInvestment,
 } where {D <: PSIP.StorageTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
@@ -220,7 +220,7 @@ function add_expression!(
     U <: Vector{D},
     S <: Union{OperationsStorageFormulation, OperationsColocatedFormulation},
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -272,7 +272,7 @@ function add_to_expression!(
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: SingleRegionBalanceModel,
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
@@ -306,7 +306,7 @@ function add_to_expression!(
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: NodalBalanceModel,
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
@@ -342,7 +342,7 @@ function add_to_expression!(
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: MultiRegionBalanceModel,
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
@@ -378,7 +378,7 @@ function add_to_expression!(
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: SingleRegionBalanceModel,
 } where {D <: PSIP.StorageTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
@@ -411,7 +411,7 @@ function add_to_expression!(
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: MultiRegionBalanceModel,
 } where {D <: PSIP.StorageTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
@@ -446,7 +446,7 @@ function add_to_expression!(
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
     W <: NodalBalanceModel,
 } where {D <: PSIP.StorageTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
@@ -521,6 +521,7 @@ function add_constraints!(
             end
         end
     end
+    return
 end
 
 function add_constraints!(
@@ -571,6 +572,7 @@ function add_constraints!(
             end
         end
     end
+    return
 end
 
 function add_constraints!(
@@ -653,6 +655,7 @@ function add_constraints!(
             end
         end
     end
+    return
 end
 
 function add_constraints!(
@@ -729,6 +732,7 @@ function add_constraints!(
             end
         end
     end
+    return
 end
 
 # Storage duration constraints
@@ -843,6 +847,7 @@ function add_constraints!(
             )
         end
     end
+    return
 end
 
 ########################### Objective Function Calls#############################################

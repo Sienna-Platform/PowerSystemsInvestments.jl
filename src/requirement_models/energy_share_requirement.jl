@@ -205,13 +205,12 @@ function add_expression!(
                 time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
                 # Load Data is in MW
                 ts_data = TimeSeries.values(time_series.data)
-                first_tstamp = time_stamps[first(time_slices)]
-                first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-                if first_tstamp != first_ts_tstamp
-                    @error(
-                        "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(PSIP.get_name(d)) does not match with the expected representative day $op_ix"
-                    )
-                end
+                check_initial_timestamp(
+                    time_series,
+                    d,
+                    time_stamps[first(time_slices)],
+                    op_ix,
+                )
                 _add_to_jump_expression!(demand_expr, weight * sum(ts_data))
             end
             expression[req_name, op_ix] = demand_expr

@@ -55,6 +55,27 @@ end
     )
 end
 
+@testset "Time series initial timestamp check" begin
+    p_5bus, op_days = test_2_zone_portfolio()
+    wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
+    time_series = IS.get_time_series(
+        IS.SingleTimeSeries,
+        wind,
+        "ops_variable_cap_factor";
+        year="2030",
+        rep_day=1,
+    )
+    @test isnothing(PSIN.check_initial_timestamp(time_series, wind, first(op_days[1]), 1))
+    # A time series that starts on a different time stamp than its representative period
+    # is an error.
+    @test_throws ErrorException PSIN.check_initial_timestamp(
+        time_series,
+        wind,
+        first(op_days[2]),
+        2,
+    )
+end
+
 @testset "Constructor" begin
     p_5bus, op_days = test_2_zone_portfolio()
 

@@ -38,7 +38,7 @@ function add_variable!(
     S <: InvestmentTechnologyFormulation,
     U <: Vector{D},
 } where {D <: PSIP.Technology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
@@ -54,17 +54,21 @@ function add_variable!(
     store_names = get_store_variable_names(get_settings(container))
 
     for t in time_steps, d in devices, name in get_variable_names(d)
+        base_name = ""
+        if store_names
+            base_name = "$(T)_$(D)_{$(name), $(t)}"
+        end
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
-            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
+            base_name = base_name,
             binary = get_variable_binary(variable_type, d, formulation),
             integer = get_variable_integer(variable_type, d, formulation),
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
-        ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
+        !isnothing(ub) && JuMP.set_upper_bound(variable[name, t], ub)
 
         lb = get_variable_lower_bound(variable_type, d, formulation)
-        lb !== nothing && JuMP.set_lower_bound(variable[name, t], lb)
+        !isnothing(lb) && JuMP.set_lower_bound(variable[name, t], lb)
     end
 
     return
@@ -80,7 +84,7 @@ function add_variable!(
     S <: OperationsTechnologyFormulation,
     U <: Vector{D},
 } where {D <: PSIP.Technology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
@@ -98,15 +102,17 @@ function add_variable!(
     store_names = get_store_variable_names(get_settings(container))
 
     for t in time_steps, d in devices, name in get_variable_names(d)
-        variable[name, t] = JuMP.@variable(
-            get_jump_model(container),
-            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
-        )
+        base_name = ""
+        if store_names
+            base_name = "$(T)_$(D)_{$(name), $(t)}"
+        end
+        variable[name, t] =
+            JuMP.@variable(get_jump_model(container), base_name = base_name,)
         ub = get_variable_upper_bound(variable_type, d, formulation)
-        ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
+        !isnothing(ub) && JuMP.set_upper_bound(variable[name, t], ub)
 
         lb = get_variable_lower_bound(variable_type, d, formulation)
-        lb !== nothing && JuMP.set_lower_bound(variable[name, t], lb)
+        !isnothing(lb) && JuMP.set_lower_bound(variable[name, t], lb)
     end
 
     return
@@ -122,7 +128,7 @@ function add_variable!(
     S <: FeasibilityTechnologyFormulation,
     U <: Vector{D},
 } where {D <: PSIP.Technology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
@@ -139,15 +145,17 @@ function add_variable!(
     store_names = get_store_variable_names(get_settings(container))
 
     for t in time_steps, d in devices, name in get_variable_names(d)
-        variable[name, t] = JuMP.@variable(
-            get_jump_model(container),
-            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
-        )
+        base_name = ""
+        if store_names
+            base_name = "$(T)_$(D)_{$(name), $(t)}"
+        end
+        variable[name, t] =
+            JuMP.@variable(get_jump_model(container), base_name = base_name,)
         ub = get_variable_upper_bound(variable_type, d, formulation)
-        ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
+        !isnothing(ub) && JuMP.set_upper_bound(variable[name, t], ub)
 
         lb = get_variable_lower_bound(variable_type, d, formulation)
-        lb !== nothing && JuMP.set_lower_bound(variable[name, t], lb)
+        !isnothing(lb) && JuMP.set_lower_bound(variable[name, t], lb)
     end
 
     return
@@ -163,7 +171,7 @@ function add_variable!(
     S <: AbstractTechnologyFormulation,
     U <: Vector{D},
 } where {D <: PSIP.Technology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
@@ -180,15 +188,17 @@ function add_variable!(
     store_names = get_store_variable_names(get_settings(container))
 
     for t in time_steps, d in devices, name in get_variable_names(d)
-        variable[name, t] = JuMP.@variable(
-            get_jump_model(container),
-            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
-        )
+        base_name = ""
+        if store_names
+            base_name = "$(T)_$(D)_{$(name), $(t)}"
+        end
+        variable[name, t] =
+            JuMP.@variable(get_jump_model(container), base_name = base_name,)
         ub = get_variable_upper_bound(variable_type, d, formulation)
-        ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
+        !isnothing(ub) && JuMP.set_upper_bound(variable[name, t], ub)
 
         lb = get_variable_lower_bound(variable_type, d, formulation)
-        lb !== nothing && JuMP.set_lower_bound(variable[name, t], lb)
+        !isnothing(lb) && JuMP.set_lower_bound(variable[name, t], lb)
     end
 
     return

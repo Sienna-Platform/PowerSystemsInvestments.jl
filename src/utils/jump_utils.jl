@@ -287,9 +287,9 @@ function check_conflict_status(
     jump_model::JuMP.Model,
     constraint_container::DenseAxisArray{JuMP.ConstraintRef},
 )
-    conflict_indices = Vector()
-    dims = axes(constraint_container)
-    for index in Iterators.product(dims...)
+    indexes = Iterators.product(axes(constraint_container)...)
+    conflict_indices = Vector{eltype(indexes)}()
+    for index in indexes
         if isassigned(constraint_container, index...) &&
            MOI.get(
             jump_model,
@@ -306,9 +306,9 @@ function check_conflict_status(
     jump_model::JuMP.Model,
     constraint_container::SparseAxisArray{<:Union{Nothing, JuMP.ConstraintRef}},
 )
-    conflict_indices = Vector()
+    conflict_indices = Vector{keytype(constraint_container.data)}()
     for (index, constraint) in constraint_container.data
-        constraint === nothing && continue
+        isnothing(constraint) && continue
         if MOI.get(jump_model, MOI.ConstraintConflictStatus(), constraint) !=
            MOI.NOT_IN_CONFLICT
             push!(conflict_indices, index)

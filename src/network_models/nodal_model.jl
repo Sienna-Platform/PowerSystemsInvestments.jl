@@ -52,16 +52,14 @@ function add_constraints!(
     slack_up = add_variable_container!(container, BalanceSlackUp(), U, nodes, time_steps)
     slack_dn = add_variable_container!(container, BalanceSlackDown(), U, nodes, time_steps)
     for t in time_steps, n in nodes
-        up = JuMP.@variable(
-            jump_model,
-            lower_bound = 0.0,
-            base_name = store_names ? "BalanceSlackUp_{$(n), $(t)}" : "",
-        )
-        dn = JuMP.@variable(
-            jump_model,
-            lower_bound = 0.0,
-            base_name = store_names ? "BalanceSlackDown_{$(n), $(t)}" : "",
-        )
+        up_name = ""
+        dn_name = ""
+        if store_names
+            up_name = "BalanceSlackUp_{$(n), $(t)}"
+            dn_name = "BalanceSlackDown_{$(n), $(t)}"
+        end
+        up = JuMP.@variable(jump_model, lower_bound = 0.0, base_name = up_name)
+        dn = JuMP.@variable(jump_model, lower_bound = 0.0, base_name = dn_name)
         slack_up[n, t] = up
         slack_dn[n, t] = dn
         constraint[n, t] = JuMP.@constraint(jump_model, expressions[n, t] + up - dn == 0)

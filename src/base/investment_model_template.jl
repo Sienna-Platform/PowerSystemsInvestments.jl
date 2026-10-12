@@ -5,9 +5,9 @@ mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
     operation_model::OperationCostModel
     feasibility_model::FeasibilityModel
     transport_model::TransportModel{<:AbstractTransportAggregation}
-    technology_models::Dict # TODO: define strict Type for this
-    branch_models::Dict # TODO: Decide name for branches: path? corridors? We are using transport for network
-    requirement_models::Dict # policy/requirement models keyed by RequirementModel => Vector{String}
+    technology_models::Dict{TechnologyModel, Vector{String}}
+    branch_models::Dict{TechnologyModel, Vector{String}} # TODO: Decide name for branches: path? corridors? We are using transport for network
+    requirement_models::Dict{RequirementModel, Vector{String}}
 
     function InvestmentModelTemplate(
         capital_model::CapitalCostModel,
@@ -20,9 +20,9 @@ mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
             operation_model,
             feasibility_model,
             transport_model,
-            Dict(),
-            Dict(),
-            Dict(),
+            Dict{TechnologyModel, Vector{String}}(),
+            Dict{TechnologyModel, Vector{String}}(),
+            Dict{RequirementModel, Vector{String}}(),
         )
     end
 end
@@ -167,22 +167,14 @@ function set_requirement_model!(
 end
 
 function get_type_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfolio)
-    tech_types = Set()
-    capital_formulations = Set()
-    operation_formulations = Set()
-    feasibility_formulations = Set()
-    type_capital_map = Dict()
-    type_operation_map = Dict()
-    type_feasibility_map = Dict()
+    type_capital_map = Dict{Tuple{Type, Type}, Vector{String}}()
+    type_operation_map = Dict{Tuple{Type, Type}, Vector{String}}()
+    type_feasibility_map = Dict{Tuple{Type, Type}, Vector{String}}()
     for (model, names) in models_dict
         tech_type = get_technology_type(model)
         cap_formulation = get_investment_formulation(model)
         ops_formulation = get_operations_formulation(model)
         feas_formulation = get_feasibility_formulation(model)
-        push!(tech_types, tech_type)
-        push!(capital_formulations, cap_formulation)
-        push!(operation_formulations, ops_formulation)
-        push!(feasibility_formulations, feas_formulation)
         if !haskey(type_capital_map, (tech_type, cap_formulation))
             type_capital_map[(tech_type, cap_formulation)] = deepcopy(names)
         else
@@ -243,7 +235,7 @@ function get_type_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfol
 end
 
 function get_requirement_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfolio)
-    type_formulation_map = Dict{Tuple{DataType, DataType}, Vector{String}}()
+    type_formulation_map = Dict{Tuple{Type, Type}, Vector{String}}()
     for (model, names) in models_dict
         req_type = get_requirement_type(model)
         req_formulation = get_requirement_formulation(model)

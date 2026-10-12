@@ -41,7 +41,7 @@ function SingleOptimizationContainer(
     settings::Settings,
     jump_model::Union{Nothing, JuMP.Model},
 )
-    if jump_model !== nothing && get_direct_mode_optimizer(settings)
+    if !isnothing(jump_model) && get_direct_mode_optimizer(settings)
         throw(
             IS.ConflictingInputsError(
                 "Externally provided JuMP models are not compatible with the direct model keyword argument. Use JuMP.direct_model before passing the custom model",
@@ -49,8 +49,12 @@ function SingleOptimizationContainer(
         )
     end
 
+    if isnothing(jump_model)
+        jump_model = JuMP.Model()
+    end
+
     return SingleOptimizationContainer(
-        jump_model === nothing ? JuMP.Model() : jump_model,
+        jump_model,
         TimeMapping(nothing),
         settings,
         copy_for_serialization(settings),
@@ -147,7 +151,7 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
     if get_direct_mode_optimizer(settings)
         optimizer = () -> MOI.instantiate(get_optimizer(settings))
         container.JuMPmodel = JuMP.direct_model(optimizer())
-    elseif get_optimizer(settings) === nothing
+    elseif isnothing(get_optimizer(settings))
         @debug "The optimization model has no optimizer attached" _group =
             LOG_GROUP_OPTIMIZATION_CONTAINER
     else
@@ -373,7 +377,7 @@ end
 
 function get_variable(container::SingleOptimizationContainer, key::VariableKey)
     var = get(container.variables, key, nothing)
-    if var === nothing
+    if isnothing(var)
         name = IS.Optimization.encode_key(key)
         keys = IS.Optimization.encode_key.(get_variable_keys(container))
         throw(IS.InvalidValue("variable $name is not stored. $keys"))
@@ -424,7 +428,7 @@ end
 
 function get_constraint(container::SingleOptimizationContainer, key::ConstraintKey)
     var = get(container.constraints, key, nothing)
-    if var === nothing
+    if isnothing(var)
         name = IS.Optimization.encode_key(key)
         keys = IS.Optimization.encode_key.(get_constraint_keys(container))
         throw(IS.InvalidValue("constraint $name is not stored. $keys"))
@@ -521,7 +525,7 @@ end
 
 function get_expression(container::SingleOptimizationContainer, key::ExpressionKey)
     var = get(container.expressions, key, nothing)
-    if var === nothing
+    if isnothing(var)
         throw(
             IS.InvalidValue(
                 "constraint $key is not stored. $(collect(keys(container.expressions)))",
@@ -559,16 +563,29 @@ function update_objective_function!(container::SingleOptimizationContainer)
     return
 end
 
+# Adding a quadratic cost to affine terms needs a new expression. Any other combination is
+# added in place.
+function _add_to_objective_terms!(
+    terms::JuMP.GenericAffExpr,
+    cost_expr::JuMP.GenericQuadExpr,
+)
+    return terms + cost_expr
+end
+
+function _add_to_objective_terms!(
+    terms::JuMP.AbstractJuMPScalar,
+    cost_expr::JuMP.AbstractJuMPScalar,
+)
+    JuMP.add_to_expression!(terms, cost_expr)
+    return terms
+end
+
 function add_to_objective_operations_expression!(
     container::SingleOptimizationContainer,
     cost_expr::T,
 ) where {T <: JuMP.AbstractJuMPScalar}
-    T_cf = typeof(container.objective_function.operation_terms)
-    if T_cf <: JuMP.GenericAffExpr && T <: JuMP.GenericQuadExpr
-        container.objective_function.operation_terms += cost_expr
-    else
-        JuMP.add_to_expression!(container.objective_function.operation_terms, cost_expr)
-    end
+    container.objective_function.operation_terms =
+        _add_to_objective_terms!(container.objective_function.operation_terms, cost_expr)
     return
 end
 
@@ -576,12 +593,8 @@ function add_to_objective_investment_expression!(
     container::SingleOptimizationContainer,
     cost_expr::T,
 ) where {T <: JuMP.AbstractJuMPScalar}
-    T_cf = typeof(container.objective_function.capital_terms)
-    if T_cf <: JuMP.GenericAffExpr && T <: JuMP.GenericQuadExpr
-        container.objective_function.capital_terms += cost_expr
-    else
-        JuMP.add_to_expression!(container.objective_function.capital_terms, cost_expr)
-    end
+    container.objective_function.capital_terms =
+        _add_to_objective_terms!(container.objective_function.capital_terms, cost_expr)
     return
 end
 

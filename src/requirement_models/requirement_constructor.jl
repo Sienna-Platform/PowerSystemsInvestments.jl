@@ -2,7 +2,7 @@ function construct_requirements!(
     container::SingleOptimizationContainer,
     p::PSIP.Portfolio,
     stage::Union{ArgumentConstructStage, ModelConstructStage},
-    requirement_map::Dict{Tuple{DataType, DataType}, Vector{String}},
+    requirement_map::Dict{Tuple{Type, Type}, Vector{String}},
     requirement_names_to_model_map::Dict{String, RequirementModel},
     names_to_model_map::Dict{String, TechnologyModel},
     transport_model::TransportModel{<:AbstractTransportAggregation},

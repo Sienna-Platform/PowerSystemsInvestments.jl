@@ -37,7 +37,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -51,13 +51,7 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-            if first_tstamp != first_ts_tstamp
-                @error(
-                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
-                )
-            end
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(
                     expression[SINGLE_REGION, t],
@@ -81,7 +75,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -97,13 +91,7 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-            if first_tstamp != first_ts_tstamp
-                @error(
-                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
-                )
-            end
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(expression[region, t], multiplier * ts_data[ix])
             end
@@ -123,7 +111,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: NodalBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -139,13 +127,7 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-            if first_tstamp != first_ts_tstamp
-                @error(
-                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
-                )
-            end
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(expression[region, t], multiplier * ts_data[ix])
             end
@@ -169,7 +151,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -184,13 +166,7 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-            if first_tstamp != first_ts_tstamp
-                @error(
-                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
-                )
-            end
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             _add_to_jump_expression!(
                 expression[SINGLE_REGION, op_ix],
                 weight * sum(ts_data),
@@ -212,7 +188,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -229,13 +205,7 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-            if first_tstamp != first_ts_tstamp
-                @error(
-                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
-                )
-            end
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             _add_to_jump_expression!(expression[region, op_ix], weight * sum(ts_data))
         end
     end
@@ -253,7 +223,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: NodalBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -270,13 +240,7 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-            if first_tstamp != first_ts_tstamp
-                @error(
-                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
-                )
-            end
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             _add_to_jump_expression!(expression[region, op_ix], weight * sum(ts_data))
         end
     end
@@ -294,7 +258,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: SingleRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -308,13 +272,7 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-            if first_tstamp != first_ts_tstamp
-                @error(
-                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
-                )
-            end
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(
                     expression[SINGLE_REGION, t],
@@ -338,7 +296,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.DemandRequirement}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -354,13 +312,7 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-            if first_tstamp != first_ts_tstamp
-                @error(
-                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
-                )
-            end
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(expression[region, t], multiplier * ts_data[ix])
             end

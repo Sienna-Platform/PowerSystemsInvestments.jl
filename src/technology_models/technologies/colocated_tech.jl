@@ -82,7 +82,7 @@ function add_expression!(
     U <: Vector{D},
     V <: AbstractTechnologyFormulation,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
@@ -153,6 +153,7 @@ function add_constraints!(
             )
         end
     end
+    return
 end
 
 # TODO: ActivePowerLimits for each type
@@ -207,6 +208,7 @@ function add_constraints!(
             end
         end
     end
+    return
 end
 
 # Limits for renewables #
@@ -258,13 +260,7 @@ function add_constraints!(
             ts_name = get_default_time_series_names(D, V())
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping, ts_name)
             ts_data = TimeSeries.values(time_series.data)
-            first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-            if first_tstamp != first_ts_tstamp
-                @error(
-                    "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $name does not match with the expected representative day $op_ix"
-                )
-            end
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             time_step_inv = inverse_invest_mapping[op_ix]
             for (ix, t) in enumerate(time_slices)
                 con_ub[name, t] = JuMP.@constraint(
@@ -335,6 +331,7 @@ function add_constraints!(
             )
         end
     end
+    return
 end
 
 ### Storage Balance ####
@@ -417,6 +414,7 @@ function add_constraints!(
             end
         end
     end
+    return
 end
 
 function add_constraints!(
@@ -492,6 +490,7 @@ function add_constraints!(
             end
         end
     end
+    return
 end
 
 ########################### Objective Function Calls#############################################

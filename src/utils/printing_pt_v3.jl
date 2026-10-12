@@ -144,7 +144,11 @@ function _show_method(
         name = "PowerSystemsInvestments"
     end
 
-    extra = backend == :auto ? (; display_size=(-1, -1)) : (;)
+    if backend == :auto
+        extra = (; display_size=(-1, -1))
+    else
+        extra = (;)
+    end
     for (k, val) in values
         if !isempty(val)
             println(io)
