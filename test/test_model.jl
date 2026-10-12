@@ -329,7 +329,13 @@ end
     JuMP.set_normalized_rhs(first(balance_con), 1e18)
 
     @test solve!(m; export_optimization_problem=false) == PSIN.RunStatus.FAILED
-    @test !isempty(get_infeasibility_conflict(container))
+    conflict = get_infeasibility_conflict(container)
+    @test !isempty(conflict)
+
+    # The conflict table must print with the installed PrettyTables version.
+    key, indices = first(conflict)
+    table = sprint(PSIN._print_conflict_table, key, indices)
+    @test occursin(string(key), table)
 end
 
 @testset "Build and solve hydro portfolio with BasicDispatchWithBudget" begin

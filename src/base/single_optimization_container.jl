@@ -945,7 +945,7 @@ function compute_conflict!(container::SingleOptimizationContainer)
 
         msg = IOBuffer()
         for (k, v) in conflict
-            PrettyTables.pretty_table(msg, v; header=[k])
+            _print_conflict_table(msg, k, v)
         end
         @error "Constraints participating in conflict basis (IIS) \n\n$(String(take!(msg)))"
 

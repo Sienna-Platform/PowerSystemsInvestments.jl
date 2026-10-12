@@ -105,3 +105,8 @@ function _show_method(
         end
     end
 end
+
+function _print_conflict_table(io::IO, key, conflict_indices::Vector)
+    PrettyTables.pretty_table(io, conflict_indices; header=[string(key)], crop=:none)
+    return
+end

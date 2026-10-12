@@ -161,3 +161,13 @@ function _show_method(
         end
     end
 end
+
+function _print_conflict_table(io::IO, key, conflict_indices::Vector)
+    PrettyTables.pretty_table(
+        io,
+        conflict_indices;
+        column_labels=[string(key)],
+        display_size=(-1, -1),
+    )
+    return
+end
