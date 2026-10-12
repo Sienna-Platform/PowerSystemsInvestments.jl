@@ -70,13 +70,14 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         name = PSIP.get_name(d)
         init_cap = get_init_cap(d, T(), portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-        )
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t])
+            expression[name, t] = copy(running)
+        end
     end
 
     return
@@ -109,14 +110,15 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         unit_size = PSIP.get_unit_size(d)
         name = PSIP.get_name(d)
         init_cap = get_init_cap(d, T(), portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] * unit_size for t_p in time_steps if t_p <= t),
-        )
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t], unit_size)
+            expression[name, t] = copy(running)
+        end
     end
 
     return
@@ -562,7 +564,7 @@ function objective_function!(
 ) where {T <: PSIP.SupplyTechnology, B <: InvestmentTechnologyFormulation}
     tech_model = string(B)
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
     return
 end
 function objective_function!(
@@ -575,8 +577,7 @@ function objective_function!(
 }
     tech_model = string(B)
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
-    #TODO: Add fixed_om costs for renewables (RenewableGenerationCost does not have fixed cost component?)
-    # add_fixed_om_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
     return
 end
 

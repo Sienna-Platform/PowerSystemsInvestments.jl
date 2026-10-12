@@ -96,7 +96,7 @@ function test_2_zone_portfolio()
 
     t_th = SupplyTechnology{ThermalStandard}(;
         prime_mover_type=PrimeMovers.ST,
-        capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(coal_igcc_capex * 1000.0), 0.0),
         id=1,
         available=true,
         name="cheap_thermal",
@@ -109,7 +109,7 @@ function test_2_zone_portfolio()
             shut_down=0.0,
         ),#LinearCurve(0.0),
         capacity_limits=(0.0, 1e8),
-        outage_factor=0.92,
+        outage_factors=(planned=0.0, forced=0.08),
         region=[z1],
         unit_size=250.0,
         financial_data=tech_financials(),
@@ -117,7 +117,7 @@ function test_2_zone_portfolio()
 
     t_th_mid = SupplyTechnology{ThermalStandard}(;
         prime_mover_type=PrimeMovers.ST,
-        capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(coal_igcc_capex * 1000.0), 0.0),
         id=3,
         available=true,
         name="mid_thermal",
@@ -130,7 +130,7 @@ function test_2_zone_portfolio()
             shut_down=0.0,
         ),#LinearCurve(0.0),
         capacity_limits=(0.0, 1e8),
-        outage_factor=0.92,
+        outage_factors=(planned=0.0, forced=0.08),
         region=[z2],
         unit_size=250.0,
         financial_data=tech_financials(),
@@ -138,7 +138,7 @@ function test_2_zone_portfolio()
 
     t_th_exp = SupplyTechnology{ThermalStandard}(;
         prime_mover_type=PrimeMovers.ST,
-        capital_costs=LinearCurve(coal_new_capex * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(coal_new_capex * 1000.0), 0.0),
         id=2,
         available=true,
         name="expensive_thermal",
@@ -151,7 +151,7 @@ function test_2_zone_portfolio()
             shut_down=0.0,
         ),
         capacity_limits=(0.0, 1e8),
-        outage_factor=0.95,
+        outage_factors=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=75.0,
         financial_data=tech_financials(),
@@ -207,7 +207,7 @@ function test_2_zone_portfolio()
 
     t_re = SupplyTechnology{RenewableDispatch}(;
         prime_mover_type=PrimeMovers.WT,
-        capital_costs=LinearCurve(wind_capex * 1000.0), # to $/MW
+        capital_costs=PSIP.CapitalCost(LinearCurve(wind_capex * 1000.0), 0.0), # to $/MW
         id=3,
         available=true,
         name="wind",
@@ -220,7 +220,7 @@ function test_2_zone_portfolio()
             shut_down=0.0,
         ),
         capacity_limits=(0.0, 1e8),
-        outage_factor=0.92,
+        outage_factors=(planned=0.0, forced=0.08),
         region=[z2],
         financial_data=tech_financials(),
     )
@@ -241,8 +241,12 @@ function test_2_zone_portfolio()
         power_systems_type="EnergyReservoirStorage",
         prime_mover_type=PrimeMovers.BT,
         available=true,
-        capital_costs_discharge=LinearCurve(stor_kw_capex * 1000),
-        capital_costs_energy=LinearCurve(stor_kwh_capex * 1000),
+        capital_costs_storage=PSIP.StorageCapitalCost(
+            charge_capital_cost=LinearCurve(0.0),
+            discharge_capital_cost=LinearCurve(stor_kw_capex * 1000),
+            energy_capital_cost=LinearCurve(stor_kwh_capex * 1000),
+            interconnection_cost=0.0,
+        ),
         operation_costs=StorageCost(
             charge_variable_cost=CostCurve(LinearCurve(0.0)),
             discharge_variable_cost=CostCurve(LinearCurve(0.0)),
@@ -358,31 +362,30 @@ function test_2_zone_portfolio()
         financial_data=tech_financials(),
         # Solar #
         operation_costs_solar=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
-        capital_costs_solar=LinearCurve(pv_capex * 1000.0), # to $/MW
+        capital_costs_solar=PSIP.CapitalCost(LinearCurve(pv_capex * 1000.0), 0.0), # to $/MW
         capacity_limits_solar=(min=0.0, max=1e8),
         # Wind # 
         operation_costs_wind=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
-        capital_costs_wind=LinearCurve(wind_capex * 1000.0), # to $/MW
+        capital_costs_wind=PSIP.CapitalCost(LinearCurve(wind_capex * 1000.0), 0.0), # to $/MW
         capacity_limits_wind=(min=0.0, max=1e8),
         # Storage #
         efficiency_storage=(in=0.93, out=0.93),
-        operation_costs_power=StorageCost(
+        operation_costs_storage=StorageCost(
             charge_variable_cost=CostCurve(LinearCurve(0.0)),
             discharge_variable_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
         ),
-        operation_costs_energy=StorageCost(
-            charge_variable_cost=CostCurve(LinearCurve(0.0)),
-            discharge_variable_cost=CostCurve(LinearCurve(0.0)),
-            fixed=0.0,
+        capital_costs_storage=PSIP.StorageCapitalCost(
+            charge_capital_cost=LinearCurve(0.0),
+            discharge_capital_cost=LinearCurve(stor_kw_capex * 1000 / 50.0), # cheaper
+            energy_capital_cost=LinearCurve(stor_kwh_capex * 1000 / 50.0), # cheaper
+            interconnection_cost=0.0,
         ),
-        capital_costs_power=LinearCurve(stor_kw_capex * 1000 / 50.0), # cheaper
-        capital_costs_energy=LinearCurve(stor_kwh_capex * 1000 / 50.0), # cheaper
         # Inverter #
         max_inverter_capacity=1e8,
         inverter_supply_ratio=1.0,
         operation_costs_inverter=LoadCost(CostCurve(LinearCurve(0.0)), 0.0),
-        capital_costs_inverter=LinearCurve(inverter_capex),
+        capital_costs_inverter=PSIP.CapitalCost(LinearCurve(inverter_capex), 0.0),
         inverter_efficiency=1.0,
     )
 
@@ -396,7 +399,7 @@ function test_2_zone_portfolio()
         end_region=z2,
         capacity_limits=(min=0, max=1000),
         line_loss=0.05,
-        capital_costs=LinearCurve(5000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(5000.0), 0.0),
         available=true,
         power_systems_type="TransportTechnology",
         id=1,
@@ -488,7 +491,7 @@ function test_hydro_portfolio()
 
     t_hydro = SupplyTechnology{HydroDispatch}(;
         prime_mover_type=PrimeMovers.HY,
-        capital_costs=LinearCurve(2000.0 * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(2000.0 * 1000.0), 0.0),
         id=1,
         available=true,
         name="hydro",
@@ -501,7 +504,7 @@ function test_hydro_portfolio()
             shut_down=0.0,
         ),
         capacity_limits=(0.0, 500.0),
-        outage_factor=0.95,
+        outage_factors=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=50.0,
         financial_data=tech_financials(),
@@ -577,7 +580,7 @@ function test_hydro_basic_dispatch_portfolio()
 
     t_hydro = SupplyTechnology{HydroDispatch}(;
         prime_mover_type=PrimeMovers.HY,
-        capital_costs=LinearCurve(2000.0 * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(2000.0 * 1000.0), 0.0),
         id=1,
         available=true,
         name="hydro",
@@ -590,7 +593,7 @@ function test_hydro_basic_dispatch_portfolio()
             shut_down=0.0,
         ),
         capacity_limits=(0.0, 500.0),
-        outage_factor=0.95,
+        outage_factors=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=50.0,
         financial_data=tech_financials(),
@@ -665,7 +668,7 @@ function test_constrained_hydro_portfolio()
 
     t_hydro = SupplyTechnology{HydroDispatch}(;
         prime_mover_type=PrimeMovers.HY,
-        capital_costs=LinearCurve(2000.0 * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(2000.0 * 1000.0), 0.0),
         id=1,
         available=true,
         name="hydro",
@@ -678,7 +681,7 @@ function test_constrained_hydro_portfolio()
             shut_down=0.0,
         ),
         capacity_limits=(0.0, 500.0),
-        outage_factor=0.95,
+        outage_factors=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=50.0,
         financial_data=tech_financials(),
@@ -686,7 +689,7 @@ function test_constrained_hydro_portfolio()
 
     t_thermal = SupplyTechnology{ThermalStandard}(;
         prime_mover_type=PrimeMovers.ST,
-        capital_costs=LinearCurve(3000.0 * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(3000.0 * 1000.0), 0.0),
         id=2,
         available=true,
         name="backup_thermal",
@@ -699,7 +702,7 @@ function test_constrained_hydro_portfolio()
             shut_down=0.0,
         ),
         capacity_limits=(0.0, 1e8),
-        outage_factor=0.95,
+        outage_factors=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=100.0,
         financial_data=tech_financials(),

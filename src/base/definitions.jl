@@ -10,6 +10,7 @@ const MAX_START_STAGES = 3
 const OBJECTIVE_FUNCTION_POSITIVE = 1.0
 const OBJECTIVE_FUNCTION_NEGATIVE = -1.0
 const SINGLE_REGION = "SingleRegion"
+const BALANCE_SLACK_PENALTY = 1e8
 
 # Timers
 const BUILD_PROBLEMS_TIMER = TimerOutputs.TimerOutput()
@@ -26,5 +27,3 @@ const PROBLEM_LOG_FILENAME = "investment_problem.log"
 # Enums
 const ModelBuildStatus = ISOPT.ModelBuildStatus
 const RunStatus = IS.Simulation.RunStatus
-
-const MAX_OPTIMIZE_TRIES = 10

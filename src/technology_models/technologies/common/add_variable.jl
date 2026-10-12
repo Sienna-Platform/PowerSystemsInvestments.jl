@@ -21,12 +21,13 @@ function add_variable!(
         time_steps,
         meta=tech_model,
     )
+    store_names = get_store_variable_names(get_settings(container))
 
     for t in time_steps, d in devices
         name = PSY.get_name(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
-            base_name = "$(T)_$(D)_{$(name), $(t)}",
+            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
         ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
@@ -64,11 +65,12 @@ function add_variable!(
         time_steps,
         meta=tech_model,
     )
+    store_names = get_store_variable_names(get_settings(container))
     for t in time_steps, d in devices
         name = PSY.get_name(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
-            base_name = "$(T)_$(D)_{$(name), $(t)}",
+            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
             integer = true,
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
@@ -108,6 +110,7 @@ function add_variable!(
         time_steps,
         meta=tech_model,
     )
+    store_names = get_store_variable_names(get_settings(container))
 
     for t in time_steps, d in devices
         name = PSY.get_name(d)
@@ -116,13 +119,13 @@ function add_variable!(
         # Internal binary decision variable (0 or 1) — NOT stored in PSINV container
         binary_decision = JuMP.@variable(
             get_jump_model(container),
-            base_name = "$(T)_binary_$(D)_{$(name), $(t)}",
+            base_name = store_names ? "$(T)_binary_$(D)_{$(name), $(t)}" : "",
             binary = true,
         )
 
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
-            base_name = "$(T)_$(D)_{$(name), $(t)}",
+            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
             lower_bound = 0.0,
         )
         JuMP.set_upper_bound(variable[name, t], max_capacity)
@@ -162,12 +165,13 @@ function add_variable!(
         time_steps,
         meta=tech_model,
     )
+    store_names = get_store_variable_names(get_settings(container))
 
     for t in time_steps, d in devices
         name = PSY.get_name(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
-            base_name = "$(T)_$(D)_{$(name), $(t)}",
+            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
         ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
@@ -203,12 +207,13 @@ function add_variable!(
         time_steps,
         meta=tech_model,
     )
+    store_names = get_store_variable_names(get_settings(container))
 
     for t in time_steps, d in devices
         name = PSY.get_name(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
-            base_name = "$(T)_$(D)_{$(name), $(t)}",
+            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
         ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)
@@ -244,12 +249,13 @@ function add_variable!(
         time_steps,
         meta=tech_model,
     )
+    store_names = get_store_variable_names(get_settings(container))
 
     for t in time_steps, d in devices
         name = PSY.get_name(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
-            base_name = "$(T)_$(D)_{$(name), $(t)}",
+            base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
         )
         ub = get_variable_upper_bound(variable_type, d, formulation)
         ub !== nothing && JuMP.set_upper_bound(variable[name, t], ub)

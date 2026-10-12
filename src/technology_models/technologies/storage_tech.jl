@@ -96,13 +96,14 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         name = PSIP.get_name(d)
         init_cap = get_existing_capacity_power(d, portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-        )
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t])
+            expression[name, t] = copy(running)
+        end
     end
 
     return
@@ -135,13 +136,14 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         name = PSIP.get_name(d)
         init_cap = get_existing_capacity_energy(d, portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-        )
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t])
+            expression[name, t] = copy(running)
+        end
     end
 
     return
@@ -175,14 +177,15 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         unit_size = PSIP.get_unit_size_energy(d)
         name = PSIP.get_name(d)
         init_cap = PSIP.get_init_cap(d, T(), portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] * unit_size for t_p in time_steps if t_p <= t),
-        )
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t], unit_size)
+            expression[name, t] = copy(running)
+        end
     end
 
     return
@@ -216,14 +219,15 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         unit_size = PSIP.get_unit_size_energy(d)
         name = PSIP.get_name(d)
         init_cap = PSIP.get_init_cap(d, T(), portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] * unit_size for t_p in time_steps if t_p <= t),
-        )
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t], unit_size)
+            expression[name, t] = copy(running)
+        end
     end
 
     return
@@ -296,7 +300,7 @@ function add_to_expression!(
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
+    time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
 
     variable = get_variable(container, V(), D, tech_model)
@@ -330,7 +334,7 @@ function add_to_expression!(
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
+    time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
 
     variable = get_variable(container, V(), D, tech_model)
@@ -366,7 +370,7 @@ function add_to_expression!(
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
+    time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
 
     variable = get_variable(container, V(), D, tech_model)
@@ -402,7 +406,7 @@ function add_to_expression!(
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
+    time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
 
     variable = get_variable(container, V(), D, tech_model)
@@ -435,7 +439,7 @@ function add_to_expression!(
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
+    time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
 
     variable = get_variable(container, V(), D, tech_model)
@@ -470,7 +474,7 @@ function add_to_expression!(
 } where {D <: PSIP.StorageTechnology}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
+    time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
 
     variable = get_variable(container, V(), D, tech_model)
@@ -644,7 +648,8 @@ function add_constraints!(
                 else
                     tstamp_first = time_stamps[time_slices[1]]
                     tstamp_second = time_stamps[time_slices[2]]
-                    fraction_of_hour = Dates.Hour(tstamp_second - tstamp_first).value
+                    fraction_of_hour =
+                        Dates.value(Dates.Millisecond(tstamp_second - tstamp_first)) / 3.6e6
                 end
                 for (ix, t) in enumerate(time_slices)
                     # First representative day and first time point
@@ -720,7 +725,8 @@ function add_constraints!(
             else
                 tstamp_first = time_stamps[time_slices[1]]
                 tstamp_second = time_stamps[time_slices[2]]
-                fraction_of_hour = Dates.Hour(tstamp_second - tstamp_first).value
+                fraction_of_hour =
+                    Dates.value(Dates.Millisecond(tstamp_second - tstamp_first)) / 3.6e6
             end
             first_time = first(time_slices)
             last_time = last(time_slices)
@@ -899,7 +905,6 @@ function objective_function!(
     tech_model = string(S)
     add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, CumulativePowerCapacity(), devices, formulation, tech_model)
     return
 end

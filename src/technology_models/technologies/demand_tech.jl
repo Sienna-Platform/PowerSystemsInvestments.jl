@@ -290,13 +290,13 @@ function add_to_expression!(
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    operational_indexes = get_operational_indexes(time_mapping)
+    feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
 
     for d in devices
-        for op_ix in operational_indexes
+        for op_ix in feasibility_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
@@ -330,7 +330,7 @@ function add_to_expression!(
 } where {D <: PSIP.DemandRequirement}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    operational_indexes = get_operational_indexes(time_mapping)
+    feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
@@ -338,7 +338,7 @@ function add_to_expression!(
     for d in devices
         # Only one region supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
-        for op_ix in operational_indexes
+        for op_ix in feasibility_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW

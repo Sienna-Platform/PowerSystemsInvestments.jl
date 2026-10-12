@@ -107,13 +107,14 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         name = PSIP.get_name(d)
         init_cap = get_init_cap(d, T(), portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-        )
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t])
+            expression[name, t] = copy(running)
+        end
     end
 
     return
@@ -487,13 +488,14 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         name = PSIP.get_name(d)
         init_cap = get_init_cap(d, T(), portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-        )
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t])
+            expression[name, t] = copy(running)
+        end
     end
 
     return

@@ -837,33 +837,20 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     jump_model = get_jump_model(container)
 
     model_status = MOI.NO_SOLUTION::MOI.ResultStatusCode
-    conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
 
-    try_count = 0
-    while model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
-        _,
-        optimizer_stats.timed_solve_time,
-        optimizer_stats.solve_bytes_alloc,
-        optimizer_stats.sec_in_gc = @timed JuMP.optimize!(jump_model)
-        model_status = JuMP.primal_status(jump_model)
+    _,
+    optimizer_stats.timed_solve_time,
+    optimizer_stats.solve_bytes_alloc,
+    optimizer_stats.sec_in_gc = @timed JuMP.optimize!(jump_model)
+    model_status = JuMP.primal_status(jump_model)
 
-        if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
-            if get_calculate_conflict(get_settings(container))
-                @warn "Optimizer returned $model_status computing conflict"
-                conflict_status = compute_conflict!(container)
-                if conflict_status == MOI.CONFLICT_FOUND
-                    return RunStatus.FAILED
-                end
-            else
-                @warn "Optimizer returned $model_status trying optimize! again"
-            end
-
-            try_count += 1
-            if try_count > MAX_OPTIMIZE_TRIES
-                @error "Optimizer returned $model_status after $MAX_OPTIMIZE_TRIES optimize! attempts"
-                return RunStatus.FAILED
-            end
+    if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
+        if get_calculate_conflict(get_settings(container))
+            @warn "Optimizer returned $model_status; computing conflict"
+            compute_conflict!(container)
         end
+        @error "Optimizer returned $(model_status) (termination_status = $(JuMP.termination_status(jump_model)))"
+        return RunStatus.FAILED
     end
 
     _, optimizer_stats.timed_calculate_aux_variables =

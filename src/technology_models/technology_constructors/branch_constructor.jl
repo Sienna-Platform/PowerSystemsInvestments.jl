@@ -83,8 +83,6 @@ function construct_technologies!(
 
     # Capital Component of objective function
     objective_function!(container, devices, B())
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
 
     # Capacity constraint
     add_constraints!(
@@ -212,8 +210,6 @@ function construct_technologies!(
 
     # Capital Component of objective function
     objective_function!(container, devices, B())
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
 
     # Capacity constraint
     add_constraints!(

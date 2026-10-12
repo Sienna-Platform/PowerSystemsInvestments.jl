@@ -13,12 +13,18 @@ function construct_transport!(
     ::TransportModel{MultiRegionBalanceModel},
 )
     add_constraints!(container, MultiRegionBalanceConstraint, p)
+    add_constraints!(container, MultiRegionBalanceFeasibilityConstraint, p)
 end
 
 function construct_transport!(
     container::SingleOptimizationContainer,
     p::PSIP.Portfolio,
-    ::TransportModel{NodalBalanceModel},
+    transport_model::TransportModel{NodalBalanceModel},
 )
-    add_constraints!(container, NodalBalanceConstraint, p)
+    add_constraints!(
+        container,
+        NodalBalanceConstraint,
+        p,
+        get_use_slacks(transport_model),
+    )
 end
