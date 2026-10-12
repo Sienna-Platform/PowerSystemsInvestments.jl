@@ -1,5 +1,34 @@
+"""
+Abstract supertype for investment model templates.
+"""
 abstract type AbstractInvestmentModelTemplate end
 
+"""
+Template that specifies how an [`InvestmentModel`](@ref) is formulated: how capital and
+operation costs are accounted for, how energy balances are aggregated, and which
+formulations apply to each technology and requirement.
+
+# Arguments
+
+  - `capital_model::CapitalCostModel`: e.g. [`DiscountedCashFlow`](@ref)
+  - `operation_model::OperationCostModel`: e.g. [`OperationalRepresentativeDays`](@ref)
+  - `feasibility_model::FeasibilityModel`: e.g. [`RepresentativePeriods`](@ref)
+  - `transport_model::TransportModel`: e.g. `TransportModel(SingleRegionBalanceModel)`
+
+Technology and requirement models are added afterwards with
+[`set_technology_model!`](@ref) and [`set_requirement_model!`](@ref).
+
+# Example
+
+```julia
+template = InvestmentModelTemplate(
+    capital,
+    operations,
+    feasibility,
+    TransportModel(SingleRegionBalanceModel),
+)
+```
+"""
 mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
     capital_model::CapitalCostModel
     operation_model::OperationCostModel
@@ -60,6 +89,30 @@ function set_transport_model!(
     return
 end
 
+"""
+Assign a [`TechnologyModel`](@ref) to a set of technologies in a template.
+
+The technologies are selected either by `names` or, when a `Portfolio` is passed instead,
+as all the available technologies of that type in the portfolio. The model is given either
+as a [`TechnologyModel`](@ref) or as a technology type followed by its investment,
+operations and feasibility formulations.
+
+A technology can be assigned to only one technology model. Technologies of the same type
+can be split across several models by name.
+
+# Example
+
+```julia
+set_technology_model!(
+    template,
+    ["cheap_thermal", "expensive_thermal"],
+    SupplyTechnology{ThermalStandard},
+    ContinuousInvestment,
+    BasicDispatch,
+    BasicDispatchFeasibility,
+)
+```
+"""
 function set_technology_model!(
     template::InvestmentModelTemplate,
     names::Vector{String},
@@ -147,6 +200,22 @@ function set_technology_model!(
     return
 end
 
+"""
+Assign a [`RequirementModel`](@ref) to the requirements in the portfolio with the given
+`names`. The model is given either as a [`RequirementModel`](@ref) or as a requirement type
+followed by its formulation.
+
+# Example
+
+```julia
+set_requirement_model!(
+    template,
+    ["wind_share"],
+    EnergyShareRequirements,
+    RequirementEnergyShare,
+)
+```
+"""
 function set_requirement_model!(
     template::InvestmentModelTemplate,
     names::Vector{String},

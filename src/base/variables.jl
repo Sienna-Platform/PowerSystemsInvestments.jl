@@ -1,85 +1,136 @@
 abstract type SparseVariableType <: ISOPT.VariableType end
 
+"""
+Abstract supertype for variables indexed by investment period.
+"""
 abstract type InvestmentVariableType <: ISOPT.VariableType end
+"""
+Abstract supertype for variables indexed by operational time step.
+"""
 abstract type OperationsVariableType <: ISOPT.VariableType end
+"""
+Abstract supertype for variables indexed by feasibility time step.
+"""
 abstract type FeasibilityVariableType <: ISOPT.VariableType end
 
 ### Investment Variables ###
 
+"""
+Abstract supertype for variables that represent new capacity built in an investment period.
+"""
 abstract type BuildInvestmentVariableType <: InvestmentVariableType end
 
 """
-Total installed capacity for a technology
+Capacity of a technology built in an investment period, in MW. With
+[`IntegerInvestment`](@ref), the number of units built.
+
+Docs abbreviation: ``b``
 """
 struct BuildCapacity <: BuildInvestmentVariableType end
 
 """
-Total installed capacity for a technology
+Power (discharge) capacity of a storage technology built in an investment period, in MW.
+
+Docs abbreviation: ``b^\\text{pw}``
 """
 struct BuildPowerCapacity <: BuildInvestmentVariableType end
 
 """
-Total installed capacity for a technology
+Energy capacity of a storage technology built in an investment period, in MWh.
+
+Docs abbreviation: ``b^\\text{en}``
 """
 struct BuildEnergyCapacity <: BuildInvestmentVariableType end
 
 """
-TODO
+Wind capacity of a co-located technology built in an investment period, in MW.
+
+Docs abbreviation: ``b^\\text{wind}``
 """
 struct BuildWindCapacity <: BuildInvestmentVariableType end
 """
-TODO
+Solar capacity of a co-located technology built in an investment period, in MW.
+
+Docs abbreviation: ``b^\\text{solar}``
 """
 struct BuildSolarCapacity <: BuildInvestmentVariableType end
 """
-TODO
+Inverter capacity of a co-located technology built in an investment period, in MW.
+
+Docs abbreviation: ``b^\\text{inv}``
 """
 struct BuildInverterCapacity <: BuildInvestmentVariableType end
 
 ### Operations Variables ###
 
 """
-Dispatch of a technology at a timepoint
+Active power dispatched by a supply technology in an operational time step, in MW.
+
+Docs abbreviation: ``p``
 """
 struct ActivePowerVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Active power drawn from the grid by a storage or co-located technology in an operational
+time step, in MW.
+
+Docs abbreviation: ``p^\\text{in}``
 """
 struct ActiveInPowerVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Active power injected into the grid by a storage or co-located technology in an operational
+time step, in MW.
+
+Docs abbreviation: ``p^\\text{out}``
 """
 struct ActiveOutPowerVariable <: OperationsVariableType end
 
 """
-energy stored in Storage technology at a timepoint
+Energy stored in a storage or co-located technology at the end of an operational time step,
+in MWh.
+
+Docs abbreviation: ``e``
 """
 struct StateOfChargeVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Active power charged into the storage of a co-located technology in an operational time
+step, in MW.
+
+Docs abbreviation: ``p^\\text{ch}``
 """
 struct ActivePowerChargeVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Active power discharged from the storage of a co-located technology in an operational time
+step, in MW.
+
+Docs abbreviation: ``p^\\text{ds}``
 """
 struct ActivePowerDischargeVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Active power produced by the wind component of a co-located technology in an operational
+time step, in MW.
+
+Docs abbreviation: ``p^\\text{wind}``
 """
 struct ActivePowerWindVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Active power produced by the solar component of a co-located technology in an operational
+time step, in MW.
+
+Docs abbreviation: ``p^\\text{solar}``
 """
 struct ActivePowerSolarVariable <: OperationsVariableType end
 
 """
-Struct to dispatch the creation of bidirectional Active Power Flow Variables
+Active power flow through a transport technology in an operational time step, in MW.
+Positive from the start region to the end region.
+
+Docs abbreviation: ``f``
 """
 struct FlowActivePowerVariable <: OperationsVariableType end
 

@@ -1,3 +1,41 @@
+"""
+Investment (capacity expansion) model for a `Portfolio`, formulated according to an
+[`InvestmentModelTemplate`](@ref) and solved with a [`SolutionAlgorithm`](@ref).
+
+    InvestmentModel(template, SingleInstanceSolve, portfolio; kwargs...)
+
+# Arguments
+
+  - `template::InvestmentModelTemplate`: Formulations to apply
+  - `::Type{SingleInstanceSolve}`: Solution algorithm
+  - `portfolio::PowerSystemsInvestmentsPortfolios.Portfolio`: Data for the model
+  - `jump_model::Union{Nothing, JuMP.Model} = nothing`: Optional existing `JuMP.Model` to
+    build the problem in
+
+# Keyword Arguments
+
+  - `optimizer = nothing`: Solver, given as an optimizer constructor such as
+    `HiGHS.Optimizer` or as the result of `optimizer_with_attributes`
+  - `portfolio_to_file::Bool = true`: Serialize the portfolio to the output directory when
+    the problem is serialized
+  - `optimizer_solve_log_print::Bool = false`: Print the solver log
+  - `detailed_optimizer_stats::Bool = false`: Record detailed solver statistics
+  - `calculate_conflict::Bool = false`: Compute an irreducible infeasible set if the solve
+    fails. Requires a solver that supports conflict refinement.
+  - `direct_mode_optimizer::Bool = false`: Build the `JuMP.Model` in direct mode
+  - `store_variable_names::Bool = false`: Keep variable and constraint names in the
+    `JuMP.Model`. Useful for debugging; uses more memory.
+  - `check_numerical_bounds::Bool = true`: Check the numerical range of the problem
+  - `name`, `horizon`, `resolution`, `initial_time`, `time_series_cache_size`: Reserved
+
+# Example
+
+```julia
+model = InvestmentModel(template, SingleInstanceSolve, portfolio; optimizer=HiGHS.Optimizer)
+```
+
+See also: [`build!`](@ref), [`solve!`](@ref)
+"""
 mutable struct InvestmentModel{S <: SolutionAlgorithm}
     name::Symbol
     template::InvestmentModelTemplate
@@ -365,15 +403,28 @@ function build_pre_step!(model::InvestmentModel)
     return
 end
 """
-Build the Investment Model.
+Build the optimization problem of an [`InvestmentModel`](@ref). Returns the build status.
+
+Build errors are caught and written to the log file `investment_problem.log` in
+`output_dir`; check the returned status rather than relying on an exception.
 
 # Arguments
 
-    - `model::InvestmentModel{<:SolutionAlgorithm}`: InvestmentModel object
-    - `output_dir::String`: Output directory for results
-    - `console_level = Logging.Error`:
-    - `file_level = Logging.Info`:
-    - `disable_timer_outputs = false` : Enable/Disable timing outputs
+  - `model::InvestmentModel{<:SolutionAlgorithm}`: Model to build
+
+# Keyword Arguments
+
+  - `output_dir::String`: Directory for the log file and the results. Created if it does
+    not exist.
+  - `console_level = Logging.Error`: Minimum level of the log messages shown in the console
+  - `file_level = Logging.Info`: Minimum level of the log messages written to the log file
+  - `disable_timer_outputs = false`: Disable the build timers
+
+# Example
+
+```julia
+build!(model; output_dir=mktempdir())
+```
 """
 function build!(
     model::InvestmentModel{<:SolutionAlgorithm};
@@ -412,6 +463,33 @@ function build!(
     return get_status(model)
 end
 
+"""
+Solve an [`InvestmentModel`](@ref) and store its results. Returns the run status.
+
+If the model has not been built, it is built first; in that case `output_dir` must be
+passed as a keyword argument. Solve errors are caught and written to the log file; check
+the returned status rather than relying on an exception.
+
+# Arguments
+
+  - `model::InvestmentModel{<:SolutionAlgorithm}`: Model to solve
+
+# Keyword Arguments
+
+  - `export_problem_results::Bool = false`: Export the results to files in the output
+    directory
+  - `export_optimization_problem::Bool = true`: Serialize the problem and the `JuMP.Model`
+    to the output directory after the solve
+  - `console_level = Logging.Error`: Minimum level of the log messages shown in the console
+  - `file_level = Logging.Info`: Minimum level of the log messages written to the log file
+  - `disable_timer_outputs = false`: Disable the solve timers
+
+# Example
+
+```julia
+solve!(model)
+```
+"""
 function solve!(
     model::InvestmentModel{<:SolutionAlgorithm};
     export_problem_results=false,
@@ -514,9 +592,24 @@ function set_output_dir!(model::InvestmentModel, path::AbstractString)
     return
 end
 
+"""
+Read the dual values of a constraint from a solved [`InvestmentModel`](@ref).
+"""
 read_dual(model::InvestmentModel, key::ConstraintKey) = _read_results(model, key)
 read_aux_variable(model::InvestmentModel, key::AuxVarKey) = _read_results(model, key)
+"""
+Read the values of a variable from a solved [`InvestmentModel`](@ref).
+
+Returns a `DataFrame` in long format with the columns `time_index`, `name` and `value`.
+`time_index` is the investment period for investment variables and the operational time
+step for operations variables.
+"""
 read_variable(model::InvestmentModel, key::VariableKey) = _read_results(model, key)
+"""
+Read the values of an expression from a solved [`InvestmentModel`](@ref).
+
+Returns a `DataFrame` in long format with the columns `time_index`, `name` and `value`.
+"""
 read_expression(model::InvestmentModel, key::ExpressionKey) = _read_results(model, key)
 
 function _read_col_name(axes)
@@ -559,6 +652,9 @@ function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
     return vcat(frames...)
 end
 
+"""
+Read the solver statistics of a solved [`InvestmentModel`](@ref) as a `DataFrame`.
+"""
 read_optimizer_stats(model::InvestmentModel) = read_optimizer_stats(get_store(model))
 
 list_aux_variable_keys(x::InvestmentModel) =

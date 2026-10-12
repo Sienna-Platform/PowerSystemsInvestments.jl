@@ -1,3 +1,34 @@
+"""
+Establishes the model for a type of technology, specified by its type and three
+formulations.
+
+# Arguments
+
+  - `::Type{D}`: A `PowerSystemsInvestmentsPortfolios.Technology` subtype, e.g.
+    `SupplyTechnology{ThermalStandard}`
+  - `::Type{A}`: An [`InvestmentTechnologyFormulation`](@ref), e.g.
+    [`ContinuousInvestment`](@ref)
+  - `::Type{B}`: An [`OperationsTechnologyFormulation`](@ref), e.g. [`BasicDispatch`](@ref)
+  - `::Type{C}`: A [`FeasibilityTechnologyFormulation`](@ref), e.g.
+    [`BasicDispatchFeasibility`](@ref)
+  - `use_slacks::Bool = false`: Reserved for adding slack variables. Not used yet.
+  - `duals::Vector{DataType} = Vector{DataType}()`: Reserved for selecting the constraints
+    to calculate duals for. Not used yet.
+  - `attributes::Dict{String, Any} = Dict{String, Any}()`: Formulation-specific options
+
+# Example
+
+```julia
+thermal_model = TechnologyModel(
+    SupplyTechnology{ThermalStandard},
+    ContinuousInvestment,
+    BasicDispatch,
+    BasicDispatchFeasibility,
+)
+```
+
+See also: [`set_technology_model!`](@ref)
+"""
 mutable struct TechnologyModel{
     D <: PSIP.Technology,
     A <: InvestmentTechnologyFormulation,

@@ -98,6 +98,11 @@ get_discount_rate(container::SingleOptimizationContainer) = container.discount_r
 get_inflation_rate(container::SingleOptimizationContainer) = container.inflation_rate
 get_interest_rate(container::SingleOptimizationContainer) = container.interest_rate
 get_variables(container::SingleOptimizationContainer) = container.variables
+"""
+Return the constraints in the irreducible infeasible set found for a model, as a dictionary
+from the encoded constraint key to the indices of the conflicting constraints. Only
+populated when the model was created with `calculate_conflict = true` and the solve failed.
+"""
 get_infeasibility_conflict(container::SingleOptimizationContainer) =
     container.infeasibility_conflict
 

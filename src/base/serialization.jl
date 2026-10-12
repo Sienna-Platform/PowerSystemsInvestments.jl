@@ -35,6 +35,11 @@ struct ProblemSerializationWrapper
     optimizer::OptimizerAttributes
 end
 
+"""
+Serialize the template, settings and solver attributes of an [`InvestmentModel`](@ref) to
+`model.bin` in its output directory. The portfolio is also written, as JSON, unless the
+model was created with `portfolio_to_file = false`.
+"""
 function serialize_problem(model::InvestmentModel; optimizer=nothing)
     # A PowerSystem cannot be serialized in this format because of how it stores
     # time series data. Use its specialized serialization method instead.

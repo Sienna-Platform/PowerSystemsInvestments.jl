@@ -1,3 +1,7 @@
+"""
+Collect the results of a solved [`InvestmentModel`](@ref) into an
+`OptimizationProblemOutputs` object. Errors if the model was not solved successfully.
+"""
 function OptimizationProblemOutputs(model::InvestmentModel)
     status = get_run_status(model)
     status != RunStatus.SUCCESSFULLY_FINALIZED &&
