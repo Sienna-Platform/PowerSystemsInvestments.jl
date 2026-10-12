@@ -587,9 +587,33 @@ function objective_function!(
     add_capital_cost!(container, BuildSolarCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildWindCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildInverterCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, CumulativePowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, CumulativeSolarCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, CumulativeWindCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, CumulativeInverterCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(
+        container,
+        CumulativePowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        CumulativeSolarCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        CumulativeWindCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
+    add_fixed_om_cost!(
+        container,
+        CumulativeInverterCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
     return
 end

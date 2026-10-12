@@ -150,18 +150,8 @@ function construct_technologies!(
     )
 
     # Duration constraints
-    add_constraints!(
-        container,
-        StorageDurationLowerBoundConstraint(),
-        devices,
-        B(),
-    )
-    add_constraints!(
-        container,
-        StorageDurationUpperBoundConstraint(),
-        devices,
-        B(),
-    )
+    add_constraints!(container, StorageDurationLowerBoundConstraint(), devices, B())
+    add_constraints!(container, StorageDurationUpperBoundConstraint(), devices, B())
     return
 end
 

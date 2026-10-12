@@ -300,7 +300,7 @@ function add_to_expression!(
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_feasibility_time_steps(time_mapping)
+    time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
     variable = get_variable(container, V(), D, tech_model)
@@ -334,7 +334,7 @@ function add_to_expression!(
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_feasibility_time_steps(time_mapping)
+    time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
     variable = get_variable(container, V(), D, tech_model)
@@ -370,7 +370,7 @@ function add_to_expression!(
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     @assert !isempty(devices)
     time_mapping = get_time_mapping(container)
-    time_steps = get_feasibility_time_steps(time_mapping)
+    time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
     variable = get_variable(container, V(), D, tech_model)
@@ -763,10 +763,7 @@ function add_constraints!(
     ::StorageDurationLowerBoundConstraint,
     devices::U,
     formulation::S,
-) where {
-    U <: Vector{D},
-    S <: ContinuousInvestment,
-} where {D <: PSIP.StorageTechnology}
+) where {U <: Vector{D}, S <: ContinuousInvestment} where {D <: PSIP.StorageTechnology}
     time_steps = get_investment_time_steps(get_time_mapping(container))
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -778,10 +775,8 @@ function add_constraints!(
         time_steps,
         meta=tech_model,
     )
-    cumulative_power =
-        get_expression(container, CumulativePowerCapacity(), D, tech_model)
-    cumulative_energy =
-        get_expression(container, CumulativeEnergyCapacity(), D, tech_model)
+    cumulative_power = get_expression(container, CumulativePowerCapacity(), D, tech_model)
+    cumulative_energy = get_expression(container, CumulativeEnergyCapacity(), D, tech_model)
 
     for d in devices
         name = PSIP.get_name(d)
@@ -789,8 +784,7 @@ function add_constraints!(
         for t in time_steps
             constraints[name, t] = JuMP.@constraint(
                 get_jump_model(container),
-                cumulative_energy[name, t] >=
-                minimum_duration * cumulative_power[name, t]
+                cumulative_energy[name, t] >= minimum_duration * cumulative_power[name, t]
             )
         end
     end
@@ -802,10 +796,7 @@ function add_constraints!(
     ::StorageDurationUpperBoundConstraint,
     devices::U,
     formulation::S,
-) where {
-    U <: Vector{D},
-    S <: ContinuousInvestment,
-} where {D <: PSIP.StorageTechnology}
+) where {U <: Vector{D}, S <: ContinuousInvestment} where {D <: PSIP.StorageTechnology}
     time_steps = get_investment_time_steps(get_time_mapping(container))
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -817,10 +808,8 @@ function add_constraints!(
         time_steps,
         meta=tech_model,
     )
-    cumulative_power =
-        get_expression(container, CumulativePowerCapacity(), D, tech_model)
-    cumulative_energy =
-        get_expression(container, CumulativeEnergyCapacity(), D, tech_model)
+    cumulative_power = get_expression(container, CumulativePowerCapacity(), D, tech_model)
+    cumulative_energy = get_expression(container, CumulativeEnergyCapacity(), D, tech_model)
 
     for d in devices
         name = PSIP.get_name(d)
@@ -828,8 +817,7 @@ function add_constraints!(
         for t in time_steps
             constraints[name, t] = JuMP.@constraint(
                 get_jump_model(container),
-                cumulative_energy[name, t] <=
-                maximum_duration * cumulative_power[name, t]
+                cumulative_energy[name, t] <= maximum_duration * cumulative_power[name, t]
             )
         end
     end
@@ -905,6 +893,12 @@ function objective_function!(
     tech_model = string(S)
     add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, CumulativePowerCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(
+        container,
+        CumulativePowerCapacity(),
+        devices,
+        formulation,
+        tech_model,
+    )
     return
 end

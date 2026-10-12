@@ -64,8 +64,7 @@ function add_constraints!(
         )
         slack_up[n, t] = up
         slack_dn[n, t] = dn
-        constraint[n, t] =
-            JuMP.@constraint(jump_model, expressions[n, t] + up - dn == 0)
+        constraint[n, t] = JuMP.@constraint(jump_model, expressions[n, t] + up - dn == 0)
         add_to_objective_operations_expression!(
             container,
             (up + dn) * get(penalty, t, BALANCE_SLACK_PENALTY),
