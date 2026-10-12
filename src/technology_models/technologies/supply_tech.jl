@@ -1,22 +1,20 @@
 #! format: off
-_supported_investment_formulations(::Type{<:PSIP.SupplyTechnology}) = (ContinuousInvestment,)
+_supported_investment_formulations(::Type{<:PSIP.SupplyTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment)
 
+# Variables are non-negative and unbounded above unless stated otherwise
+get_variable_lower_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = 0.0
+get_variable_upper_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = nothing
 get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
 get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).min
-get_variable_binary(::BuildCapacity, d::PSIP.SupplyTechnology, ::ContinuousInvestment) = false
-get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::BinaryInvestment) = nothing
-get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::BinaryInvestment) = 0.0
-
-get_variable_lower_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::OperationsTechnologyFormulation) = 0.0
-get_variable_upper_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::OperationsTechnologyFormulation) = nothing
-
-get_variable_lower_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::FeasibilityTechnologyFormulation) = 0.0
-get_variable_upper_bound(::ActivePowerVariable, d::PSIP.SupplyTechnology, ::FeasibilityTechnologyFormulation) = nothing
+# Discrete investments count units, so the limits in MW do not apply to the variable
+get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = nothing
+get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = 0.0
 
 get_variable_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 get_expression_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 
-get_init_cap(d::PSIP.SupplyTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+# Capacity (MW) added by one unit of the build variable
+get_variable_multiplier(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = PSIP.get_unit_size(d)
 
 #! format: on
 
@@ -71,7 +69,7 @@ function add_expression!(
     )
 
     for d in devices
-        init_cap = get_init_cap(d, T(), portfolio)
+        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
         check_multi_region_technology(d, init_cap)
         for name in get_variable_names(d)
             running = JuMP.AffExpr(init_cap)
@@ -113,8 +111,8 @@ function add_expression!(
     )
 
     for d in devices
-        unit_size = PSIP.get_unit_size(d)
-        init_cap = get_init_cap(d, T(), portfolio)
+        unit_size = get_unit_size(BuildCapacity(), d, V())
+        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
         check_multi_region_technology(d, init_cap)
         for name in get_variable_names(d)
             running = JuMP.AffExpr(init_cap)

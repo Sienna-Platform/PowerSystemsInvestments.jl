@@ -36,7 +36,10 @@ function _add_cost_to_objective!(
     cost_component = PSY.get_function_data(value_curve)
     # Overnight capital and last-mile interconnection costs are both in \$/MW,
     # so the interconnection term is added directly to the proportional term.
-    proportional_term = PSY.get_proportional_term(cost_component) + interconnection_cost
+    # Costs are per MW, so they are scaled by the capacity that one unit of the variable adds.
+    proportional_term =
+        (PSY.get_proportional_term(cost_component) + interconnection_cost) *
+        get_variable_multiplier(T(), technology, U())
     @debug "Cost is assumed to be in natural units: \$/MWh"
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(

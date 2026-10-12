@@ -818,3 +818,189 @@ end
     wesd_1 = only(filter(r -> r.name == "wind_share" && r.time_index == 1, wesd_df)).value
     @test isapprox(wesd_1, weight_1 * total_demand_2030; atol=1e-2)
 end
+
+function _build_thermal_investment_model(investment_formulation)
+    p_5bus, op_days = test_2_zone_portfolio()
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{Dates}}()),
+        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal"],
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["expensive_thermal"],
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        investment_formulation,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    return m, p_5bus
+end
+
+@testset "Supply technology with discrete investment" begin
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    m_continuous, _ = _build_thermal_investment_model(ContinuousInvestment)
+    continuous_container = PSIN.get_optimization_container(m_continuous)
+    continuous_build = PSIN.get_variable(
+        continuous_container,
+        PSIN.BuildCapacity(),
+        thermal_type,
+        "ContinuousInvestment",
+    )
+    mw_cost = JuMP.coefficient(
+        JuMP.objective_function(PSIN.get_jump_model(continuous_container)),
+        continuous_build["expensive_thermal", 1],
+    )
+
+    for (formulation, is_discrete) in
+        ((BinaryInvestment, JuMP.is_binary), (IntegerInvestment, JuMP.is_integer))
+        m, p_5bus = _build_thermal_investment_model(formulation)
+        container = PSIN.get_optimization_container(m)
+        unit_size = PSIP.get_unit_size(
+            PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal"),
+        )
+        meta = string(formulation)
+
+        build = PSIN.get_variable(container, PSIN.BuildCapacity(), thermal_type, meta)
+        capacity =
+            PSIN.get_expression(container, PSIN.CumulativeCapacity(), thermal_type, meta)
+        for t in PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+            @test is_discrete(build["expensive_thermal", t])
+            # Each unit built adds unit_size MW of capacity.
+            @test JuMP.coefficient(
+                capacity["expensive_thermal", t],
+                build["expensive_thermal", 1],
+            ) == unit_size
+        end
+
+        # The cost of building one unit is the per-MW cost of the continuous formulation
+        # times the unit size.
+        unit_cost = JuMP.coefficient(
+            JuMP.objective_function(PSIN.get_jump_model(container)),
+            build["expensive_thermal", 1],
+        )
+        @test unit_cost ≈ unit_size * mw_cost
+
+        @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    end
+
+    # A discrete investment needs a positive unit size.
+    thermal = PSIP.get_technology(thermal_type, test_2_zone_portfolio()[1], "cheap_thermal")
+    PSIP.set_unit_size!(thermal, 0.0)
+    @test_throws ErrorException PSIN.get_unit_size(
+        PSIN.BuildCapacity(),
+        thermal,
+        IntegerInvestment(),
+    )
+end
+
+@testset "Storage technology with IntegerInvestment" begin
+    p_5bus, op_days = test_2_zone_portfolio()
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{Dates}}()),
+        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal"],
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    storage_type = PSIP.StorageTechnology{EnergyReservoirStorage}
+    set_technology_model!(
+        template,
+        ["test_storage"],
+        storage_type,
+        IntegerInvestment,
+        CyclicalStorageDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
+    # Power capacity is built in units of the discharge size and energy capacity in units of
+    # the energy size.
+    for (variable_type, expression_type, unit_size) in (
+        (
+            PSIN.BuildPowerCapacity,
+            PSIN.CumulativePowerCapacity,
+            PSIP.get_unit_size_discharge(storage),
+        ),
+        (
+            PSIN.BuildEnergyCapacity,
+            PSIN.CumulativeEnergyCapacity,
+            PSIP.get_unit_size_energy(storage),
+        ),
+    )
+        build =
+            PSIN.get_variable(container, variable_type(), storage_type, "IntegerInvestment")
+        capacity = PSIN.get_expression(
+            container,
+            expression_type(),
+            storage_type,
+            "IntegerInvestment",
+        )
+        @test JuMP.is_integer(build["test_storage", 1])
+        @test JuMP.coefficient(capacity["test_storage", 1], build["test_storage", 1]) ==
+              unit_size
+    end
+
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+end

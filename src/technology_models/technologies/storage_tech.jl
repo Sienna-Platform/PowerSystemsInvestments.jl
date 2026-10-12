@@ -1,47 +1,27 @@
 #! format: off
 
-_supported_investment_formulations(::Type{<:PSIP.StorageTechnology}) = (ContinuousInvestment,)
+_supported_investment_formulations(::Type{<:PSIP.StorageTechnology}) = (ContinuousInvestment, IntegerInvestment)
 
-get_variable_upper_bound(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = nothing
-get_variable_lower_bound(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = 0.0
-get_variable_upper_bound(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = nothing
-get_variable_lower_bound(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::InvestmentTechnologyFormulation) = 0.0
-get_variable_binary(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::ContinuousInvestment) = false
+# Variables are non-negative and unbounded above
+get_variable_lower_bound(::VariableType, d::PSIP.StorageTechnology, ::AbstractTechnologyFormulation) = 0.0
+get_variable_upper_bound(::VariableType, d::PSIP.StorageTechnology, ::AbstractTechnologyFormulation) = nothing
 
-get_variable_lower_bound(::ActiveInPowerVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 0.0
-get_variable_upper_bound(::ActiveInPowerVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = nothing
-
-get_variable_lower_bound(::ActiveOutPowerVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 0.0
-get_variable_upper_bound(::ActiveOutPowerVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = nothing
-
-get_variable_lower_bound(::StateOfChargeVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 0.0
-get_variable_upper_bound(::StateOfChargeVariable, d::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = nothing
-
-get_variable_lower_bound(::ActiveInPowerVariable, d::PSIP.StorageTechnology, ::BasicDispatchFeasibility) = 0.0
-get_variable_upper_bound(::ActiveInPowerVariable, d::PSIP.StorageTechnology, ::BasicDispatchFeasibility) = nothing
-
-get_variable_lower_bound(::ActiveOutPowerVariable, d::PSIP.StorageTechnology, ::BasicDispatchFeasibility) = 0.0
-get_variable_upper_bound(::ActiveOutPowerVariable, d::PSIP.StorageTechnology, ::BasicDispatchFeasibility) = nothing
-
-get_variable_lower_bound(::StateOfChargeVariable, d::PSIP.StorageTechnology, ::BasicDispatchFeasibility) = 0.0
-get_variable_upper_bound(::StateOfChargeVariable, d::PSIP.StorageTechnology, ::BasicDispatchFeasibility) = nothing
-
-get_variable_multiplier(::ActiveInPowerVariable, ::Type{PSIP.StorageTechnology}) = 1.0
-get_variable_multiplier(::ActiveOutPowerVariable, ::Type{PSIP.StorageTechnology}) = 1.0
+get_variable_multiplier(::ActiveInPowerVariable, ::Type{<:PSIP.StorageTechnology}) = 1.0
+get_variable_multiplier(::ActiveOutPowerVariable, ::Type{<:PSIP.StorageTechnology}) = 1.0
+# Capacity added by one unit of the build variables
+get_variable_multiplier(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::IntegerInvestment) = PSIP.get_unit_size_discharge(d)
+get_variable_multiplier(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::IntegerInvestment) = PSIP.get_unit_size_energy(d)
 
 get_expression_multiplier(::EnergyBalance, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::EnergyBalance, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 get_expression_multiplier(::WeightedEnergyGeneration, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::WeightedEnergyGeneration, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
-get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 1.0
-get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
+get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::FeasibilityTechnologyFormulation) = 1.0
+get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::FeasibilityTechnologyFormulation) = -1.0
 
 # TODO: Defaulting to using discharge values for symmetric storage, but we need to be careful if we implement asymmetric storage investments
 get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d).max
 get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_limits_energy(d).max
-
-get_init_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
-get_init_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mwh(p, d)
 
 #! format: on
 
@@ -58,12 +38,6 @@ function get_default_attributes(
 }
     return Dict{String, Any}()
 end
-
-get_existing_capacity_power(d::PSIP.StorageTechnology, p::PSIP.Portfolio) =
-    PSIP.get_existing_capacity_mw(p, d)
-
-get_existing_capacity_energy(d::PSIP.StorageTechnology, p::PSIP.Portfolio) =
-    PSIP.get_existing_capacity_mwh(p, d)
 
 ################### Variables ####################
 
@@ -98,7 +72,7 @@ function add_expression!(
 
     for d in devices
         name = PSIP.get_name(d)
-        init_cap = get_existing_capacity_power(d, portfolio)
+        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
         running = JuMP.AffExpr(init_cap)
         for t in time_steps
             JuMP.add_to_expression!(running, var[name, t])
@@ -138,7 +112,7 @@ function add_expression!(
 
     for d in devices
         name = PSIP.get_name(d)
-        init_cap = get_existing_capacity_energy(d, portfolio)
+        init_cap = PSIP.get_existing_capacity_mwh(portfolio, d)
         running = JuMP.AffExpr(init_cap)
         for t in time_steps
             JuMP.add_to_expression!(running, var[name, t])
@@ -178,9 +152,9 @@ function add_expression!(
     )
 
     for d in devices
-        unit_size = PSIP.get_unit_size_energy(d)
+        unit_size = get_unit_size(BuildPowerCapacity(), d, V())
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_init_cap(d, T(), portfolio)
+        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
         running = JuMP.AffExpr(init_cap)
         for t in time_steps
             JuMP.add_to_expression!(running, var[name, t], unit_size)
@@ -220,9 +194,9 @@ function add_expression!(
     )
 
     for d in devices
-        unit_size = PSIP.get_unit_size_energy(d)
+        unit_size = get_unit_size(BuildEnergyCapacity(), d, V())
         name = PSIP.get_name(d)
-        init_cap = PSIP.get_init_cap(d, T(), portfolio)
+        init_cap = PSIP.get_existing_capacity_mwh(portfolio, d)
         running = JuMP.AffExpr(init_cap)
         for t in time_steps
             JuMP.add_to_expression!(running, var[name, t], unit_size)
@@ -763,7 +737,10 @@ function add_constraints!(
     ::StorageDurationLowerBoundConstraint,
     devices::U,
     formulation::S,
-) where {U <: Vector{D}, S <: ContinuousInvestment} where {D <: PSIP.StorageTechnology}
+) where {
+    U <: Vector{D},
+    S <: InvestmentTechnologyFormulation,
+} where {D <: PSIP.StorageTechnology}
     time_steps = get_investment_time_steps(get_time_mapping(container))
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -796,7 +773,10 @@ function add_constraints!(
     ::StorageDurationUpperBoundConstraint,
     devices::U,
     formulation::S,
-) where {U <: Vector{D}, S <: ContinuousInvestment} where {D <: PSIP.StorageTechnology}
+) where {
+    U <: Vector{D},
+    S <: InvestmentTechnologyFormulation,
+} where {D <: PSIP.StorageTechnology}
     time_steps = get_investment_time_steps(get_time_mapping(container))
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)

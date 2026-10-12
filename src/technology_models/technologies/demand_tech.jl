@@ -22,7 +22,7 @@ end
 
 ################### Variables ####################
 
-get_variable_multiplier(::ActivePowerVariable, ::Type{PSIP.DemandRequirement}) = -1.0
+get_variable_multiplier(::ActivePowerVariable, ::Type{<:PSIP.DemandRequirement}) = -1.0
 
 ################## Expressions ###################
 
@@ -43,6 +43,7 @@ function add_to_expression!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
+    multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
         for op_ix in operational_indexes
@@ -58,7 +59,10 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix])
+                _add_to_jump_expression!(
+                    expression[SINGLE_REGION, t],
+                    multiplier * ts_data[ix],
+                )
             end
         end
     end
@@ -83,6 +87,7 @@ function add_to_expression!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
+    multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
         # Only 1 region supported
@@ -100,7 +105,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix])
+                _add_to_jump_expression!(expression[region, t], multiplier * ts_data[ix])
             end
         end
     end
@@ -124,6 +129,7 @@ function add_to_expression!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
+    multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
         # Only 1 region (node) supported
@@ -141,7 +147,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix])
+                _add_to_jump_expression!(expression[region, t], multiplier * ts_data[ix])
             end
         end
     end
@@ -294,6 +300,7 @@ function add_to_expression!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
+    multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
         for op_ix in feasibility_indexes
@@ -309,7 +316,10 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[SINGLE_REGION, t], -1.0 * ts_data[ix])
+                _add_to_jump_expression!(
+                    expression[SINGLE_REGION, t],
+                    multiplier * ts_data[ix],
+                )
             end
         end
     end
@@ -334,6 +344,7 @@ function add_to_expression!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
+    multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
         # Only one region supported
@@ -351,7 +362,7 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                _add_to_jump_expression!(expression[region, t], -1.0 * ts_data[ix])
+                _add_to_jump_expression!(expression[region, t], multiplier * ts_data[ix])
             end
         end
     end
