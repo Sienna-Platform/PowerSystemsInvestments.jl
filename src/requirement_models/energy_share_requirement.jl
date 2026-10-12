@@ -17,7 +17,12 @@ function construct_requirement!(
     ::Type{B},
     ::TransportModel{<:AbstractTransportAggregation},
     names_to_model_map::Dict{String, TechnologyModel},
-) where {T <: PSIP.EnergyShareRequirements, B <: RequirementEnergyShare}
+    requirement_model_vector::Vector{X},
+) where {
+    T <: PSIP.EnergyShareRequirements,
+    B <: RequirementEnergyShare,
+    X <: RequirementModel,
+}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
     _validate_energy_share_contributors!(p, requirements)
     add_expression!(
@@ -41,7 +46,12 @@ function construct_requirement!(
     ::Type{B},
     ::TransportModel{<:AbstractTransportAggregation},
     names_to_model_map::Dict{String, TechnologyModel},
-) where {T <: PSIP.EnergyShareRequirements, B <: RequirementEnergyShare}
+    requirement_model_vector::Vector{X},
+) where {
+    T <: PSIP.EnergyShareRequirements,
+    B <: RequirementEnergyShare,
+    X <: RequirementModel,
+}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
     add_constraints!(container, EnergyShareRequirementConstraint(), p, requirements, B())
     return

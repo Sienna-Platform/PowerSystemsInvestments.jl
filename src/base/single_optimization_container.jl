@@ -737,6 +737,8 @@ function build_model!(
         get_type_formulation_to_names_map(template.branch_models, port)
     br_names_to_model_map = names_to_technology_model_map(template.branch_models)
     # Requirement Maps #
+    requirement_names_to_model_map =
+        names_to_requirement_model_map(get_requirement_models(template))
     requirement_map =
         get_requirement_formulation_to_names_map(get_requirement_models(template), port)
 
@@ -783,6 +785,7 @@ function build_model!(
         port,
         ArgumentConstructStage(),
         requirement_map,
+        requirement_names_to_model_map,
         names_to_model_map,
         transport_model,
     )
@@ -840,6 +843,7 @@ function build_model!(
         port,
         ModelConstructStage(),
         requirement_map,
+        requirement_names_to_model_map,
         names_to_model_map,
         transport_model,
     )

@@ -244,17 +244,10 @@ end
 
 function get_requirement_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfolio)
     type_formulation_map = Dict{Tuple{DataType, DataType}, Vector{String}}()
-    assigned_names = Set{Tuple{DataType, String}}()
     for (model, names) in models_dict
         req_type = get_requirement_type(model)
         req_formulation = get_requirement_formulation(model)
         for name in names
-            if (req_type, name) in assigned_names
-                error(
-                    "Requirement $name is currently present in more than one requirement model",
-                )
-            end
-            push!(assigned_names, (req_type, name))
             requirement = PSIP.get_requirement(req_type, port, name)
             if isnothing(requirement)
                 error(
@@ -293,6 +286,33 @@ function names_to_technology_model_vector(
     names::Vector{String},
 )
     model_vector = Vector{TechnologyModel}(undef, length(names))
+    for (ix, name) in enumerate(names)
+        model_vector[ix] = names_model_map[name]
+    end
+    return model_vector
+end
+
+function names_to_requirement_model_map(models_dict::Dict)
+    inverse_dic = Dict{String, RequirementModel}()
+    for (model, names) in models_dict
+        for name in names
+            if haskey(inverse_dic, name)
+                error(
+                    "Requirement $name is currently present in more than one requirement model",
+                )
+            else
+                inverse_dic[name] = model
+            end
+        end
+    end
+    return inverse_dic
+end
+
+function names_to_requirement_model_vector(
+    names_model_map::Dict{String, RequirementModel},
+    names::Vector{String},
+)
+    model_vector = Vector{RequirementModel}(undef, length(names))
     for (ix, name) in enumerate(names)
         model_vector[ix] = names_model_map[name]
     end

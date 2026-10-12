@@ -714,10 +714,20 @@ end
         PSIP.EnergyShareRequirements,
         RequirementEnergyShare,
     )
-    @test_throws ErrorException PSIN.get_requirement_formulation_to_names_map(
+    @test_throws ErrorException PSIN.names_to_requirement_model_map(
         PSIN.get_requirement_models(duplicated_template),
-        p_5bus,
     )
+
+    # Each requirement keeps the model it was registered with.
+    requirement_models =
+        PSIN.names_to_requirement_model_map(PSIN.get_requirement_models(template))
+    model_vector = PSIN.names_to_requirement_model_vector(
+        requirement_models,
+        ["wind_share", "wind_share_2035"],
+    )
+    @test model_vector[1] !== model_vector[2]
+    @test model_vector ==
+          [requirement_models["wind_share"], requirement_models["wind_share_2035"]]
 
     m = InvestmentModel(
         template,
