@@ -158,7 +158,7 @@ function write_results!(
     update_timestamp::Dates.Date;
     exports=nothing,
 )
-    if exports !== nothing
+    if !isnothing(exports)
         export_params = Dict{Symbol, Any}(
             :exports => exports,
             :exports_path => joinpath(exports.path, string(get_name(model))),
@@ -186,7 +186,7 @@ function write_model_dual_results!(
 ) where {T <: InvestmentModel}
     container = get_optimization_container(model)
     model_name = get_name(model)
-    if export_params !== nothing
+    if !isnothing(export_params)
         exports_path = joinpath(export_params[:exports_path], "duals")
         mkpath(exports_path)
     end
@@ -196,7 +196,7 @@ function write_model_dual_results!(
         data = jump_value.(constraint)
         write_result!(store, model_name, key, index, update_timestamp, data)
 
-        if export_params !== nothing &&
+        if !isnothing(export_params) &&
            should_export_dual(export_params[:exports], index, model_name, key)
             horizon_count = export_params[:horizon_count]
             resolution = export_params[:resolution]
@@ -219,7 +219,7 @@ function write_model_variable_results!(
 ) where {T <: InvestmentModel}
     container = get_optimization_container(model)
     model_name = get_name(model)
-    if export_params !== nothing
+    if !isnothing(export_params)
         exports_path = joinpath(export_params[:exports_path], "variables")
         mkpath(exports_path)
     end
@@ -234,7 +234,7 @@ function write_model_variable_results!(
         !should_write_resulting_value(key) && continue
         data = jump_value.(variable)
         write_result!(store, model_name, key, index, update_timestamp, data)
-        if export_params !== nothing &&
+        if !isnothing(export_params) &&
            should_export_variable(export_params[:exports], index, model_name, key)
             horizon_count = export_params[:horizon_count]
             resolution = export_params[:resolution]
@@ -257,7 +257,7 @@ function write_model_aux_variable_results!(
 ) where {T <: InvestmentModel}
     container = get_optimization_container(model)
     model_name = get_name(model)
-    if export_params !== nothing
+    if !isnothing(export_params)
         exports_path = joinpath(export_params[:exports_path], "aux_variables")
         mkpath(exports_path)
     end
@@ -267,7 +267,7 @@ function write_model_aux_variable_results!(
         data = jump_value.(variable)
         write_result!(store, model_name, key, index, update_timestamp, data)
 
-        if export_params !== nothing &&
+        if !isnothing(export_params) &&
            should_export_aux_variable(export_params[:exports], index, model_name, key)
             horizon_count = export_params[:horizon_count]
             resolution = export_params[:resolution]
@@ -290,7 +290,7 @@ function write_model_expression_results!(
 ) where {T <: InvestmentModel}
     container = get_optimization_container(model)
     model_name = get_name(model)
-    if export_params !== nothing
+    if !isnothing(export_params)
         exports_path = joinpath(export_params[:exports_path], "expressions")
         mkpath(exports_path)
     end
@@ -306,7 +306,7 @@ function write_model_expression_results!(
         data = jump_value.(expression)
         write_result!(store, model_name, key, index, update_timestamp, data)
 
-        if export_params !== nothing &&
+        if !isnothing(export_params) &&
            should_export_expression(export_params[:exports], index, model_name, key)
             horizon_count = export_params[:horizon_count]
             resolution = export_params[:resolution]
@@ -322,7 +322,7 @@ end
 
 function init_model_store_params!(model::InvestmentModel)
     base_power = 1.0 # Investment Models should default to Natural Units
-    port_uuid = IS.make_uuid()
+    port_uuid = IS.get_uuid(get_portfolio(model))
 
     store_params = ModelStoreParams(
         base_power,
@@ -486,18 +486,12 @@ function solve_impl!(model::InvestmentModel)
     status = solve_model!(container, get_portfolio(model))
     set_run_status!(model, status)
     if status != RunStatus.SUCCESSFULLY_FINALIZED
-        settings = get_settings(model)
         model_name = get_name(model)
-        ts = get_current_timestamp(model)
         output_dir = get_output_dir(model)
         infeasible_opt_path = joinpath(output_dir, "infeasible_$(model_name).json")
         @error("Serializing Infeasible Problem at $(infeasible_opt_path)")
         serialize_optimization_model(container, infeasible_opt_path)
-        if !get_allow_fails(settings)
-            error("Solving model $(model_name) failed at $(ts)")
-        else
-            @error "Solving model $(model_name) failed at $(ts). Failure Allowed"
-        end
+        error("Solving model $(model_name) failed")
     end
     return
 end
@@ -529,20 +523,41 @@ function _read_col_name(axes)
     # Currently, variables that don't have timestamps have a dummy axes to keep
     # two axes in the Store (HDF or Memory). This if-else is used to decide if a
     # dummy axes is being used or not.
-    if typeof(axes[2]) <: UnitRange{Int}
-        return axes[1]
-    elseif typeof(axes[2]) <: Vector{String}
-        IS.@assert_op length(axes[1]) == 1
-        return axes[2]
-    else
-        error("Second axes in store is not allowed to be $(typeof(axes[2]))")
-    end
+    return _select_col_names(axes[1], axes[2])
+end
+
+_select_col_names(first_axis, ::UnitRange{Int}) = first_axis
+
+function _select_col_names(first_axis, second_axis::Vector{String})
+    IS.@assert_op length(first_axis) == 1
+    return second_axis
+end
+
+function _select_col_names(first_axis, second_axis)
+    error("Second axes in store is not allowed to be $(typeof(second_axis))")
 end
 
 function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
-    res = first(values(read_results(get_store(model), key)))
-    col_name = _read_col_name(axes(res))
-    return DataFrames.DataFrame(permutedims(res.data), col_name)
+    store_data = read_results(get_store(model), key)  # OrderedDict{Date, DenseAxisArray{Float64,2}}
+    frames = DataFrames.DataFrame[]
+    t_offset = 0
+    for (_, arr) in store_data
+        col_names = string.(_read_col_name(axes(arr)))
+        n_times = size(arr.data, 2)
+        df_wide = DataFrames.DataFrame(permutedims(arr.data), col_names)
+        df_wide.time_index = (t_offset + 1):(t_offset + n_times)
+        push!(
+            frames,
+            DataFrames.stack(
+                df_wide,
+                DataFrames.Not(:time_index);
+                variable_name=:name,
+                value_name=:value,
+            ),
+        )
+        t_offset += n_times
+    end
+    return vcat(frames...)
 end
 
 read_optimizer_stats(model::InvestmentModel) = read_optimizer_stats(get_store(model))
