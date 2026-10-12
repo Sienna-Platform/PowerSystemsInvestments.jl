@@ -88,6 +88,29 @@
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    # Storage charge and discharge must appear in the balance of the region it is in.
+    container = PSIN.get_optimization_container(m)
+    balance = PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio)
+    storage_type = PSIP.StorageTechnology{EnergyReservoirStorage}
+    storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
+    storage_region = PSIP.get_name(only(PSIP.get_region(storage)))
+    for (var_type, coefficient) in
+        ((PSIN.ActiveOutPowerVariable, 1.0), (PSIN.ActiveInPowerVariable, -1.0))
+        variable = PSIN.get_variable(
+            container,
+            var_type(),
+            storage_type,
+            "CyclicalStorageDispatch",
+        )
+        for t in PSIN.get_time_steps(PSIN.get_time_mapping(container))
+            @test JuMP.coefficient(
+                balance[storage_region, t],
+                variable["test_storage", t],
+            ) == coefficient
+        end
+    end
+
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemResults(m)
@@ -351,6 +374,7 @@ end
         p_hydro,
         nothing;
         optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
         store_variable_names=true,
     )
 
@@ -434,6 +458,7 @@ end
         p_tight,
         nothing;
         optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
         store_variable_names=true,
     )
 
@@ -519,6 +544,7 @@ end
         p_hydro,
         nothing;
         optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
         store_variable_names=true,
     )
 
