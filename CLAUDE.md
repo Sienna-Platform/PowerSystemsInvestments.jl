@@ -82,5 +82,6 @@ InvestmentModel{SingleInstanceSolve}(template, alg, portfolio; optimizer=...)
 - Module aliases: `IS`, `ISOPT`, `PSY`, `MOI`, `PSIP`, `PM` — defined in `src/PowerSystemsInvestments.jl`
 - Container keys are typed structs (`VariableKey`, `ConstraintKey`, `ExpressionKey`) from `ISOPT`
 - All optimization variables/expressions are in natural units (base power = 1.0 for investment models)
+- A `SupplyTechnology` located in more than one region has separate build and dispatch variables per region, indexed as `<name>__<region>` (`get_variable_names` in `src/utils/technology_region_utils.jl`); `capacity_limits` applies to the total over its regions. Other technologies must be located in a single region
 - Operational weights (`OperationalRepresentativeDays`) are per-year: the weighted duration of each investment period's slices adds up to one year (e.g. `365` for a single representative day). The period length comes from the capital model and is applied when costs are discounted; `check_operational_weights` warns at build time otherwise
 - `PrettyTables` version is detected at load time; `printing_pt_v2.jl` vs `printing_pt_v3.jl` is selected via `pkgversion`

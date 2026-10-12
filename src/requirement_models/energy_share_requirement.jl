@@ -156,11 +156,9 @@ function add_expression!(
                 ops_meta = string(get_operations_formulation(tech_model))
                 weighted_gen =
                     get_expression(container, WeightedEnergyGeneration(), D, ops_meta)
-                _add_to_jump_expression!(
-                    share_expr,
-                    weighted_gen[resource_name, op_ix],
-                    1.0,
-                )
+                for name in get_variable_names(resource)
+                    _add_to_jump_expression!(share_expr, weighted_gen[name, op_ix], 1.0)
+                end
             end
             expression[req_name, op_ix] = share_expr
         end

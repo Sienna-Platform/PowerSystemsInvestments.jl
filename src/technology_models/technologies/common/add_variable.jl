@@ -12,7 +12,7 @@ function add_variable!(
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
-    names = [PSIP.get_name(d) for d in devices]
+    names = get_variable_names(devices)
     variable = add_variable_container!(
         container,
         variable_type,
@@ -23,8 +23,7 @@ function add_variable!(
     )
     store_names = get_store_variable_names(get_settings(container))
 
-    for t in time_steps, d in devices
-        name = PSY.get_name(d)
+    for t in time_steps, d in devices, name in get_variable_names(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
@@ -54,7 +53,7 @@ function add_variable!(
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
-    names = [PSIP.get_name(d) for d in devices]
+    names = get_variable_names(devices)
     check_duplicate_names(names, container, variable_type, D)
 
     variable = add_variable_container!(
@@ -66,8 +65,7 @@ function add_variable!(
         meta=tech_model,
     )
     store_names = get_store_variable_names(get_settings(container))
-    for t in time_steps, d in devices
-        name = PSY.get_name(d)
+    for t in time_steps, d in devices, name in get_variable_names(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
@@ -98,7 +96,7 @@ function add_variable!(
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
-    names = [PSIP.get_name(d) for d in devices]
+    names = get_variable_names(devices)
     check_duplicate_names(names, container, variable_type, D)
 
     # Create continuous BuildCapacity variable container (0 ≤ capacity ≤ max_capacity)
@@ -112,8 +110,7 @@ function add_variable!(
     )
     store_names = get_store_variable_names(get_settings(container))
 
-    for t in time_steps, d in devices
-        name = PSY.get_name(d)
+    for t in time_steps, d in devices, name in get_variable_names(d)
         max_capacity = PSIP.get_capacity_limits(d).max
 
         # Internal binary decision variable (0 or 1) — NOT stored in PSINV container
@@ -155,7 +152,7 @@ function add_variable!(
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
-    names = [PSIP.get_name(d) for d in devices]
+    names = get_variable_names(devices)
 
     variable = add_variable_container!(
         container,
@@ -167,8 +164,7 @@ function add_variable!(
     )
     store_names = get_store_variable_names(get_settings(container))
 
-    for t in time_steps, d in devices
-        name = PSY.get_name(d)
+    for t in time_steps, d in devices, name in get_variable_names(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
@@ -198,7 +194,7 @@ function add_variable!(
     time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
 
-    names = [PSIP.get_name(d) for d in devices]
+    names = get_variable_names(devices)
     variable = add_variable_container!(
         container,
         variable_type,
@@ -209,8 +205,7 @@ function add_variable!(
     )
     store_names = get_store_variable_names(get_settings(container))
 
-    for t in time_steps, d in devices
-        name = PSY.get_name(d)
+    for t in time_steps, d in devices, name in get_variable_names(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
@@ -239,7 +234,7 @@ function add_variable!(
     time_mapping = get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
-    names = [PSIP.get_name(d) for d in devices]
+    names = get_variable_names(devices)
 
     variable = add_variable_container!(
         container,
@@ -251,8 +246,7 @@ function add_variable!(
     )
     store_names = get_store_variable_names(get_settings(container))
 
-    for t in time_steps, d in devices
-        name = PSY.get_name(d)
+    for t in time_steps, d in devices, name in get_variable_names(d)
         variable[name, t] = JuMP.@variable(
             get_jump_model(container),
             base_name = store_names ? "$(T)_$(D)_{$(name), $(t)}" : "",
