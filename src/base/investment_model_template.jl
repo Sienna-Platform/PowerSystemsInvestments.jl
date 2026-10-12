@@ -242,6 +242,36 @@ function get_type_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfol
     return type_capital_map, type_operation_map, type_feasibility_map
 end
 
+function get_requirement_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfolio)
+    type_formulation_map = Dict{Tuple{DataType, DataType}, Vector{String}}()
+    assigned_names = Set{Tuple{DataType, String}}()
+    for (model, names) in models_dict
+        req_type = get_requirement_type(model)
+        req_formulation = get_requirement_formulation(model)
+        for name in names
+            if (req_type, name) in assigned_names
+                error(
+                    "Requirement $name is currently present in more than one requirement model",
+                )
+            end
+            push!(assigned_names, (req_type, name))
+            requirement = PSIP.get_requirement(req_type, port, name)
+            if isnothing(requirement)
+                error(
+                    "Requirement with name $name was added in a Formulation but does not exist in the Portfolio.",
+                )
+            end
+            if PSIP.get_available(requirement)
+                merged_names = get!(type_formulation_map, (req_type, req_formulation)) do
+                    return Vector{String}()
+                end
+                push!(merged_names, name)
+            end
+        end
+    end
+    return type_formulation_map
+end
+
 function names_to_technology_model_map(models_dict::Dict)
     inverse_dic = Dict{String, TechnologyModel}()
     for (model, names) in models_dict

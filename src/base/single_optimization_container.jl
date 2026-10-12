@@ -736,6 +736,9 @@ function build_model!(
     br_type_capital_map, br_type_operation_map, br_type_feasibility_map =
         get_type_formulation_to_names_map(template.branch_models, port)
     br_names_to_model_map = names_to_technology_model_map(template.branch_models)
+    # Requirement Maps #
+    requirement_map =
+        get_requirement_formulation_to_names_map(get_requirement_models(template), port)
 
     # Only build the feasibility model if there are feasibility timesteps
     if is_feasibility_empty(get_time_mapping(container))
@@ -779,7 +782,7 @@ function build_model!(
         container,
         port,
         ArgumentConstructStage(),
-        get_requirement_models(template),
+        requirement_map,
         names_to_model_map,
         transport_model,
     )
@@ -836,7 +839,7 @@ function build_model!(
         container,
         port,
         ModelConstructStage(),
-        get_requirement_models(template),
+        requirement_map,
         names_to_model_map,
         transport_model,
     )

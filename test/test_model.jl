@@ -622,9 +622,19 @@ end
         target_year=2030,
         generation_fraction_requirement=fraction,
     )
+    # A second policy of the same type, registered through its own
+    # `set_requirement_model!` call below.
+    esr_2035 = PSIP.EnergyShareRequirements(;
+        name="wind_share_2035",
+        id=2,
+        available=true,
+        target_year=2035,
+        generation_fraction_requirement=0.1,
+    )
     PSIP.add_requirement!(p_5bus, esr)
-    PSIP.set_requirements!(wind, [esr])
-    PSIP.set_requirements!(demand2, [esr])
+    PSIP.add_requirement!(p_5bus, esr_2035)
+    PSIP.set_requirements!(wind, [esr, esr_2035])
+    PSIP.set_requirements!(demand2, [esr, esr_2035])
 
     weights = [365, 365]
     periods = [
@@ -675,12 +685,38 @@ end
         BasicDispatchFeasibility,
     )
 
-    # NEW: register the requirement model
+    # Register the requirement models. Models of the same type and formulation are merged
+    # at build time.
     set_requirement_model!(
         template,
         ["wind_share"],
         PSIP.EnergyShareRequirements,
         RequirementEnergyShare,
+    )
+    set_requirement_model!(
+        template,
+        ["wind_share_2035"],
+        PSIP.EnergyShareRequirements,
+        RequirementEnergyShare,
+    )
+    requirement_map = PSIN.get_requirement_formulation_to_names_map(
+        PSIN.get_requirement_models(template),
+        p_5bus,
+    )
+    @test sort(requirement_map[(PSIP.EnergyShareRequirements, RequirementEnergyShare)]) ==
+          ["wind_share", "wind_share_2035"]
+
+    # A requirement can only belong to one requirement model.
+    duplicated_template = deepcopy(template)
+    set_requirement_model!(
+        duplicated_template,
+        ["wind_share"],
+        PSIP.EnergyShareRequirements,
+        RequirementEnergyShare,
+    )
+    @test_throws ErrorException PSIN.get_requirement_formulation_to_names_map(
+        PSIN.get_requirement_models(duplicated_template),
+        p_5bus,
     )
 
     m = InvestmentModel(
