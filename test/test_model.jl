@@ -1,7 +1,7 @@
 @testset "Build and solve 2 Zone Portfolio" begin
     p_5bus, op_days = test_2_zone_portfolio()
-    # 2 representative days (24-hours for 5 years each)
-    weights = [365 * 5, 365 * 5]
+    # 2 representative days (24 hours each), one per period, with per-year weights
+    weights = [365, 365]
     # 2 periods: 2030-2035, 2035-2040
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
@@ -264,7 +264,7 @@ end
 
 @testset "InvestmentModel calculate_conflict=true detects infeasibility" begin
     p_5bus, op_days = test_2_zone_portfolio()
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -334,7 +334,7 @@ end
 
 @testset "Build and solve hydro portfolio with BasicDispatchWithBudget" begin
     p_hydro, op_days = test_hydro_portfolio()
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -409,7 +409,7 @@ end
 
 @testset "Hydro budget constraint satisfied with 0.05 factor" begin
     p_tight, op_days = test_constrained_hydro_portfolio()
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -504,7 +504,7 @@ end
 
 @testset "Build and solve hydro portfolio with BasicDispatch" begin
     p_hydro, op_days = test_hydro_basic_dispatch_portfolio()
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -620,7 +620,7 @@ end
     PSIP.set_requirements!(wind, [esr])
     PSIP.set_requirements!(demand2, [esr])
 
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -728,8 +728,8 @@ end
     @test total_wind_2030 >= fraction * total_demand_2030 - tol
 
     # --- Weighted-energy expressions -------------------------------------------------
-    # op_ix=1 (2030 representative day) carries weight 365*5.
-    weight_1 = 365 * 5
+    # op_ix=1 (2030 representative day) carries the per-year weight 365.
+    weight_1 = 365
 
     # WeightedEnergyGeneration[wind, op_ix=1] == weight * Σ_t P[wind, t in 1:24].
     weg_df = read_expression(

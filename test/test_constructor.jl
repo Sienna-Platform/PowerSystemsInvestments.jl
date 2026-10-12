@@ -29,6 +29,32 @@ end
     )
 end
 
+@testset "Operational weights check" begin
+    _, op_days = test_2_zone_portfolio()
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    time_mapping = PSIN.TimeMapping(periods, op_days, Vector{Vector{DateTime}}())
+
+    @test_logs min_level = Logging.Warn PSIN.check_operational_weights(
+        time_mapping,
+        [365.0, 365.0],
+    )
+    # Weights that include the length of the period are flagged, one warning per period.
+    @test_logs(
+        (:warn, r"represent 5.0 years"),
+        (:warn, r"represent 5.0 years"),
+        min_level = Logging.Warn,
+        PSIN.check_operational_weights(time_mapping, [365.0 * 5, 365.0 * 5]),
+    )
+    @test_logs(
+        (:warn, r"represent 0.5 years"),
+        min_level = Logging.Warn,
+        PSIN.check_operational_weights(time_mapping, [365.0, 182.5]),
+    )
+end
+
 @testset "Constructor" begin
     p_5bus, op_days = test_2_zone_portfolio()
 
@@ -41,7 +67,7 @@ end
         ], # Vector of Period Duration
     )
 
-    weights = [365 * 5, 365 * 5] # Each day is weighted for a year and then 5 year period length
+    weights = [365, 365] # Per-year weights: each period is represented by one day
     operations = PSIN.OperationalRepresentativeDays(op_days, weights)
     feasibility = RepresentativePeriods(Vector{Vector{Dates}}()) # Empty Feasibility
 

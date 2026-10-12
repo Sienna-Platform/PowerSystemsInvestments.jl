@@ -17,7 +17,7 @@ function _capital_cost_template(op_days)
             (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
         ],
     )
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     operations = PSIN.OperationalRepresentativeDays(op_days, weights)
     feasibility = RepresentativePeriods(Vector{Vector{Dates}}())
     template = InvestmentModelTemplate(
