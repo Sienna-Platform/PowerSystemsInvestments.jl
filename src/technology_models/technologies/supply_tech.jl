@@ -537,7 +537,7 @@ function add_constraints!(
     return
 end
 
-# Dispatch is limited by the committed capacity
+# Dispatch of the committed capacity is between its minimum output and its full output
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -563,15 +563,29 @@ function add_constraints!(
         time_steps,
         meta=tech_model,
     )
+    con_lb = add_constraints_container!(
+        container,
+        T(),
+        D,
+        get_variable_names(devices),
+        time_steps,
+        meta="$(tech_model)_lb",
+    )
     active_power = get_variable(container, V(), D, tech_model)
     committed_cap = get_variable(container, CommittedCapacityVariable(), D, tech_model)
 
-    for name in get_variable_names(devices), t in time_steps
-        # TODO: add lower bound for the minimum dispatch value from PSIP
-        con_ub[name, t] = JuMP.@constraint(
-            get_jump_model(container),
-            active_power[name, t] <= committed_cap[name, t]
-        )
+    for d in devices
+        min_generation = PSIP.get_min_generation_fraction(d)
+        for name in get_variable_names(d), t in time_steps
+            con_ub[name, t] = JuMP.@constraint(
+                get_jump_model(container),
+                active_power[name, t] <= committed_cap[name, t]
+            )
+            con_lb[name, t] = JuMP.@constraint(
+                get_jump_model(container),
+                active_power[name, t] >= min_generation * committed_cap[name, t]
+            )
+        end
     end
     return
 end
@@ -731,8 +745,11 @@ function add_constraints!(
     return
 end
 
-# Capacity that stays committed can change its output by the ramp limit. Capacity that starts
-# up or shuts down in the time step is not limited.
+# The output of the capacity that stays committed can change by the ramp limit. Capacity that
+# starts up can reach its minimum output or one time step of ramp, whichever is larger, and
+# capacity that shuts down must come from that same level. Capacity that shuts down was
+# producing at least its minimum output, which is lost, and capacity that starts up adds at
+# least its minimum output.
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -775,23 +792,28 @@ function add_constraints!(
     for d in devices
         # Ramp limits are a fraction of the capacity per hour
         ramp_limits = PSIP.get_ramp_limits(d)
+        min_generation = PSIP.get_min_generation_fraction(d)
         for name in get_variable_names(d), op_ix in get_all_indexes(time_mapping)
             time_step_length = get_time_step_length(time_mapping, op_ix)
             ramp_up = min(1.0, ramp_limits.up * time_step_length)
             ramp_down = min(1.0, ramp_limits.down * time_step_length)
+            start_up_output = max(min_generation, ramp_up)
+            shut_down_output = max(min_generation, ramp_down)
             for t in consecutive_slices[op_ix]
                 previous_t = get_previous_time_step(time_mapping, op_ix, t)
                 con_up[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     active_power[name, t] - active_power[name, previous_t] <=
                     ramp_up * (committed_cap[name, t] - start_up_cap[name, t]) +
-                    start_up_cap[name, t]
+                    start_up_output * start_up_cap[name, t] -
+                    min_generation * shut_down_cap[name, t]
                 )
                 con_down[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     active_power[name, previous_t] - active_power[name, t] <=
                     ramp_down * (committed_cap[name, t] - start_up_cap[name, t]) +
-                    shut_down_cap[name, t]
+                    shut_down_output * shut_down_cap[name, t] -
+                    min_generation * start_up_cap[name, t]
                 )
             end
         end

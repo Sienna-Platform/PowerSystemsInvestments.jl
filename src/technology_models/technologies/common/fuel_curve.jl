@@ -36,5 +36,7 @@ get_fuel_price(fuel_curve::PSY.FuelCurve) = _get_fuel_price(PSY.get_fuel_cost(fu
 _get_fuel_price(fuel_price::Float64) = fuel_price
 
 function _get_fuel_price(::IS.TimeSeriesKey)
-    error("Time-varying fuel prices are not currently supported. Use a constant fuel price.")
+    error(
+        "Time-varying fuel prices are not currently supported. Use a constant fuel price.",
+    )
 end

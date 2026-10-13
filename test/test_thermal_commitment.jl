@@ -5,6 +5,7 @@
     thermal = PSIP.get_technology(thermal_type, p_5bus, name)
     PSIP.set_time_limits!(thermal, (up=3.0, down=2.0))
     PSIP.set_ramp_limits!(thermal, (up=0.3, down=0.4))
+    PSIP.set_min_generation_fraction!(thermal, 0.35)
     forced_outage = PSIP.get_outage_factors(thermal).forced
     @test forced_outage > 0.0
 
@@ -68,6 +69,15 @@
     dispatch_limit = constraint(PSIN.ActivePowerLimitsConstraint())
     @test coefficient(dispatch_limit[name, 5], dispatch[name, 5]) == 1.0
     @test coefficient(dispatch_limit[name, 5], committed[name, 5]) == -1.0
+    # Committed capacity produces at least its minimum output.
+    min_dispatch_limit = constraint(PSIN.ActivePowerLimitsConstraint(), "$(meta)_lb")
+    @test coefficient(min_dispatch_limit[name, 5], dispatch[name, 5]) == 1.0
+    @test coefficient(min_dispatch_limit[name, 5], committed[name, 5]) ≈ -0.35
+    # A technology without a minimum output only has to be non-negative.
+    @test coefficient(
+        min_dispatch_limit["cheap_thermal", 5],
+        committed["cheap_thermal", 5],
+    ) == 0.0
     committed_limit = constraint(PSIN.CommittedCapacityLimitConstraint())
     @test coefficient(committed_limit[name, 5], build[name, 1]) ≈ -(1.0 - forced_outage)
     # Time step 30 is in the second investment period.
@@ -103,17 +113,27 @@
     @test coefficient(min_down[name, 1], shut_down[name, 23]) == 0.0
     @test coefficient(min_down[name, 1], build[name, 1]) == -1.0
 
-    # Ramp limits apply to the capacity that stays committed.
+    # Ramp limits: 0.3 up and 0.4 down per hour, with a minimum output of 0.35.
+    # Up:   P[t] - P[t-1] <= 0.3 (u - v) + max(0.35, 0.3) v - 0.35 w
+    # Down: P[t-1] - P[t] <= 0.4 (u - v) + max(0.35, 0.4) w - 0.35 v
     ramp_up = constraint(PSIN.RampRateConstraint(), "$(meta)_up")
     ramp_down = constraint(PSIN.RampRateConstraint(), "$(meta)_dn")
     @test coefficient(ramp_up[name, 1], dispatch[name, 1]) == 1.0
     @test coefficient(ramp_up[name, 1], dispatch[name, 24]) == -1.0
     @test coefficient(ramp_up[name, 1], committed[name, 1]) ≈ -0.3
-    @test coefficient(ramp_up[name, 1], start_up[name, 1]) ≈ 0.3 - 1.0
+    @test coefficient(ramp_up[name, 1], start_up[name, 1]) ≈ 0.3 - 0.35
+    @test coefficient(ramp_up[name, 1], shut_down[name, 1]) ≈ 0.35
     @test coefficient(ramp_down[name, 1], dispatch[name, 24]) == 1.0
+    @test coefficient(ramp_down[name, 1], dispatch[name, 1]) == -1.0
     @test coefficient(ramp_down[name, 1], committed[name, 1]) ≈ -0.4
-    @test coefficient(ramp_down[name, 1], start_up[name, 1]) ≈ 0.4
-    @test coefficient(ramp_down[name, 1], shut_down[name, 1]) == -1.0
+    @test coefficient(ramp_down[name, 1], start_up[name, 1]) ≈ 0.4 + 0.35
+    @test coefficient(ramp_down[name, 1], shut_down[name, 1]) ≈ -0.4
+
+    # Without a minimum output, the output can change by the ramp limit times the committed
+    # capacity, whether or not capacity starts up.
+    @test coefficient(ramp_up["cheap_thermal", 1], committed["cheap_thermal", 1]) ≈ -1.0
+    @test coefficient(ramp_up["cheap_thermal", 1], start_up["cheap_thermal", 1]) == 0.0
+    @test coefficient(ramp_up["cheap_thermal", 1], shut_down["cheap_thermal", 1]) == 0.0
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
@@ -129,10 +149,16 @@
     dispatch_values = values(PSIN.ActivePowerVariable)
     committed_values = values(PSIN.CommittedCapacityVariable)
     start_up_values = values(PSIN.StartUpCapacityVariable)
+    shut_down_values = values(PSIN.ShutDownCapacityVariable)
     tol = 1e-4
     @test all(dispatch_values .<= committed_values .+ tol)
+    @test all(dispatch_values .>= 0.35 .* committed_values .- tol)
     for t in 2:24
+        continuing = committed_values[t] - start_up_values[t]
         @test dispatch_values[t] - dispatch_values[t - 1] <=
-              0.3 * (committed_values[t] - start_up_values[t]) + start_up_values[t] + tol
+              0.3 * continuing + 0.35 * start_up_values[t] - 0.35 * shut_down_values[t] +
+              tol
+        @test dispatch_values[t - 1] - dispatch_values[t] <=
+              0.4 * continuing + 0.4 * shut_down_values[t] - 0.35 * start_up_values[t] + tol
     end
 end
