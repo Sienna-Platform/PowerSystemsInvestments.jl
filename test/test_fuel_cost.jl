@@ -231,3 +231,12 @@ end
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end
+
+@testset "Unsupported cost curves fail at build" begin
+    quadratic_cost_curve = CostCurve(QuadraticCurve(0.01, 30.0, 0.0))
+    @test_throws ErrorException PSIN.throw_unsupported_curve(quadratic_cost_curve)
+
+    m = _make_fuel_cost_model(quadratic_cost_curve)
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+end

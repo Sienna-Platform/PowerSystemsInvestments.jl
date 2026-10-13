@@ -178,9 +178,6 @@ function construct_technologies!(
     # Operations Component of objective function
     objective_function!(container, devices, C())
 
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
-
     # Dispatch constraint
     add_constraints!(
         container,

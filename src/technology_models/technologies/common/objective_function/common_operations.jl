@@ -18,7 +18,7 @@ function add_variable_cost!(
 ) where {
     T <: PSIP.SupplyTechnology,
     U <: ActivePowerVariable,
-    V <: Union{BasicDispatch, BasicDispatchWithBudget},
+    V <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
 }
     for d in devices
         op_cost_data = PSIP.get_operation_costs(d)

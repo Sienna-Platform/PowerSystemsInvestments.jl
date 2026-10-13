@@ -37,6 +37,7 @@ export BinaryInvestment
 ### Operation Formulations ###
 export BasicDispatch
 export BasicDispatchWithBudget
+export ContinuousThermalCommitment
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
 export CyclicalStorageDispatch

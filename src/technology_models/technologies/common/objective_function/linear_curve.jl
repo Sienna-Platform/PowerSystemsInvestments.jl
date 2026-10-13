@@ -97,11 +97,24 @@ function _add_cost_to_objective!(
 end
 
 function _add_variable_cost_to_objective!(
+    ::SingleOptimizationContainer,
+    ::OperationsVariableType,
+    ::PSIP.Technology,
+    ::PSY.OperationalCost,
+    cost_curve::PSY.ProductionVariableCostCurve,
+    ::AbstractTechnologyFormulation,
+    ::String,
+)
+    throw_unsupported_curve(cost_curve)
+    return
+end
+
+function _add_variable_cost_to_objective!(
     container::SingleOptimizationContainer,
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
-    cost_curve::PSY.CostCurve,
+    cost_curve::PSY.CostCurve{PSY.LinearCurve},
     ::U,
     tech_model::String,
 ) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
@@ -125,7 +138,7 @@ function _add_variable_cost_to_objective!(
     ::T,
     technology::PSIP.Technology,
     om_cost::PSY.OperationalCost,
-    fuel_curve::PSY.FuelCurve,
+    fuel_curve::PSY.FuelCurve{PSY.LinearCurve},
     ::U,
     tech_model::String,
 ) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
@@ -167,16 +180,13 @@ function _add_cost_to_objective!(
     T <: Union{ActiveInPowerVariable, ActivePowerChargeVariable},
     U <: AbstractTechnologyFormulation,
 }
-    cost_curve = PSY.get_charge_variable_cost(om_cost)
-    value_curve = PSY.get_value_curve(cost_curve)
-    proportional_term = PSY.get_proportional_term(value_curve)
-    multiplier = objective_function_multiplier(T(), U())
-    _add_linearcurve_cost!(
+    _add_variable_cost_to_objective!(
         container,
         T(),
         technology,
         om_cost,
-        multiplier * proportional_term,
+        PSY.get_charge_variable_cost(om_cost),
+        U(),
         tech_model,
     )
     return
@@ -194,16 +204,13 @@ function _add_cost_to_objective!(
     T <: Union{ActiveOutPowerVariable, ActivePowerDischargeVariable},
     U <: AbstractTechnologyFormulation,
 }
-    cost_curve = PSY.get_discharge_variable_cost(om_cost)
-    value_curve = PSY.get_value_curve(cost_curve)
-    proportional_term = PSY.get_proportional_term(value_curve)
-    multiplier = objective_function_multiplier(T(), U())
-    _add_linearcurve_cost!(
+    _add_variable_cost_to_objective!(
         container,
         T(),
         technology,
         om_cost,
-        multiplier * proportional_term,
+        PSY.get_discharge_variable_cost(om_cost),
+        U(),
         tech_model,
     )
     return
@@ -324,7 +331,6 @@ function _add_linearcurve_cost!(
     inflation_rate = get_inflation_rate(container)
     tech_base_year = PSIP.get_technology_base_year(financials)
     time_mapping = get_time_mapping(container)
-    operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     investment_time_stamps = get_investment_time_stamps(time_mapping)
@@ -334,7 +340,7 @@ function _add_linearcurve_cost!(
     years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
 
     for op_ix in get_operational_indexes(time_mapping)
-        weight = operational_weights[op_ix]
+        weight = get_time_step_weight(container, op_ix)
         stage = inverse_invest_mapping[op_ix]
         inv_tuple = investment_time_stamps[stage]
         period_factor = investment_period_annuity_factor(discount_rate, inv_tuple)

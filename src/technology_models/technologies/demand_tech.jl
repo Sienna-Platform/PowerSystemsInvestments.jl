@@ -155,13 +155,12 @@ function add_to_expression!(
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
-    operational_weights = get_operational_weights(container)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
 
     for d in devices
         for op_ix in operational_indexes
-            weight = operational_weights[op_ix]
+            weight = get_time_step_weight(container, op_ix)
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
@@ -192,7 +191,6 @@ function add_to_expression!(
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
-    operational_weights = get_operational_weights(container)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
 
@@ -200,7 +198,7 @@ function add_to_expression!(
         # Only 1 region supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
         for op_ix in operational_indexes
-            weight = operational_weights[op_ix]
+            weight = get_time_step_weight(container, op_ix)
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
@@ -227,7 +225,6 @@ function add_to_expression!(
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
-    operational_weights = get_operational_weights(container)
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_stamps = get_time_stamps(time_mapping)
 
@@ -235,7 +232,7 @@ function add_to_expression!(
         # Only 1 region (node) supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
         for op_ix in operational_indexes
-            weight = operational_weights[op_ix]
+            weight = get_time_step_weight(container, op_ix)
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW

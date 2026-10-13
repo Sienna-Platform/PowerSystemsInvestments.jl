@@ -1,3 +1,14 @@
+"""
+Throw an error for a variable cost curve type that the formulations do not support yet.
+Variable costs must be a `PSY.CostCurve{PSY.LinearCurve}` or a `PSY.FuelCurve{PSY.LinearCurve}`.
+"""
+function throw_unsupported_curve(curve::PSY.ProductionVariableCostCurve)
+    error(
+        "Variable cost curves of type $(typeof(curve)) are not currently supported. Use a " *
+        "CostCurve{LinearCurve} or a FuelCurve{LinearCurve}.",
+    )
+end
+
 _is_fuel_curve(::PSY.ProductionVariableCostCurve) = false
 _is_fuel_curve(::PSY.FuelCurve) = true
 
@@ -15,12 +26,7 @@ Fuel consumed per MWh generated. Only linear fuel curves are supported, and thei
 get_heat_rate(fuel_curve::PSY.FuelCurve{PSY.LinearCurve}) =
     PSY.get_proportional_term(PSY.get_value_curve(fuel_curve))
 
-function get_heat_rate(fuel_curve::PSY.FuelCurve)
-    error(
-        "Only linear fuel curves are supported. Got a fuel curve defined by a " *
-        "$(nameof(typeof(PSY.get_value_curve(fuel_curve)))).",
-    )
-end
+get_heat_rate(fuel_curve::PSY.FuelCurve) = throw_unsupported_curve(fuel_curve)
 
 """
 Price per unit of fuel. Only constant fuel prices are supported.
@@ -30,5 +36,5 @@ get_fuel_price(fuel_curve::PSY.FuelCurve) = _get_fuel_price(PSY.get_fuel_cost(fu
 _get_fuel_price(fuel_price::Float64) = fuel_price
 
 function _get_fuel_price(::IS.TimeSeriesKey)
-    error("Time-varying fuel prices are not supported. Use a constant fuel price.")
+    error("Time-varying fuel prices are not currently supported. Use a constant fuel price.")
 end
