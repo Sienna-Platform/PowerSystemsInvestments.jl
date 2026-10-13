@@ -112,8 +112,6 @@ function construct_technologies!(
 
     # Capital Component of objective function
     objective_function!(container, devices, B())
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
 
     # Capacity constraint
     add_constraints!(
@@ -141,9 +139,6 @@ function construct_technologies!(
 
     # Operations Component of objective function
     objective_function!(container, devices, C())
-
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
 
     # Dispatch constraint
     add_constraints!(
@@ -292,8 +287,6 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     objective_function!(container, devices, C())
-
-    update_objective_function!(container)
 
     add_constraints!(
         container,

@@ -132,9 +132,6 @@ function construct_technologies!(
     # Capital Component of objective function
     objective_function!(container, devices, B())
 
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
-
     # Capacity constraints
     add_constraints!(
         container,
@@ -152,7 +149,9 @@ function construct_technologies!(
         B(),
     )
 
-    # TODO: Implement Constraints on Ratio Energy vs Power
+    # Duration constraints
+    add_constraints!(container, StorageDurationLowerBoundConstraint(), devices, B())
+    add_constraints!(container, StorageDurationUpperBoundConstraint(), devices, B())
     return
 end
 
@@ -175,9 +174,6 @@ function construct_technologies!(
 
     # Operations Component of objective function
     objective_function!(container, devices, C())
-
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
 
     # Dispatch input power constraint
     add_constraints!(

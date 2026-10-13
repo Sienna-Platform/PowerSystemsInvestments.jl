@@ -255,6 +255,7 @@ else
 end
 include("utils/logging.jl")
 include("utils/psip_utils.jl")
+include("utils/technology_region_utils.jl")
 # Technology Models #
 include("technology_models/technologies/common/add_variable.jl")
 include("technology_models/technologies/common/add_to_expression.jl")

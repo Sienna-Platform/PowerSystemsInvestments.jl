@@ -1,28 +1,15 @@
 #! format: off
-get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = get_max_new_capacity(d)
-get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
-get_variable_binary(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::ContinuousInvestment) = false
-get_variable_upper_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::BinaryInvestment) = nothing
-get_variable_lower_bound(::BuildCapacity, d::PSIP.AggregateTransportTechnology, ::BinaryInvestment) = 0.0
+_supported_investment_formulations(::Type{<:PSIP.AggregateTransportTechnology}) = (ContinuousInvestment,)
+_supported_investment_formulations(::Type{<:PSIP.NodalACTransportTechnology}) = (ContinuousInvestment,)
 
-get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = get_max_new_capacity(d)
-get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
-get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::ContinuousInvestment) = false
-get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = 0.0
+# New capacity is limited by the maximum cumulative capacity constraint, which accounts for
+# the existing capacity
+get_variable_upper_bound(::BuildCapacity, d::PSIP.TransmissionTechnology, ::InvestmentTechnologyFormulation) = nothing
+get_variable_lower_bound(::BuildCapacity, d::PSIP.TransmissionTechnology, ::InvestmentTechnologyFormulation) = 0.0
 
+# Aggregate flows are only limited by the cumulative capacity constraints
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
-
-get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = true
-get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = 1.0
-
-# Cumulative capacity bounds
-get_max_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity) =
-    PSIP.get_capacity_limits(d).max
-get_min_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity) =
-    PSIP.get_capacity_limits(d).min
-get_init_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) =
-    PSIP.get_existing_capacity_mw(p, d)
 
 # Operations variable bounds: bidirectional flow with magnitude <= capacity
 get_variable_lower_bound(
@@ -42,22 +29,8 @@ get_variable_upper_bound(
 ) = PSIP.get_capacity_limits(d).max
 
 get_max_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
-get_min_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).min
-
-get_init_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 
 #! format: on
-
-function get_max_new_capacity(d::PSIP.TransmissionTechnology)
-    @warn "get_existing_line_capacity is not implemented for TransmissionTechnology. Returning maximum limits."
-    return PSIP.get_capacity_limits(d).max
-end
-
-# TODO: Check if there is a different way we can get the existing line capacity
-function get_existing_line_capacity(d::PSIP.TransmissionTechnology)
-    @warn "get_existing_line_capacity is not implemented for TransmissionTechnology. Returning minimum limits."
-    return PSIP.get_capacity_limits(d).min
-end
 
 function get_default_attributes(
     ::Type{U},
@@ -88,7 +61,7 @@ function add_expression!(
     S <: AbstractTechnologyFormulation,
     U <: Vector{D},
 } where {D <: PSIP.AggregateTransportTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
@@ -104,13 +77,14 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         name = PSIP.get_name(d)
-        init_cap = get_init_cap(d, T(), portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-        )
+        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t])
+            expression[name, t] = copy(running)
+        end
     end
 
     return
@@ -158,7 +132,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.AggregateTransportTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
@@ -283,6 +257,7 @@ function add_constraints!(
             )
         end
     end
+    return
 end
 
 # Maximum cumulative capacity for NodalACTransportTechnology
@@ -324,6 +299,7 @@ function add_constraints!(
             )
         end
     end
+    return
 end
 
 ########################### Objective Function Calls#############################################
@@ -365,7 +341,7 @@ function add_to_expression!(
     U <: Vector{D},
     V <: NodalBalanceModel,
 } where {D <: PSIP.NodalACTransportTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
@@ -451,6 +427,7 @@ function add_constraints!(
             end
         end
     end
+    return
 end
 
 # ============================================================================
@@ -468,7 +445,7 @@ function add_expression!(
     S <: AbstractTechnologyFormulation,
     U <: Vector{D},
 } where {D <: PSIP.NodalACTransportTechnology}
-    @assert !isempty(devices)
+    IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
@@ -484,13 +461,14 @@ function add_expression!(
         meta=tech_model,
     )
 
-    for t in time_steps, d in devices
+    for d in devices
         name = PSIP.get_name(d)
-        init_cap = get_init_cap(d, T(), portfolio)
-        expression[name, t] = JuMP.@expression(
-            get_jump_model(container),
-            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
-        )
+        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t])
+            expression[name, t] = copy(running)
+        end
     end
 
     return

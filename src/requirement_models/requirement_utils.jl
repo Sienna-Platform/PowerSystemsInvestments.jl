@@ -1,3 +1,8 @@
+_is_resource(::PSIP.Technology) = false
+_is_resource(::PSIP.ResourceTechnology) = true
+_is_demand(::PSIP.Technology) = false
+_is_demand(::PSIP.DemandTechnology) = true
+
 """
 Return the available technologies attached to `requirement` that participate on
 the generation side — `PSIP.ResourceTechnology` subtypes (`SupplyTechnology`,
@@ -7,7 +12,7 @@ the generation side — `PSIP.ResourceTechnology` subtypes (`SupplyTechnology`,
 function _contributing_resources(p::PSIP.Portfolio, requirement::PSIP.Requirement)
     return [
         t for t in PSIP.get_contributing_technologies(p, requirement) if
-        t isa PSIP.ResourceTechnology && PSIP.get_available(t)
+        _is_resource(t) && PSIP.get_available(t)
     ]
 end
 
@@ -19,6 +24,6 @@ the demand side — `PSIP.DemandTechnology` subtypes (`DemandRequirement`,
 function _contributing_demands(p::PSIP.Portfolio, requirement::PSIP.Requirement)
     return [
         t for t in PSIP.get_contributing_technologies(p, requirement) if
-        t isa PSIP.DemandTechnology && PSIP.get_available(t)
+        _is_demand(t) && PSIP.get_available(t)
     ]
 end

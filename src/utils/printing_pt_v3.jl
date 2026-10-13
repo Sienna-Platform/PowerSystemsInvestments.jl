@@ -144,7 +144,11 @@ function _show_method(
         name = "PowerSystemsInvestments"
     end
 
-    extra = backend == :auto ? (; display_size=(-1, -1)) : (;)
+    if backend == :auto
+        extra = (; display_size=(-1, -1))
+    else
+        extra = (;)
+    end
     for (k, val) in values
         if !isempty(val)
             println(io)
@@ -160,4 +164,14 @@ function _show_method(
             )
         end
     end
+end
+
+function _print_conflict_table(io::IO, key, conflict_indices::Vector)
+    PrettyTables.pretty_table(
+        io,
+        conflict_indices;
+        column_labels=[string(key)],
+        display_size=(-1, -1),
+    )
+    return
 end

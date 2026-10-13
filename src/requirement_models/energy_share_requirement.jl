@@ -17,7 +17,12 @@ function construct_requirement!(
     ::Type{B},
     ::TransportModel{<:AbstractTransportAggregation},
     names_to_model_map::Dict{String, TechnologyModel},
-) where {T <: PSIP.EnergyShareRequirements, B <: RequirementEnergyShare}
+    requirement_model_vector::Vector{X},
+) where {
+    T <: PSIP.EnergyShareRequirements,
+    B <: RequirementEnergyShare,
+    X <: RequirementModel,
+}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
     _validate_energy_share_contributors!(p, requirements)
     add_expression!(
@@ -41,7 +46,12 @@ function construct_requirement!(
     ::Type{B},
     ::TransportModel{<:AbstractTransportAggregation},
     names_to_model_map::Dict{String, TechnologyModel},
-) where {T <: PSIP.EnergyShareRequirements, B <: RequirementEnergyShare}
+    requirement_model_vector::Vector{X},
+) where {
+    T <: PSIP.EnergyShareRequirements,
+    B <: RequirementEnergyShare,
+    X <: RequirementModel,
+}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
     add_constraints!(container, EnergyShareRequirementConstraint(), p, requirements, B())
     return
@@ -146,11 +156,9 @@ function add_expression!(
                 ops_meta = string(get_operations_formulation(tech_model))
                 weighted_gen =
                     get_expression(container, WeightedEnergyGeneration(), D, ops_meta)
-                _add_to_jump_expression!(
-                    share_expr,
-                    weighted_gen[resource_name, op_ix],
-                    1.0,
-                )
+                for name in get_variable_names(resource)
+                    _add_to_jump_expression!(share_expr, weighted_gen[name, op_ix], 1.0)
+                end
             end
             expression[req_name, op_ix] = share_expr
         end
@@ -197,13 +205,12 @@ function add_expression!(
                 time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
                 # Load Data is in MW
                 ts_data = TimeSeries.values(time_series.data)
-                first_tstamp = time_stamps[first(time_slices)]
-                first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
-                if first_tstamp != first_ts_tstamp
-                    @error(
-                        "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(PSIP.get_name(d)) does not match with the expected representative day $op_ix"
-                    )
-                end
+                check_initial_timestamp(
+                    time_series,
+                    d,
+                    time_stamps[first(time_slices)],
+                    op_ix,
+                )
                 _add_to_jump_expression!(demand_expr, weight * sum(ts_data))
             end
             expression[req_name, op_ix] = demand_expr

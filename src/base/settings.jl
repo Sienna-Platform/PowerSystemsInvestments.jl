@@ -37,15 +37,7 @@ function Settings(
         time_series_cache_size = 0
     end
 
-    if isa(optimizer, MOI.OptimizerWithAttributes) || optimizer === nothing
-        optimizer_ = optimizer
-    elseif isa(optimizer, DataType)
-        optimizer_ = MOI.OptimizerWithAttributes(optimizer)
-    else
-        error(
-            "The provided input for optimizer is invalid. Provide a JuMP.OptimizerWithAttributes object or a valid Optimizer constructor (e.g. GLPK.Optimizer).",
-        )
-    end
+    optimizer_ = _make_optimizer_with_attributes(optimizer)
 
     return Settings(
         Ref(IS.time_period_conversion(horizon)),
@@ -65,13 +57,24 @@ function Settings(
     )
 end
 
+_make_optimizer_with_attributes(optimizer::Union{Nothing, MOI.OptimizerWithAttributes}) =
+    optimizer
+_make_optimizer_with_attributes(optimizer::DataType) =
+    MOI.OptimizerWithAttributes(optimizer)
+
+function _make_optimizer_with_attributes(optimizer)
+    error(
+        "The provided input for optimizer is invalid. Provide a JuMP.OptimizerWithAttributes object or a valid Optimizer constructor (e.g. GLPK.Optimizer).",
+    )
+end
+
+_get_setting_value(val) = val
+_get_setting_value(val::Base.RefValue) = val[]
+
 function log_values(settings::Settings)
     text = Vector{String}()
-    for (name, type) in zip(fieldnames(Settings), fieldtypes(Settings))
-        val = getfield(settings, name)
-        if type <: Base.RefValue
-            val = val[]
-        end
+    for name in fieldnames(Settings)
+        val = _get_setting_value(getfield(settings, name))
         push!(text, "$name = $val")
     end
 
@@ -105,8 +108,7 @@ function restore_from_copy(
         elseif name == :ext
             continue
         else
-            val = getfield(settings, name)
-            vals[name] = isa(val, Base.RefValue) ? val[] : val
+            vals[name] = _get_setting_value(getfield(settings, name))
         end
     end
 

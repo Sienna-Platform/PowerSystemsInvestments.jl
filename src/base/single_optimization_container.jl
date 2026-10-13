@@ -41,7 +41,7 @@ function SingleOptimizationContainer(
     settings::Settings,
     jump_model::Union{Nothing, JuMP.Model},
 )
-    if jump_model !== nothing && get_direct_mode_optimizer(settings)
+    if !isnothing(jump_model) && get_direct_mode_optimizer(settings)
         throw(
             IS.ConflictingInputsError(
                 "Externally provided JuMP models are not compatible with the direct model keyword argument. Use JuMP.direct_model before passing the custom model",
@@ -49,8 +49,12 @@ function SingleOptimizationContainer(
         )
     end
 
+    if isnothing(jump_model)
+        jump_model = JuMP.Model()
+    end
+
     return SingleOptimizationContainer(
-        jump_model === nothing ? JuMP.Model() : jump_model,
+        jump_model,
         TimeMapping(nothing),
         settings,
         copy_for_serialization(settings),
@@ -147,7 +151,7 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
     if get_direct_mode_optimizer(settings)
         optimizer = () -> MOI.instantiate(get_optimizer(settings))
         container.JuMPmodel = JuMP.direct_model(optimizer())
-    elseif get_optimizer(settings) === nothing
+    elseif isnothing(get_optimizer(settings))
         @debug "The optimization model has no optimizer attached" _group =
             LOG_GROUP_OPTIMIZATION_CONTAINER
     else
@@ -167,6 +171,48 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
     else
         JuMP.set_silent(JuMPmodel)
         @debug "optimizer set to silent" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
+    end
+    return
+end
+
+"""
+Warn when the operational weights of an investment period do not represent one year.
+
+Weights are the number of times each representative slice occurs per year. Operation costs
+are multiplied by the number of years of the investment period when they are discounted, so
+weights that already include the period length would count those costs more than once.
+"""
+function check_operational_weights(
+    time_mapping::TimeMapping,
+    operational_weights::Vector{Float64},
+)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    time_stamps = get_time_stamps(time_mapping)
+    investment_time_stamps = get_investment_time_stamps(time_mapping)
+    investment_to_operational_ixs = get_investment_map_to_operational_slices(time_mapping)
+    for stage in get_investment_time_steps(time_mapping)
+        stage_operational_indexes = investment_to_operational_ixs[stage]
+        isempty(stage_operational_indexes) && continue
+        represented_hours = 0.0
+        for op_ix in stage_operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            # A slice with a single time step is assumed to last one hour.
+            hours_per_step = 1.0
+            if length(time_slices) > 1
+                step = time_stamps[time_slices[2]] - time_stamps[time_slices[1]]
+                hours_per_step = Dates.value(Dates.Millisecond(step)) / 3.6e6
+            end
+            represented_hours +=
+                operational_weights[op_ix] * length(time_slices) * hours_per_step
+        end
+        represented_years = represented_hours / HOURS_PER_YEAR
+        if abs(represented_years - 1.0) > OPERATIONAL_WEIGHTS_TOLERANCE
+            @warn "The operational weights of investment period $(investment_time_stamps[stage]) " *
+                  "represent $(round(represented_years; digits=3)) years of operation. " *
+                  "Weights must be per-year: the weighted duration of the representative " *
+                  "slices of each investment period should add up to one year. The length " *
+                  "of the period is applied separately when costs are discounted."
+        end
     end
     return
 end
@@ -193,6 +239,7 @@ function init_optimization_container!(
 
     set_time_mapping!(container, time_map)
     set_operational_weights!(container, operation_model.series_weights)
+    check_operational_weights(time_map, operation_model.series_weights)
     # Set Financial Data in Container from Portfolio
     set_base_year!(container, PSIP.get_base_year(portfolio))
     set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
@@ -330,7 +377,7 @@ end
 
 function get_variable(container::SingleOptimizationContainer, key::VariableKey)
     var = get(container.variables, key, nothing)
-    if var === nothing
+    if isnothing(var)
         name = IS.Optimization.encode_key(key)
         keys = IS.Optimization.encode_key.(get_variable_keys(container))
         throw(IS.InvalidValue("variable $name is not stored. $keys"))
@@ -381,7 +428,7 @@ end
 
 function get_constraint(container::SingleOptimizationContainer, key::ConstraintKey)
     var = get(container.constraints, key, nothing)
-    if var === nothing
+    if isnothing(var)
         name = IS.Optimization.encode_key(key)
         keys = IS.Optimization.encode_key.(get_constraint_keys(container))
         throw(IS.InvalidValue("constraint $name is not stored. $keys"))
@@ -478,7 +525,7 @@ end
 
 function get_expression(container::SingleOptimizationContainer, key::ExpressionKey)
     var = get(container.expressions, key, nothing)
-    if var === nothing
+    if isnothing(var)
         throw(
             IS.InvalidValue(
                 "constraint $key is not stored. $(collect(keys(container.expressions)))",
@@ -516,16 +563,29 @@ function update_objective_function!(container::SingleOptimizationContainer)
     return
 end
 
+# Adding a quadratic cost to affine terms needs a new expression. Any other combination is
+# added in place.
+function _add_to_objective_terms!(
+    terms::JuMP.GenericAffExpr,
+    cost_expr::JuMP.GenericQuadExpr,
+)
+    return terms + cost_expr
+end
+
+function _add_to_objective_terms!(
+    terms::JuMP.AbstractJuMPScalar,
+    cost_expr::JuMP.AbstractJuMPScalar,
+)
+    JuMP.add_to_expression!(terms, cost_expr)
+    return terms
+end
+
 function add_to_objective_operations_expression!(
     container::SingleOptimizationContainer,
     cost_expr::T,
 ) where {T <: JuMP.AbstractJuMPScalar}
-    T_cf = typeof(container.objective_function.operation_terms)
-    if T_cf <: JuMP.GenericAffExpr && T <: JuMP.GenericQuadExpr
-        container.objective_function.operation_terms += cost_expr
-    else
-        JuMP.add_to_expression!(container.objective_function.operation_terms, cost_expr)
-    end
+    container.objective_function.operation_terms =
+        _add_to_objective_terms!(container.objective_function.operation_terms, cost_expr)
     return
 end
 
@@ -533,12 +593,8 @@ function add_to_objective_investment_expression!(
     container::SingleOptimizationContainer,
     cost_expr::T,
 ) where {T <: JuMP.AbstractJuMPScalar}
-    T_cf = typeof(container.objective_function.capital_terms)
-    if T_cf <: JuMP.GenericAffExpr && T <: JuMP.GenericQuadExpr
-        container.objective_function.capital_terms += cost_expr
-    else
-        JuMP.add_to_expression!(container.objective_function.capital_terms, cost_expr)
-    end
+    container.objective_function.capital_terms =
+        _add_to_objective_terms!(container.objective_function.capital_terms, cost_expr)
     return
 end
 
@@ -693,6 +749,11 @@ function build_model!(
     br_type_capital_map, br_type_operation_map, br_type_feasibility_map =
         get_type_formulation_to_names_map(template.branch_models, port)
     br_names_to_model_map = names_to_technology_model_map(template.branch_models)
+    # Requirement Maps #
+    requirement_names_to_model_map =
+        names_to_requirement_model_map(get_requirement_models(template))
+    requirement_map =
+        get_requirement_formulation_to_names_map(get_requirement_models(template), port)
 
     # Only build the feasibility model if there are feasibility timesteps
     if is_feasibility_empty(get_time_mapping(container))
@@ -736,7 +797,8 @@ function build_model!(
         container,
         port,
         ArgumentConstructStage(),
-        get_requirement_models(template),
+        requirement_map,
+        requirement_names_to_model_map,
         names_to_model_map,
         transport_model,
     )
@@ -793,7 +855,8 @@ function build_model!(
         container,
         port,
         ModelConstructStage(),
-        get_requirement_models(template),
+        requirement_map,
+        requirement_names_to_model_map,
         names_to_model_map,
         transport_model,
     )
@@ -837,33 +900,20 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     jump_model = get_jump_model(container)
 
     model_status = MOI.NO_SOLUTION::MOI.ResultStatusCode
-    conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
 
-    try_count = 0
-    while model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
-        _,
-        optimizer_stats.timed_solve_time,
-        optimizer_stats.solve_bytes_alloc,
-        optimizer_stats.sec_in_gc = @timed JuMP.optimize!(jump_model)
-        model_status = JuMP.primal_status(jump_model)
+    _,
+    optimizer_stats.timed_solve_time,
+    optimizer_stats.solve_bytes_alloc,
+    optimizer_stats.sec_in_gc = @timed JuMP.optimize!(jump_model)
+    model_status = JuMP.primal_status(jump_model)
 
-        if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
-            if get_calculate_conflict(get_settings(container))
-                @warn "Optimizer returned $model_status computing conflict"
-                conflict_status = compute_conflict!(container)
-                if conflict_status == MOI.CONFLICT_FOUND
-                    return RunStatus.FAILED
-                end
-            else
-                @warn "Optimizer returned $model_status trying optimize! again"
-            end
-
-            try_count += 1
-            if try_count > MAX_OPTIMIZE_TRIES
-                @error "Optimizer returned $model_status after $MAX_OPTIMIZE_TRIES optimize! attempts"
-                return RunStatus.FAILED
-            end
+    if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
+        if get_calculate_conflict(get_settings(container))
+            @warn "Optimizer returned $model_status; computing conflict"
+            compute_conflict!(container)
         end
+        @error "Optimizer returned $(model_status) (termination_status = $(JuMP.termination_status(jump_model)))"
+        return RunStatus.FAILED
     end
 
     _, optimizer_stats.timed_calculate_aux_variables =
@@ -915,7 +965,7 @@ function compute_conflict!(container::SingleOptimizationContainer)
 
         msg = IOBuffer()
         for (k, v) in conflict
-            PrettyTables.pretty_table(msg, v; header=[k])
+            _print_conflict_table(msg, k, v)
         end
         @error "Constraints participating in conflict basis (IIS) \n\n$(String(take!(msg)))"
 

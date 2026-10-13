@@ -14,6 +14,10 @@ struct MaximumCumulativeSolarCapacity <: MaximumCumulativeInvestmentConstraint e
 
 struct MaximumCumulativeInverterCapacity <: MaximumCumulativeInvestmentConstraint end
 
+struct StorageDurationLowerBoundConstraint <: ISOPT.ConstraintType end
+
+struct StorageDurationUpperBoundConstraint <: ISOPT.ConstraintType end
+
 ### Operations Constraints ###
 
 abstract type OperationVariableLimitsConstraintType <: ISOPT.ConstraintType end
@@ -53,6 +57,8 @@ struct ColocatedInternalBalanceConstraint <: ISOPT.ConstraintType end
 struct EnergyBalanceConstraint <: ISOPT.ConstraintType end
 
 struct SingleRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
+
+struct MultiRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
 
 struct CommittedCapacityLimitConstraint <: OperationVariableLimitsConstraintType end
 

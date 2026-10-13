@@ -88,9 +88,27 @@ Amount of installed capacity that has been committed for dispatch at a timepoint
 """
 struct CommittedCapacityVariable <: OperationsVariableType end
 
+"""
+Amount of capacity that has been shut down at a timepoint
+"""
 struct ShutDownCapacityVariable <: OperationsVariableType end
 
+"""
+Amount of capacity that has been started up at a timepoint
+"""
 struct StartUpCapacityVariable <: OperationsVariableType end
+
+"""
+Unserved-energy slack on a system power-balance constraint (deficit: injection < 0).
+Only created when the TransportModel is built with `use_slacks = true`.
+"""
+struct BalanceSlackUp <: OperationsVariableType end
+
+"""
+Over-supply slack on a system power-balance constraint (surplus: injection > 0).
+Only created when the TransportModel is built with `use_slacks = true`.
+"""
+struct BalanceSlackDown <: OperationsVariableType end
 
 is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
 is_operation_entry(::Type{<:OperationsVariableType}) = true
