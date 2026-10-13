@@ -198,6 +198,53 @@ function add_expression!(
     return
 end
 
+# Fuel consumption per time step of the technologies with a fuel curve. The container for
+# their fuel cost is created with it, and is filled when the costs are added to the objective.
+function add_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    devices::U,
+    formulation::S,
+) where {
+    T <: FuelConsumptionExpression,
+    U <: Vector{D},
+    S <: OperationsTechnologyFormulation,
+} where {D <: PSIP.SupplyTechnology}
+    fuel_devices = filter(has_fuel_curve, devices)
+    if isempty(fuel_devices)
+        return
+    end
+    time_steps = get_time_steps(get_time_mapping(container))
+    tech_model = string(S)
+
+    variable = get_variable(container, ActivePowerVariable(), D, tech_model)
+    expression = add_expression_container!(
+        container,
+        expression_type,
+        D,
+        get_variable_names(fuel_devices),
+        time_steps,
+        meta=tech_model,
+    )
+    add_expression_container!(
+        container,
+        FuelCost(),
+        D,
+        PSIP.get_name.(fuel_devices),
+        time_steps,
+        meta=tech_model,
+    )
+
+    for d in fuel_devices
+        heat_rate = get_heat_rate(PSY.get_variable(PSIP.get_operation_costs(d)))
+        for name in get_variable_names(d), t in time_steps
+            JuMP.add_to_expression!(expression[name, t], heat_rate, variable[name, t])
+        end
+    end
+
+    return
+end
+
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -569,8 +616,8 @@ function add_constraints!(
     for (ix, d) in enumerate(devices)
         # Get outage derating factors
         outage_factors = PSIP.get_outage_factors()
-        forced_derating = 1-outage_factors.forced
-        planned_derating = 1-outage_factors.planned
+        forced_derating = 1 - outage_factors.forced
+        planned_derating = 1 - outage_factors.planned
 
         name = PSIP.get_name(d)
         tech_model = tech_model_vector[ix]
@@ -583,7 +630,8 @@ function add_constraints!(
             for t in time_slices
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
-                    committed_cap[name, t] <= forced_derating * planned_derating * installed_cap[name, time_step_inv]
+                    committed_cap[name, t] <=
+                    forced_derating * planned_derating * installed_cap[name, time_step_inv]
                 )
             end
         end
@@ -652,11 +700,12 @@ function add_constraints!(
                             get_jump_model(container),
                             committed_cap[name, t] >= 0
                         )
-                    # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
+                        # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
                     else
                         con_soc[name, t] = JuMP.@constraint(
                             get_jump_model(container),
-                            committed_cap[name, t] >= sum(start_up_cap[name, t-i] for i in 1:num_time_steps)
+                            committed_cap[name, t] >=
+                            sum(start_up_cap[name, t - i] for i in 1:num_time_steps)
                         )
                     end
                 end
@@ -729,11 +778,13 @@ function add_constraints!(
                             get_jump_model(container),
                             committed_cap[name, t] >= 0
                         )
-                    # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
+                        # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
                     else
                         con_soc[name, t] = JuMP.@constraint(
                             get_jump_model(container),
-                            committed_cap[name, t] <= installed_cap[name, stage] - sum(shut_down_cap[name, t-i] for i in 1:num_time_steps)
+                            committed_cap[name, t] <=
+                            installed_cap[name, stage] -
+                            sum(shut_down_cap[name, t - i] for i in 1:num_time_steps)
                         )
                     end
                 end
@@ -794,11 +845,13 @@ function add_constraints!(
                             get_jump_model(container),
                             committed_cap[name, t] >= 0
                         )
-                    # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
+                        # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
                     else
                         con_soc[name, t] = JuMP.@constraint(
                             get_jump_model(container),
-                            committed_cap[name, t] == committed_cap[name, t-1] + start_up_cap[name, t] - shut_down_cap[name, t]
+                            committed_cap[name, t] ==
+                            committed_cap[name, t - 1] + start_up_cap[name, t] -
+                            shut_down_cap[name, t]
                         )
                     end
                 end

@@ -31,6 +31,10 @@ struct TotalCapitalCost <: ISOPT.ExpressionType end
 
 struct VariableOMCost <: OperationsExpressionType end
 
+struct FuelConsumptionExpression <: OperationsExpressionType end
+
+struct FuelCost <: OperationsExpressionType end
+
 struct FeasibilitySurplus <: FeasibilityExpressionType end
 
 should_write_resulting_value(::Type{CumulativeCapacity}) = true
@@ -44,6 +48,9 @@ should_write_resulting_value(::Type{WeightedEnergyGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyDemand}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareDemand}) = true
+
+should_write_resulting_value(::Type{FuelConsumptionExpression}) = true
+should_write_resulting_value(::Type{FuelCost}) = true
 
 is_operation_entry(::Type{<:OperationsExpressionType}) = true
 is_operation_entry(::Type{<:InvestmentExpressionType}) = false

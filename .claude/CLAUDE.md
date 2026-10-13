@@ -56,6 +56,7 @@ The investment formulations a technology accepts are listed by `_supported_inves
 - A `SupplyTechnology` located in more than one region has separate build and dispatch variables per region, indexed as `<name>__<region>` (`get_variable_names` in `utils/technology_region_utils.jl`); `capacity_limits` applies to the total over its regions, and existing capacity or a minimum limit is an error for such a technology. Other technologies must be located in a single region.
 - Discrete investment variables count units: capacity and capital cost are scaled by `get_variable_multiplier`, and `get_unit_size` errors on a non-positive unit size.
 - A time series that does not start on the first time stamp of its representative period is an error (`check_initial_timestamp`).
+- Variable costs dispatch on the curve type of the technology's operation cost: a `PSY.CostCurve` gives the cost per MWh, a `PSY.FuelCurve` gives a heat rate that is priced with its fuel price (`common/fuel_curve.jl`). Fuel curves must be linear with a constant fuel price; their no-load term is not modeled. `FuelConsumptionExpression` and `FuelCost` are created only for technologies with a fuel curve.
 - The base year and discount rate used in the objective come from the `Portfolio`; `DiscountedCashFlow` only supplies the investment periods.
 - Respect the include order in `src/PowerSystemsInvestments.jl`: abstract formulation types, capital/operation/transport, then containers, then technology constructors. New types must be defined before files that reference them.
 
@@ -83,7 +84,7 @@ Formatter (self-activates its own environment):
 julia --project=scripts/formatter -e 'include("scripts/formatter/formatter_code.jl")'
 ```
 
-Tests — `test/runtests.jl` uses a `@includetests` macro (TestSetExtensions-style) that auto-discovers `test_*.jl` files (`test_capital_cost.jl`, `test_constructor.jl`, `test_model.jl`, `test_multi_region_supply.jl`, `test_printing.jl`) and runs Aqua checks; solver is HiGHS. Test deps live in `test/Project.toml`.
+Tests — `test/runtests.jl` uses a `@includetests` macro (TestSetExtensions-style) that auto-discovers `test_*.jl` files (`test_capital_cost.jl`, `test_constructor.jl`, `test_fuel_cost.jl`, `test_model.jl`, `test_multi_region_supply.jl`, `test_printing.jl`) and runs Aqua checks; solver is HiGHS. Test deps live in `test/Project.toml`.
 
 ```sh
 julia --project=test test/runtests.jl                 # full suite

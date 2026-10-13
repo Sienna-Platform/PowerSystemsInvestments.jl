@@ -41,6 +41,9 @@ function construct_technologies!(
 
     # WeightedEnergyGeneration
     add_expression!(container, WeightedEnergyGeneration(), devices, C())
+
+    # FuelConsumptionExpression
+    add_expression!(container, FuelConsumptionExpression(), devices, C())
     return
 end
 
@@ -54,7 +57,11 @@ function construct_technologies!(
     tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: PSIP.SupplyTechnology{PSY.ThermalStandard}, C <: ContinuousThermalCommitment, X <: TechnologyModel}
+) where {
+    T <: PSIP.SupplyTechnology{PSY.ThermalStandard},
+    C <: ContinuousThermalCommitment,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     add_variable!(container, ActivePowerVariable(), devices, C())
@@ -68,6 +75,9 @@ function construct_technologies!(
 
     # WeightedEnergyGeneration
     add_expression!(container, WeightedEnergyGeneration(), devices, C())
+
+    # FuelConsumptionExpression
+    add_expression!(container, FuelConsumptionExpression(), devices, C())
     return
 end
 
@@ -270,6 +280,9 @@ function construct_technologies!(
 
     # WeightedEnergyGeneration
     add_expression!(container, WeightedEnergyGeneration(), devices, C())
+
+    # FuelConsumptionExpression
+    add_expression!(container, FuelConsumptionExpression(), devices, C())
     return
 end
 
