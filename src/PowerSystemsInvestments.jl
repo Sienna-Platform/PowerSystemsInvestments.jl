@@ -37,6 +37,7 @@ export BinaryInvestment
 ### Operation Formulations ###
 export BasicDispatch
 export BasicDispatchWithBudget
+export ContinuousThermalCommitment
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
 export CyclicalStorageDispatch
@@ -77,6 +78,10 @@ export CapitalCost
 export TotalCapitalCost
 export FixedOperationModelCost
 export VariableOMCost
+export FuelCost
+export StartUpCost
+export ShutDownCost
+export FuelConsumptionExpression
 export EnergyBalance
 export CumulativePowerCapacity
 export CumulativeEnergyCapacity
@@ -259,6 +264,7 @@ include("utils/technology_region_utils.jl")
 # Technology Models #
 include("technology_models/technologies/common/add_variable.jl")
 include("technology_models/technologies/common/add_to_expression.jl")
+include("technology_models/technologies/common/fuel_curve.jl")
 include("technology_models/technologies/supply_tech.jl")
 include("technology_models/technologies/demand_tech.jl")
 include("technology_models/technologies/storage_tech.jl")

@@ -26,9 +26,8 @@ function add_constraints!(
     #   slack_dn  > 0  → over-supply (surplus)
     # Both are penalized in the objective so they stay at zero wherever the
     # balance can feasibly be met; any nonzero slack pinpoints an unservable node.
-    # The penalty is weighted like a variable cost: by the representative-day weight, over
+    # The penalty is weighted like a variable cost: by the hours of the year each time step stands for, over
     # the years of the investment period, discounted to the base year.
-    operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     investment_time_stamps = get_investment_time_stamps(time_mapping)
@@ -44,7 +43,7 @@ function add_constraints!(
             penalty[t] =
                 BALANCE_SLACK_PENALTY *
                 period_factor *
-                operational_weights[op_ix] *
+                get_time_step_weight(container, op_ix) *
                 discount_factor^(years[t] - base_year)
         end
     end

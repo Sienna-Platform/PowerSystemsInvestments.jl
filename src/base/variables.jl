@@ -84,6 +84,21 @@ Struct to dispatch the creation of bidirectional Active Power Flow Variables
 struct FlowActivePowerVariable <: OperationsVariableType end
 
 """
+Amount of installed capacity that has been committed for dispatch at a timepoint
+"""
+struct CommittedCapacityVariable <: OperationsVariableType end
+
+"""
+Amount of capacity that has been shut down at a timepoint
+"""
+struct ShutDownCapacityVariable <: OperationsVariableType end
+
+"""
+Amount of capacity that has been started up at a timepoint
+"""
+struct StartUpCapacityVariable <: OperationsVariableType end
+
+"""
 Unserved-energy slack on a system power-balance constraint (deficit: injection < 0).
 Only created when the TransportModel is built with `use_slacks = true`.
 """

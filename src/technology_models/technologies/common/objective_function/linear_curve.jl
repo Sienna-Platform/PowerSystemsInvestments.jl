@@ -84,9 +84,43 @@ function _add_cost_to_objective!(
     ::U,
     tech_model::String,
 ) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
-    cost_curve = PSY.get_variable(om_cost)
-    value_curve = PSY.get_value_curve(cost_curve)
-    proportional_term = PSY.get_proportional_term(value_curve)
+    _add_variable_cost_to_objective!(
+        container,
+        T(),
+        technology,
+        om_cost,
+        PSY.get_variable(om_cost),
+        U(),
+        tech_model,
+    )
+    return
+end
+
+function _add_variable_cost_to_objective!(
+    ::SingleOptimizationContainer,
+    ::OperationsVariableType,
+    ::PSIP.Technology,
+    ::PSY.OperationalCost,
+    cost_curve::PSY.ProductionVariableCostCurve,
+    ::AbstractTechnologyFormulation,
+    ::String,
+)
+    throw_unsupported_curve(cost_curve)
+    return
+end
+
+function _add_variable_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    cost_curve::PSY.CostCurve{PSY.LinearCurve},
+    ::U,
+    tech_model::String,
+) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
+    proportional_term =
+        PSY.get_proportional_term(PSY.get_value_curve(cost_curve)) +
+        PSY.get_proportional_term(PSY.get_vom_cost(cost_curve))
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
         container,
@@ -96,6 +130,41 @@ function _add_cost_to_objective!(
         multiplier * proportional_term,
         tech_model,
     )
+    return
+end
+
+function _add_variable_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    fuel_curve::PSY.FuelCurve{PSY.LinearCurve},
+    ::U,
+    tech_model::String,
+) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
+    multiplier = objective_function_multiplier(T(), U())
+    fuel_term = get_heat_rate(fuel_curve) * get_fuel_price(fuel_curve)
+    _add_linearcurve_cost!(
+        container,
+        T(),
+        FuelCost(),
+        technology,
+        om_cost,
+        multiplier * fuel_term,
+        tech_model,
+    )
+    vom_term = PSY.get_proportional_term(PSY.get_vom_cost(fuel_curve))
+    if !iszero(vom_term)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            VariableOMCost(),
+            technology,
+            om_cost,
+            multiplier * vom_term,
+            tech_model,
+        )
+    end
     return
 end
 
@@ -111,16 +180,13 @@ function _add_cost_to_objective!(
     T <: Union{ActiveInPowerVariable, ActivePowerChargeVariable},
     U <: AbstractTechnologyFormulation,
 }
-    cost_curve = PSY.get_charge_variable_cost(om_cost)
-    value_curve = PSY.get_value_curve(cost_curve)
-    proportional_term = PSY.get_proportional_term(value_curve)
-    multiplier = objective_function_multiplier(T(), U())
-    _add_linearcurve_cost!(
+    _add_variable_cost_to_objective!(
         container,
         T(),
         technology,
         om_cost,
-        multiplier * proportional_term,
+        PSY.get_charge_variable_cost(om_cost),
+        U(),
         tech_model,
     )
     return
@@ -138,16 +204,13 @@ function _add_cost_to_objective!(
     T <: Union{ActiveOutPowerVariable, ActivePowerDischargeVariable},
     U <: AbstractTechnologyFormulation,
 }
-    cost_curve = PSY.get_discharge_variable_cost(om_cost)
-    value_curve = PSY.get_value_curve(cost_curve)
-    proportional_term = PSY.get_proportional_term(value_curve)
-    multiplier = objective_function_multiplier(T(), U())
-    _add_linearcurve_cost!(
+    _add_variable_cost_to_objective!(
         container,
         T(),
         technology,
         om_cost,
-        multiplier * proportional_term,
+        PSY.get_discharge_variable_cost(om_cost),
+        U(),
         tech_model,
     )
     return
@@ -232,6 +295,193 @@ function _add_linearcurve_cost!(
     return
 end
 
+# Committed capacity has the no-load term of its cost or fuel curve
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    ::U,
+    tech_model::String,
+) where {T <: CommittedCapacityVariable, U <: AbstractTechnologyFormulation}
+    _add_commitment_curve_cost_to_objective!(
+        container,
+        T(),
+        technology,
+        om_cost,
+        PSY.get_variable(om_cost),
+        U(),
+        tech_model,
+    )
+    return
+end
+
+# Capacity that starts up has a start-up cost and consumes the start-up fuel of its fuel curve
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    ::U,
+    tech_model::String,
+) where {T <: StartUpCapacityVariable, U <: AbstractTechnologyFormulation}
+    _add_start_up_cost_to_objective!(
+        container,
+        T(),
+        technology,
+        om_cost,
+        PSY.get_start_up(om_cost),
+        U(),
+        tech_model,
+    )
+    _add_commitment_curve_cost_to_objective!(
+        container,
+        T(),
+        technology,
+        om_cost,
+        PSY.get_variable(om_cost),
+        U(),
+        tech_model,
+    )
+    return
+end
+
+# Capacity that shuts down has a shut-down cost
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    ::U,
+    tech_model::String,
+) where {T <: ShutDownCapacityVariable, U <: AbstractTechnologyFormulation}
+    shut_down_cost = PSY.get_shut_down(om_cost)
+    if !iszero(shut_down_cost)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            ShutDownCost(),
+            technology,
+            om_cost,
+            objective_function_multiplier(T(), U()) * shut_down_cost,
+            tech_model,
+        )
+    end
+    return
+end
+
+function _add_start_up_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    start_up_cost::Float64,
+    ::U,
+    tech_model::String,
+) where {T <: StartUpCapacityVariable, U <: AbstractTechnologyFormulation}
+    if !iszero(start_up_cost)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            StartUpCost(),
+            technology,
+            om_cost,
+            objective_function_multiplier(T(), U()) * start_up_cost,
+            tech_model,
+        )
+    end
+    return
+end
+
+function _add_start_up_cost_to_objective!(
+    ::SingleOptimizationContainer,
+    ::StartUpCapacityVariable,
+    technology::PSIP.Technology,
+    ::PSY.OperationalCost,
+    ::PSY.StartUpStages,
+    ::AbstractTechnologyFormulation,
+    ::String,
+)
+    error(
+        "Technology $(PSIP.get_name(technology)) defines its start-up cost by stages (hot, " *
+        "warm, cold), which is not currently supported. Use a single start-up cost.",
+    )
+    return
+end
+
+function _add_commitment_curve_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    fuel_curve::PSY.FuelCurve{PSY.LinearCurve},
+    ::U,
+    tech_model::String,
+) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
+    fuel_term = get_commitment_fuel(T(), fuel_curve) * get_fuel_price(fuel_curve)
+    if !iszero(fuel_term)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            FuelCost(),
+            technology,
+            om_cost,
+            objective_function_multiplier(T(), U()) * fuel_term,
+            tech_model,
+        )
+    end
+    return
+end
+
+function _add_commitment_curve_cost_to_objective!(
+    ::SingleOptimizationContainer,
+    ::OperationsVariableType,
+    ::PSIP.Technology,
+    ::PSY.OperationalCost,
+    ::PSY.CostCurve{PSY.LinearCurve},
+    ::AbstractTechnologyFormulation,
+    ::String,
+)
+    return
+end
+
+# The constant term of a cost curve is a cost per hour and MW committed
+function _add_commitment_curve_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    cost_curve::PSY.CostCurve{PSY.LinearCurve},
+    ::U,
+    tech_model::String,
+) where {T <: CommittedCapacityVariable, U <: AbstractTechnologyFormulation}
+    no_load_cost = PSY.get_constant_term(PSY.get_value_curve(cost_curve))
+    if !iszero(no_load_cost)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            technology,
+            om_cost,
+            objective_function_multiplier(T(), U()) * no_load_cost,
+            tech_model,
+        )
+    end
+    return
+end
+
+# Costs per hour are weighted by the hours of the year a time step stands for. Start-up and
+# shut-down costs are per event, so they are weighted by the occurrences of the period.
+get_cost_weight(
+    container::SingleOptimizationContainer,
+    ::OperationsVariableType,
+    op_ix::Int,
+) = get_time_step_weight(container, op_ix)
+get_cost_weight(
+    container::SingleOptimizationContainer,
+    ::Union{StartUpCapacityVariable, ShutDownCapacityVariable},
+    op_ix::Int,
+) = get_operational_weights(container)[op_ix]
+
 # Dispatch for scalar proportional terms
 function _add_linearcurve_cost!(
     container::SingleOptimizationContainer,
@@ -241,13 +491,33 @@ function _add_linearcurve_cost!(
     proportional_term::Float64,
     tech_model::String,
 ) where {T <: OperationsVariableType}
+    _add_linearcurve_cost!(
+        container,
+        T(),
+        VariableOMCost(),
+        technology,
+        om_cost,
+        proportional_term,
+        tech_model,
+    )
+    return
+end
+
+function _add_linearcurve_cost!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::S,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    proportional_term::Float64,
+    tech_model::String,
+) where {T <: OperationsVariableType, S <: OperationsExpressionType}
     financials = PSIP.get_financial_data(technology)
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
     inflation_rate = get_inflation_rate(container)
     tech_base_year = PSIP.get_technology_base_year(financials)
     time_mapping = get_time_mapping(container)
-    operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     investment_time_stamps = get_investment_time_stamps(time_mapping)
@@ -257,7 +527,7 @@ function _add_linearcurve_cost!(
     years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
 
     for op_ix in get_operational_indexes(time_mapping)
-        weight = operational_weights[op_ix]
+        weight = get_cost_weight(container, T(), op_ix)
         stage = inverse_invest_mapping[op_ix]
         inv_tuple = investment_time_stamps[stage]
         period_factor = investment_period_annuity_factor(discount_rate, inv_tuple)
@@ -268,7 +538,7 @@ function _add_linearcurve_cost!(
             _add_linearcurve_variable_term_to_model!(
                 container,
                 T(),
-                VariableOMCost(),
+                S(),
                 technology,
                 period_factor * weight * npv_proportional_term,
                 t,
@@ -283,12 +553,12 @@ end
 function _add_linearcurve_variable_term_to_model!(
     container::SingleOptimizationContainer,
     ::T,
-    ::VariableOMCost,
+    ::S,
     technology::PSIP.Technology,
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: OperationsVariableType}
+) where {T <: OperationsVariableType, S <: OperationsExpressionType}
     linear_cost = _add_proportional_term!(
         container,
         T(),
@@ -297,14 +567,7 @@ function _add_linearcurve_variable_term_to_model!(
         time_period,
         tech_model,
     )
-    add_to_expression!(
-        container,
-        VariableOMCost,
-        linear_cost,
-        technology,
-        time_period,
-        tech_model,
-    )
+    add_to_expression!(container, S, linear_cost, technology, time_period, tech_model)
     return
 end
 
