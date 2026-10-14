@@ -175,23 +175,14 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
     return
 end
 
-"""
-Hours of a year that each time step of the representative period `op_ix` stands for: the
-weight of the period times the length of its time steps. It converts power in a time step
-into energy per year.
-"""
+# Hours of a year that each time step of the representative period stands for
 function get_time_step_weight(container::SingleOptimizationContainer, op_ix::Int)
     return get_operational_weights(container)[op_ix] *
            get_time_step_length(get_time_mapping(container), op_ix)
 end
 
-"""
-Warn when the operational weights of an investment period do not represent one year.
-
-Weights are the number of times each representative slice occurs per year. Operation costs
-are multiplied by the number of years of the investment period when they are discounted, so
-weights that already include the period length would count those costs more than once.
-"""
+# Weights are per year: the period length is applied when costs are discounted, so weights
+# that include it would count operation costs more than once.
 function check_operational_weights(
     time_mapping::TimeMapping,
     operational_weights::Vector{Float64},

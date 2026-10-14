@@ -295,6 +295,169 @@ function _add_linearcurve_cost!(
     return
 end
 
+# Committed capacity consumes the no-load fuel of its fuel curve
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    ::U,
+    tech_model::String,
+) where {T <: CommittedCapacityVariable, U <: AbstractTechnologyFormulation}
+    _add_commitment_fuel_cost_to_objective!(
+        container,
+        T(),
+        technology,
+        om_cost,
+        PSY.get_variable(om_cost),
+        U(),
+        tech_model,
+    )
+    return
+end
+
+# Capacity that starts up has a start-up cost and consumes the start-up fuel of its fuel curve
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    ::U,
+    tech_model::String,
+) where {T <: StartUpCapacityVariable, U <: AbstractTechnologyFormulation}
+    _add_start_up_cost_to_objective!(
+        container,
+        T(),
+        technology,
+        om_cost,
+        PSY.get_start_up(om_cost),
+        U(),
+        tech_model,
+    )
+    _add_commitment_fuel_cost_to_objective!(
+        container,
+        T(),
+        technology,
+        om_cost,
+        PSY.get_variable(om_cost),
+        U(),
+        tech_model,
+    )
+    return
+end
+
+# Capacity that shuts down has a shut-down cost
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    ::U,
+    tech_model::String,
+) where {T <: ShutDownCapacityVariable, U <: AbstractTechnologyFormulation}
+    shut_down_cost = PSY.get_shut_down(om_cost)
+    if !iszero(shut_down_cost)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            ShutDownCost(),
+            technology,
+            om_cost,
+            objective_function_multiplier(T(), U()) * shut_down_cost,
+            tech_model,
+        )
+    end
+    return
+end
+
+function _add_start_up_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    start_up_cost::Float64,
+    ::U,
+    tech_model::String,
+) where {T <: StartUpCapacityVariable, U <: AbstractTechnologyFormulation}
+    if !iszero(start_up_cost)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            StartUpCost(),
+            technology,
+            om_cost,
+            objective_function_multiplier(T(), U()) * start_up_cost,
+            tech_model,
+        )
+    end
+    return
+end
+
+function _add_start_up_cost_to_objective!(
+    ::SingleOptimizationContainer,
+    ::StartUpCapacityVariable,
+    technology::PSIP.Technology,
+    ::PSY.OperationalCost,
+    ::PSY.StartUpStages,
+    ::AbstractTechnologyFormulation,
+    ::String,
+)
+    error(
+        "Technology $(PSIP.get_name(technology)) defines its start-up cost by stages (hot, " *
+        "warm, cold), which is not currently supported. Use a single start-up cost.",
+    )
+    return
+end
+
+function _add_commitment_fuel_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    fuel_curve::PSY.FuelCurve{PSY.LinearCurve},
+    ::U,
+    tech_model::String,
+) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
+    fuel_term = get_commitment_fuel(T(), fuel_curve) * get_fuel_price(fuel_curve)
+    if !iszero(fuel_term)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            FuelCost(),
+            technology,
+            om_cost,
+            objective_function_multiplier(T(), U()) * fuel_term,
+            tech_model,
+        )
+    end
+    return
+end
+
+function _add_commitment_fuel_cost_to_objective!(
+    ::SingleOptimizationContainer,
+    ::OperationsVariableType,
+    ::PSIP.Technology,
+    ::PSY.OperationalCost,
+    ::PSY.CostCurve{PSY.LinearCurve},
+    ::AbstractTechnologyFormulation,
+    ::String,
+)
+    return
+end
+
+# Costs per hour are weighted by the hours of the year a time step stands for. Start-up and
+# shut-down costs are per event, so they are weighted by the occurrences of the period.
+get_cost_weight(
+    container::SingleOptimizationContainer,
+    ::OperationsVariableType,
+    op_ix::Int,
+) = get_time_step_weight(container, op_ix)
+get_cost_weight(
+    container::SingleOptimizationContainer,
+    ::Union{StartUpCapacityVariable, ShutDownCapacityVariable},
+    op_ix::Int,
+) = get_operational_weights(container)[op_ix]
+
 # Dispatch for scalar proportional terms
 function _add_linearcurve_cost!(
     container::SingleOptimizationContainer,
@@ -340,7 +503,7 @@ function _add_linearcurve_cost!(
     years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
 
     for op_ix in get_operational_indexes(time_mapping)
-        weight = get_time_step_weight(container, op_ix)
+        weight = get_cost_weight(container, T(), op_ix)
         stage = inverse_invest_mapping[op_ix]
         inv_tuple = investment_time_stamps[stage]
         period_factor = investment_period_annuity_factor(discount_rate, inv_tuple)

@@ -17,8 +17,8 @@ end
     two_hourly =
         PSIN.TimeMapping(TIME_STEP_TEST_PERIODS, _time_step_test_days(2), no_feasibility)
 
-    @test PSIN.get_time_step_lengths(hourly) == [1.0, 1.0]
-    @test PSIN.get_time_step_lengths(two_hourly) == [2.0, 2.0]
+    @test PSIN.get_time_step_length(hourly, 1) == 1.0
+    @test PSIN.get_time_step_length(two_hourly, 1) == 2.0
     @test PSIN.get_time_step_length(two_hourly, 2) == 2.0
 
     # Sub-hourly steps and periods with a single time step.
@@ -30,7 +30,8 @@ end
         [half_hourly_day, single_step],
         no_feasibility,
     )
-    @test PSIN.get_time_step_lengths(mixed) == [0.5, 1.0]
+    @test PSIN.get_time_step_length(mixed, 1) == 0.5
+    @test PSIN.get_time_step_length(mixed, 2) == 1.0
 
     # Time stamps must be evenly spaced within a representative period.
     uneven_day = [DateTime(2030, 1, 1, 0), DateTime(2030, 1, 1, 1), DateTime(2030, 1, 1, 3)]
@@ -50,11 +51,16 @@ end
     @test PSIN.get_previous_time_step(two_hourly, 2, 14, 0) == 14
     @test PSIN.get_previous_time_step(mixed, 2, 49) == 49
 
-    # Durations are converted to a whole number of time steps of the period.
-    @test PSIN.get_time_steps_in_duration(hourly, 1, 3.0) == 3
-    @test PSIN.get_time_steps_in_duration(two_hourly, 1, 3.0) == 2
-    @test PSIN.get_time_steps_in_duration(two_hourly, 1, 0.5) == 0
-    @test PSIN.get_time_steps_in_duration(two_hourly, 1, 100.0) == 12
+    # Minimum up and down times are rounded up to a whole number of time steps, at least one
+    # and at most the length of the period.
+    @test PSIN.get_commitment_time_steps(hourly, 1, 3.0) == 3
+    @test PSIN.get_commitment_time_steps(two_hourly, 1, 3.0) == 2
+    @test PSIN.get_commitment_time_steps(two_hourly, 1, 4.0) == 2
+    @test PSIN.get_commitment_time_steps(two_hourly, 1, 0.5) == 1
+    @test PSIN.get_commitment_time_steps(two_hourly, 1, 0.0) == 1
+    @test PSIN.get_commitment_time_steps(two_hourly, 1, 100.0) == 12
+    # Exact multiples of the time step do not round up an extra step.
+    @test PSIN.get_commitment_time_steps(mixed, 1, 0.9 + 0.6) == 3
 end
 
 # One zone with a gas technology defined by a fuel curve, wind, storage and a demand. The
@@ -246,6 +252,12 @@ end
     )
     @test PSIN.get_time_step_weight(hourly, 1) == 365.0
     @test PSIN.get_time_step_weight(two_hourly, 1) == 730.0
+    # Costs per MWh are weighted by hours. Costs of starting up or shutting down capacity are
+    # per event, so they do not depend on the length of the time step.
+    @test PSIN.get_cost_weight(two_hourly, PSIN.ActivePowerVariable(), 1) == 730.0
+    @test PSIN.get_cost_weight(two_hourly, PSIN.CommittedCapacityVariable(), 1) == 730.0
+    @test PSIN.get_cost_weight(two_hourly, PSIN.StartUpCapacityVariable(), 1) == 365.0
+    @test PSIN.get_cost_weight(two_hourly, PSIN.ShutDownCapacityVariable(), 1) == 365.0
 
     # A MW dispatched during a 2-hour time step costs and burns twice as much as during a
     # 1-hour time step.

@@ -79,6 +79,8 @@ export TotalCapitalCost
 export FixedOperationModelCost
 export VariableOMCost
 export FuelCost
+export StartUpCost
+export ShutDownCost
 export FuelConsumptionExpression
 export EnergyBalance
 export CumulativePowerCapacity

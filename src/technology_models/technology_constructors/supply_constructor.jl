@@ -78,6 +78,11 @@ function construct_technologies!(
 
     # FuelConsumptionExpression
     add_expression!(container, FuelConsumptionExpression(), devices, C())
+    add_to_expression!(container, FuelConsumptionExpression(), devices, C())
+
+    # Start-up and shut-down costs
+    add_expression!(container, StartUpCost(), devices, C())
+    add_expression!(container, ShutDownCost(), devices, C())
     return
 end
 

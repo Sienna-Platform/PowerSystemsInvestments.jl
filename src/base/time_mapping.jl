@@ -32,10 +32,7 @@ function OperationalPeriods(::Nothing)
     )
 end
 
-"""
-Length in hours of the time steps of a representative period. The time stamps of a period
-must be evenly spaced. A period with a single time step is assumed to last one hour.
-"""
+# Hours per time step. A period with a single time step is assumed to last one hour.
 function _get_time_step_length(time_stamps::Vector{Dates.DateTime})
     if length(time_stamps) == 1
         return 1.0
@@ -132,7 +129,6 @@ function TimeMapping(
 end
 
 get_consecutive_slices(tm::TimeMapping) = tm.operation.consecutive_slices
-get_time_step_lengths(tm::TimeMapping) = tm.operation.time_step_lengths
 get_time_step_length(tm::TimeMapping, op_ix::Int) = tm.operation.time_step_lengths[op_ix]
 get_operational_indexes(tm::TimeMapping) = tm.operation.operational_indexes
 get_feasibility_indexes(tm::TimeMapping) = tm.operation.feasibility_indexes
@@ -163,24 +159,11 @@ is_feasibility_empty(tm::TimeMapping) = isempty(tm.operation.feasibility_indexes
 get_investment_map_to_operational_slices(tm::TimeMapping) =
     tm.investment.map_to_operational_slices
 
-"""
-Time step that comes `steps_back` steps before time step `t` in the representative period
-`op_ix`. Representative periods are cyclic: the time step before the first one is the last
-one of the same period.
-"""
+# Representative periods are cyclic: the time step before the first one is the last one
 function get_previous_time_step(tm::TimeMapping, op_ix::Int, t::Int, steps_back::Int=1)
     time_slices = get_consecutive_slices(tm)[op_ix]
     position = t - first(time_slices) + 1
     IS.@assert_op position >= 1
     IS.@assert_op position <= length(time_slices)
     return time_slices[mod1(position - steps_back, length(time_slices))]
-end
-
-"""
-Number of time steps of the representative period `op_ix` that cover `duration` hours,
-rounded to the nearest whole number and limited to the length of the period.
-"""
-function get_time_steps_in_duration(tm::TimeMapping, op_ix::Int, duration::Float64)
-    num_time_steps = round(Int, duration / get_time_step_length(tm, op_ix))
-    return clamp(num_time_steps, 0, length(get_consecutive_slices(tm)[op_ix]))
 end
