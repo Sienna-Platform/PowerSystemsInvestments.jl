@@ -302,6 +302,49 @@ end
           fuel_price .* weighting .* expression_values(FuelConsumptionExpression)
 end
 
+@testset "Thermal commitment no-load cost of a cost curve" begin
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    name = "expensive_thermal"
+    cost_per_mwh = 30.0
+    no_load_cost = 4.0
+    m = _commitment_cost_test_model(
+        ThermalGenerationCost(;
+            variable=CostCurve(LinearCurve(cost_per_mwh, no_load_cost)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    meta = string(ContinuousThermalCommitment)
+    variable(variable_type) =
+        PSIN.get_variable(container, variable_type, thermal_type, meta)
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    for t in (1, 30)
+        # The constant term is a cost per hour and MW committed, weighted like the cost of
+        # dispatch.
+        dispatch_cost =
+            JuMP.coefficient(objective, variable(PSIN.ActivePowerVariable())[name, t])
+        @test JuMP.coefficient(
+            objective,
+            variable(PSIN.CommittedCapacityVariable())[name, t],
+        ) ≈ dispatch_cost * no_load_cost / cost_per_mwh
+        @test JuMP.coefficient(
+            objective,
+            variable(PSIN.StartUpCapacityVariable())[name, t],
+        ) == 0.0
+    end
+    # A cost curve has no fuel.
+    @test !haskey(
+        PSIN.get_expressions(container),
+        PSIN.ExpressionKey(FuelConsumptionExpression, thermal_type, meta),
+    )
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+end
+
 @testset "Start-up costs by stages are not supported" begin
     m = _commitment_cost_test_model(
         ThermalGenerationCost(;

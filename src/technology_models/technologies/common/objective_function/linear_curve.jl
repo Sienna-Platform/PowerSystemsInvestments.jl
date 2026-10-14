@@ -295,7 +295,7 @@ function _add_linearcurve_cost!(
     return
 end
 
-# Committed capacity consumes the no-load fuel of its fuel curve
+# Committed capacity has the no-load term of its cost or fuel curve
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
     ::T,
@@ -304,7 +304,7 @@ function _add_cost_to_objective!(
     ::U,
     tech_model::String,
 ) where {T <: CommittedCapacityVariable, U <: AbstractTechnologyFormulation}
-    _add_commitment_fuel_cost_to_objective!(
+    _add_commitment_curve_cost_to_objective!(
         container,
         T(),
         technology,
@@ -334,7 +334,7 @@ function _add_cost_to_objective!(
         U(),
         tech_model,
     )
-    _add_commitment_fuel_cost_to_objective!(
+    _add_commitment_curve_cost_to_objective!(
         container,
         T(),
         technology,
@@ -409,7 +409,7 @@ function _add_start_up_cost_to_objective!(
     return
 end
 
-function _add_commitment_fuel_cost_to_objective!(
+function _add_commitment_curve_cost_to_objective!(
     container::SingleOptimizationContainer,
     ::T,
     technology::PSIP.Technology,
@@ -433,7 +433,7 @@ function _add_commitment_fuel_cost_to_objective!(
     return
 end
 
-function _add_commitment_fuel_cost_to_objective!(
+function _add_commitment_curve_cost_to_objective!(
     ::SingleOptimizationContainer,
     ::OperationsVariableType,
     ::PSIP.Technology,
@@ -442,6 +442,30 @@ function _add_commitment_fuel_cost_to_objective!(
     ::AbstractTechnologyFormulation,
     ::String,
 )
+    return
+end
+
+# The constant term of a cost curve is a cost per hour and MW committed
+function _add_commitment_curve_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.OperationalCost,
+    cost_curve::PSY.CostCurve{PSY.LinearCurve},
+    ::U,
+    tech_model::String,
+) where {T <: CommittedCapacityVariable, U <: AbstractTechnologyFormulation}
+    no_load_cost = PSY.get_constant_term(PSY.get_value_curve(cost_curve))
+    if !iszero(no_load_cost)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            technology,
+            om_cost,
+            objective_function_multiplier(T(), U()) * no_load_cost,
+            tech_model,
+        )
+    end
     return
 end
 
