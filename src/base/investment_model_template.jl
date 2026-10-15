@@ -47,6 +47,12 @@ get_capital_model(template::InvestmentModelTemplate) = template.capital_model
 get_operation_model(template::InvestmentModelTemplate) = template.operation_model
 get_feasibility_model(template::InvestmentModelTemplate) = template.feasibility_model
 
+# Called by the InvestmentModel constructor on its copy of the template. Investment
+# templates need no portfolio-dependent completion yet.
+function IOM.finalize_template!(::InvestmentModelTemplate, ::PSIP.Portfolio)
+    return
+end
+
 """
 Sets the network model in a template.
 """

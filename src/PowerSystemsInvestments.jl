@@ -433,7 +433,6 @@ include("base/investment_model_template.jl")
 include("base/objective_function.jl")
 include("base/optimization_container.jl")
 # Investment Model #
-include("investment_model/investment_model_store.jl")
 include("investment_model/investment_model.jl")
 include("investment_model/investment_problem_results.jl")
 # Serialization #

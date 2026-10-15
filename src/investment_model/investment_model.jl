@@ -21,175 +21,14 @@ function build_if_not_already_built!(model::InvestmentModel{<:AbstractInvestment
     return
 end
 
-function write_results!(
-    store,
-    model::InvestmentModel,
-    index::Dates.Date,
-    update_timestamp::Dates.Date;
-    exports=nothing,
-)
-    if exports !== nothing
-        export_params = Dict{Symbol, Any}(
-            :exports => exports,
-            :exports_path => joinpath(exports.path, string(IOM.get_name(model))),
-            :file_type => get_export_file_type(exports),
-            :resolution => get_resolution(model),
-            :horizon_count => get_horizon(get_settings(model)) ÷ get_resolution(model),
+# Called by the InvestmentModel constructor. Operational time series are read per
+# representative period during the build, so this only checks that there is data to read.
+function IOM.validate_time_series!(model::InvestmentModel{<:AbstractInvestmentProblem})
+    counts = IS.get_time_series_counts(get_portfolio(model).data)
+    if counts.static_time_series_count < 1
+        error(
+            "The portfolio does not contain any time series data. An InvestmentModel can't be built.",
         )
-    else
-        export_params = nothing
-    end
-
-    write_model_dual_results!(store, model, index, update_timestamp, export_params)
-    write_model_variable_results!(store, model, index, update_timestamp, export_params)
-    write_model_aux_variable_results!(store, model, index, update_timestamp, export_params)
-    write_model_expression_results!(store, model, index, update_timestamp, export_params)
-    return
-end
-
-function write_model_dual_results!(
-    store,
-    model::T,
-    index::Dates.Date,
-    update_timestamp::Dates.Date,
-    export_params::Union{Dict{Symbol, Any}, Nothing},
-) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
-    model_name = IOM.get_name(model)
-    if export_params !== nothing
-        exports_path = joinpath(export_params[:exports_path], "duals")
-        mkpath(exports_path)
-    end
-
-    for (key, constraint) in get_duals(container)
-        !should_write_resulting_value(get_entry_type(key)) && continue
-        data = jump_value.(constraint)
-        write_result!(store, model_name, key, index, update_timestamp, data)
-
-        if export_params !== nothing &&
-           should_export_dual(export_params[:exports], index, model_name, key)
-            horizon_count = export_params[:horizon_count]
-            resolution = export_params[:resolution]
-            file_type = export_params[:file_type]
-            df = to_dataframe(jump_value.(constraint), key)
-            time_col = range(index; length=horizon_count, step=resolution)
-            DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            export_output(file_type, exports_path, key, index, df)
-        end
-    end
-    return
-end
-
-function write_model_variable_results!(
-    store,
-    model::T,
-    index::Dates.Date,
-    update_timestamp::Dates.Date,
-    export_params::Union{Dict{Symbol, Any}, Nothing},
-) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
-    model_name = IOM.get_name(model)
-    if export_params !== nothing
-        exports_path = joinpath(export_params[:exports_path], "variables")
-        mkpath(exports_path)
-    end
-
-    if !isempty(container.primal_values_cache)
-        variables = container.primal_values_cache.variables_cache
-    else
-        variables = get_variables(container)
-    end
-
-    for (key, variable) in variables
-        !should_write_resulting_value(get_entry_type(key)) && continue
-        data = jump_value.(variable)
-        write_result!(store, model_name, key, index, update_timestamp, data)
-        if export_params !== nothing &&
-           should_export_variable(export_params[:exports], index, model_name, key)
-            horizon_count = export_params[:horizon_count]
-            resolution = export_params[:resolution]
-            file_type = export_params[:file_type]
-            df = to_dataframe(data, key)
-            time_col = range(index; length=horizon_count, step=resolution)
-            DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            export_output(file_type, exports_path, key, index, df)
-        end
-    end
-    return
-end
-
-function write_model_aux_variable_results!(
-    store,
-    model::T,
-    index::Dates.Date,
-    update_timestamp::Dates.Date,
-    export_params::Union{Dict{Symbol, Any}, Nothing},
-) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
-    model_name = IOM.get_name(model)
-    if export_params !== nothing
-        exports_path = joinpath(export_params[:exports_path], "aux_variables")
-        mkpath(exports_path)
-    end
-
-    for (key, variable) in get_aux_variables(container)
-        !should_write_resulting_value(get_entry_type(key)) && continue
-        data = jump_value.(variable)
-        write_result!(store, model_name, key, index, update_timestamp, data)
-
-        if export_params !== nothing &&
-           should_export_aux_variable(export_params[:exports], index, model_name, key)
-            horizon_count = export_params[:horizon_count]
-            resolution = export_params[:resolution]
-            file_type = export_params[:file_type]
-            df = to_dataframe(data, key)
-            time_col = range(index; length=horizon_count, step=resolution)
-            DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            export_output(file_type, exports_path, key, index, df)
-        end
-    end
-    return
-end
-
-function write_model_expression_results!(
-    store,
-    model::T,
-    index::Dates.Date,
-    update_timestamp::Dates.Date,
-    export_params::Union{Dict{Symbol, Any}, Nothing},
-) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
-    model_name = IOM.get_name(model)
-    if export_params !== nothing
-        exports_path = joinpath(export_params[:exports_path], "expressions")
-        mkpath(exports_path)
-    end
-
-    if !isempty(container.primal_values_cache)
-        expressions = container.primal_values_cache.expressions_cache
-    else
-        expressions = get_expressions(container)
-    end
-
-    for (key, expression) in expressions
-        !should_write_resulting_value(get_entry_type(key)) && continue
-        data = jump_value.(expression)
-        @show "====================================="
-        @show key
-        @show data
-        @show "====================================="
-        write_result!(store, model_name, key, index, update_timestamp, data)
-
-        if export_params !== nothing &&
-           should_export_expression(export_params[:exports], index, model_name, key)
-            horizon_count = export_params[:horizon_count]
-            resolution = export_params[:resolution]
-            file_type = export_params[:file_type]
-            df = to_dataframe(data, key)
-            time_col = range(index; length=horizon_count, step=resolution)
-            DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            export_output(file_type, exports_path, key, index, df)
-        end
     end
     return
 end
@@ -353,7 +192,8 @@ function solve!(
                     time_mapping = get_time_mapping(container)
                     current_time = get_base_date(time_mapping)
 
-                    write_results!(get_store(model), model, current_time, current_time)
+                    timestamp = Dates.DateTime(current_time)
+                    IOM.write_outputs!(get_store(model), model, timestamp, timestamp)
                     write_optimizer_stats!(
                         get_store(model),
                         get_optimizer_stats(model),
@@ -430,29 +270,16 @@ function _read_col_name(axes)
 end
 
 function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
-    @show "====================="
-    @show key
-    @show "====================="
-    store_data = read_results(get_store(model), key)  # OrderedDict{Date, DenseAxisArray{Float64,2}}
-    frames = DataFrames.DataFrame[]
-    t_offset = 0
-    for (_, arr) in store_data
-        col_names = string.(_read_col_name(axes(arr)))
-        n_times = size(arr.data, 2)
-        df_wide = DataFrames.DataFrame(permutedims(arr.data), col_names)
-        df_wide.time_index = (t_offset + 1):(t_offset + n_times)
-        push!(
-            frames,
-            DataFrames.stack(
-                df_wide,
-                DataFrames.Not(:time_index);
-                variable_name=:name,
-                value_name=:value,
-            ),
-        )
-        t_offset += n_times
-    end
-    return vcat(frames...)
+    arr = IOM.read_outputs(get_store(model), key)
+    col_names = string.(_read_col_name(axes(arr)))
+    df_wide = DataFrames.DataFrame(permutedims(arr.data), col_names)
+    df_wide.time_index = 1:size(arr.data, 2)
+    return DataFrames.stack(
+        df_wide,
+        DataFrames.Not(:time_index);
+        variable_name=:name,
+        value_name=:value,
+    )
 end
 
 read_optimizer_stats(model::InvestmentModel) = read_optimizer_stats(get_store(model))
