@@ -716,6 +716,18 @@ end
 
 ##### Build Models #######
 
+
+# Marginal variable cost ($/MWh) of an existing thermal unit: slope of the last segment of its
+# piecewise-linear fuel curve (the rated-output marginal cost)
+function _base_thermal_marginal_cost(device::PSY.ThermalStandard)
+    cost = PSY.get_operation_cost(device)
+    cost isa PSY.ThermalGenerationCost || return 0.0
+    variable = PSY.get_variable(cost)
+    variable isa InfrastructureSystems.ProductionVariableCostCurve || return 0.0
+    slopes = InfrastructureSystems.get_slopes(InfrastructureSystems.get_function_data(variable))
+    return isempty(slopes) ? 0.0 : Float64(last(slopes))
+end
+
 function construct_devices!(
     container::SingleOptimizationContainer,
     template::InvestmentModelTemplate,
@@ -783,6 +795,17 @@ function construct_devices!(
                     )
                     JuMP.set_lower_bound(dispatch_vars[name, t], 0.0)
                     JuMP.set_upper_bound(dispatch_vars[name, t], ub)
+                end
+            end
+
+            # Existing thermal units: add marginal fuel cost to the objective
+            for device in device_list
+                device isa PSY.ThermalStandard || continue
+                name = PSY.get_name(device)
+                marginal = _base_thermal_marginal_cost(device)
+                marginal > 0.0 || continue
+                for t in time_steps
+                    add_to_objective_operations_expression!(container, marginal * dispatch_vars[name, t])
                 end
             end
 
