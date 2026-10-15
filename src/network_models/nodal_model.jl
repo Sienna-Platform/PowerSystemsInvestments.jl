@@ -58,58 +58,22 @@ function add_constraints!(
     return
 end
 
-# Energy feasibility constraint for nodal model
-# Ensures system-wide energy balance can be violated with slack for infeasible scenarios
+# Capacity adequacy constraint for nodal model (same as single-region)
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    _container::SingleOptimizationContainer,
     ::Type{T},
-    port::U,
-) where {T <: SingleRegionBalanceFeasibilityConstraint, U <: PSIP.Portfolio}
-    @info "[NodalModel] Building energy feasibility constraint with slack"
-
-    time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
-    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
-    expressions = get_expression(container, FeasibilitySurplus(), U)
-    constraint = add_constraints_container!(container, T(), U, time_steps)
-
-    jm = get_jump_model(container)
-
-    # Check if energy slack is enabled
-    enable_energy_slack = try
-        Main.ENABLE_ENERGY_SLACK
-    catch
-        true
-    end
-
-    @info "[NodalModel] enable_energy_slack=$enable_energy_slack"
-
-    if enable_energy_slack
-        # Create slack variables for energy feasibility violations ($5k/MWh penalty)
-        @info "[NodalModel] Creating energy feasibility slack variables..."
-        slack_vars = @variable(jm, energy_feasibility_slack[t in time_steps] >= 0)
-        @info "[NodalModel] Created $(length(time_steps)) energy feasibility slack variables"
-
-        # Add constraints with slack: sum over all nodes >= -slack[t]
-        # This allows total generation < total load with slack covering the gap
-        for t in time_steps
-            total_surplus = sum(expressions[n, t] for n in nodes)
-            constraint[t] =
-                JuMP.@constraint(jm, total_surplus >= -slack_vars[t])
-        end
-
-        # Store slack variables for penalty accumulation
-        # NOTE: Objective is set in reserve margin function to accumulate all slack penalties
-        jm.ext[:energy_feasibility_slack] = slack_vars
-        @info "[NodalModel] Stored energy feasibility slack in jm.ext"
-    else
-        # Hard constraints (original behavior)
-        for t in time_steps
-            total_surplus = sum(expressions[n, t] for n in nodes)
-            constraint[t] =
-                JuMP.@constraint(jm, total_surplus >= 0)
-        end
-    end
-
+    _port::U,
+) where {T <: CapacityAdequacyConstraint, U <: PSIP.Portfolio}
+    # Note: This constraint is registered but intentionally does nothing during build.
+    # The capacity adequacy constraint is enforced through the energy balance and
+    # capacity requirements of individual technologies. The framework handles this
+    # automatically through:
+    # 1. TechnologyFinancialData.investment_limits setting maximum investment
+    # 2. ActivePowerLimitsConstraint ensuring dispatch ≤ installed capacity
+    # 3. CumulativeCapacity variables tracking built capacity over time
+    #
+    # If custom capacity adequacy logic with non-unity capacity credits is needed,
+    # it should be implemented at a different point in the build process after
+    # all variables have been created.
     return
 end

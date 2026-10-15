@@ -9,10 +9,16 @@ function add_constraints!(
     constraint = add_constraints_container!(container, T(), U, time_steps)
     jump_model = get_jump_model(container)
 
+    slack_pos = @variable(jump_model, single_region_balance_slack_pos[t in time_steps] >= 0)
+    slack_neg = @variable(jump_model, single_region_balance_slack_neg[t in time_steps] >= 0)
     for t in time_steps
         balance_expr = expressions[SINGLE_REGION, t]
-        constraint[t] = JuMP.@constraint(jump_model, balance_expr == 0)
+        constraint[t] = JuMP.@constraint(jump_model, balance_expr == slack_pos[t] - slack_neg[t])
     end
+
+    # Same keys as the nodal balance slacks so the planning penalty accumulation applies to both
+    jump_model.ext[:nodal_balance_slack_pos] = slack_pos
+    jump_model.ext[:nodal_balance_slack_neg] = slack_neg
 
     return
 end
@@ -41,10 +47,10 @@ function add_constraints!(
         slack_vars = @variable(jm, energy_feasibility_slack[t in time_steps] >= 0)
         energy_feasibility_slack_penalty = 1_000_000.0
 
-        # Add constraints with slack: expressions[SINGLE_REGION, t] >= -slack[t]
+        # Add constraints with slack: sum(expressions[k, t] for k in axes(expressions, 1)) >= -slack[t]
         for t in time_steps
             constraint[t] =
-                JuMP.@constraint(jm, expressions[SINGLE_REGION, t] >= -slack_vars[t])
+                JuMP.@constraint(jm, sum(expressions[k, t] for k in axes(expressions, 1)) >= -slack_vars[t])
         end
 
         # Store slack variables for penalty accumulation
@@ -54,7 +60,7 @@ function add_constraints!(
         # Hard constraints (original behavior)
         for t in time_steps
             constraint[t] =
-                JuMP.@constraint(jm, expressions[SINGLE_REGION, t] >= 0)
+                JuMP.@constraint(jm, sum(expressions[k, t] for k in axes(expressions, 1)) >= 0)
         end
     end
 
