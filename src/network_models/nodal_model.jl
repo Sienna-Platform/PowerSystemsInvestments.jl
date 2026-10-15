@@ -2,11 +2,11 @@
 # Structure mirrors multiregion_model.jl but uses PSIP.Node instead of PSIP.Zone.
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{T},
     port::U,
 ) where {T <: NodalBalanceConstraint, U <: PSIP.Portfolio}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
     expressions = get_expression(container, EnergyBalance(), U)

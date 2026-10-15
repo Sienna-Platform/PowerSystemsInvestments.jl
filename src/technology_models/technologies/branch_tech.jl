@@ -78,7 +78,7 @@ end
 ################## Expressions ###################
 
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -89,7 +89,7 @@ function add_expression!(
     U <: Vector{D},
 } where {D <: PSIP.AggregateTransportTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -117,7 +117,7 @@ function add_expression!(
 end
 
 function add_to_expression!(
-    ::SingleOptimizationContainer,
+    ::OptimizationContainer,
     ::T,
     ::U,
     ::BasicDispatch,
@@ -132,7 +132,7 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    ::SingleOptimizationContainer,
+    ::OptimizationContainer,
     ::T,
     ::U,
     ::BasicDispatch,
@@ -147,7 +147,22 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    ::OptimizationContainer,
+    ::T,
+    ::U,
+    ::BasicDispatch,
+    ::TransportModel{V},
+) where {
+    T <: EnergyBalance,
+    U <: Vector{D},
+    V <: SingleRegionBalanceModel,
+} where {D <: PSIP.NodalACTransportTechnology}
+    # Do nothing for Nodal Transport Paths in SingleRegion models
+    return
+end
+
+function add_to_expression!(
+    container::OptimizationContainer,
     ::T,
     devices::U,
     ::S,
@@ -159,7 +174,7 @@ function add_to_expression!(
     V <: MultiRegionBalanceModel,
 } where {D <: PSIP.AggregateTransportTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -171,8 +186,12 @@ function add_to_expression!(
         start_region = PSIP.get_name(PSIP.get_start_region(d))
         end_region = PSIP.get_name(PSIP.get_end_region(d))
         losses = PSIP.get_line_loss(d)
-        _add_to_jump_expression!(expression[start_region, t], variable[name, t], -1.0)
-        _add_to_jump_expression!(
+        add_proportional_to_jump_expression!(
+            expression[start_region, t],
+            variable[name, t],
+            -1.0,
+        )
+        add_proportional_to_jump_expression!(
             expression[end_region, t],
             variable[name, t],
             (1.0 - losses), # Losses are assumed in the end region
@@ -183,7 +202,7 @@ function add_to_expression!(
 end
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -196,7 +215,7 @@ function add_constraints!(
     V <: FlowActivePowerVariable,
     X <: TechnologyModel,
 } where {D <: PSIP.AggregateTransportTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -246,7 +265,7 @@ end
 
 # Maximum cumulative capacity
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -257,7 +276,7 @@ function add_constraints!(
     U <: Vector{D},
     V <: CumulativeCapacity,
 } where {D <: PSIP.AggregateTransportTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -287,7 +306,7 @@ end
 
 # Maximum cumulative capacity for NodalACTransportTechnology
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -298,7 +317,7 @@ function add_constraints!(
     U <: Vector{D},
     V <: CumulativeCapacity,
 } where {D <: PSIP.NodalACTransportTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -329,24 +348,26 @@ end
 ########################### Objective Function Calls#############################################
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.AggregateTransportTechnology, S <: ContinuousInvestment}
     tech_model = string(S)
-    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(container, port, BuildCapacity(), devices, formulation, tech_model)
     # TODO: Decide if we want to include fixed OM cost for Transport Paths
     #add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
     return
 end
 
 function objective_function!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
+    port::PSIP.Portfolio,
     devices::Vector{T},
     formulation::S,
 ) where {T <: PSIP.NodalACTransportTechnology, S <: ContinuousInvestment}
     tech_model = string(S)
-    add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(container, port, BuildCapacity(), devices, formulation, tech_model)
     return
 end
 
@@ -354,7 +375,7 @@ end
 
 # Energy balance contribution: negative at start node, positive at end node (no losses for now)
 function add_to_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     devices::U,
     ::S,
@@ -366,7 +387,7 @@ function add_to_expression!(
     V <: NodalBalanceModel,
 } where {D <: PSIP.NodalACTransportTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -378,8 +399,16 @@ function add_to_expression!(
         start_node = PSIP.get_name(PSIP.get_start_node(d))
         end_node = PSIP.get_name(PSIP.get_end_node(d))
         # Flow leaves start node, enters end node (no losses assumed)
-        _add_to_jump_expression!(expression[start_node, t], variable[name, t], -1.0)
-        _add_to_jump_expression!(expression[end_node, t], variable[name, t], 1.0)
+        add_proportional_to_jump_expression!(
+            expression[start_node, t],
+            variable[name, t],
+            -1.0,
+        )
+        add_proportional_to_jump_expression!(
+            expression[end_node, t],
+            variable[name, t],
+            1.0,
+        )
     end
 
     return
@@ -387,7 +416,7 @@ end
 
 # Constraints: |flow| <= cumulative capacity (two inequality constraints per line)
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::T,
     ::V,
     devices::U,
@@ -400,7 +429,7 @@ function add_constraints!(
     V <: FlowActivePowerVariable,
     X <: TechnologyModel,
 } where {D <: PSIP.NodalACTransportTechnology}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
     device_names = PSIP.get_name.(devices)
@@ -458,7 +487,7 @@ end
 # ============================================================================
 
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
@@ -469,7 +498,7 @@ function add_expression!(
     U <: Vector{D},
 } where {D <: PSIP.NodalACTransportTechnology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
 

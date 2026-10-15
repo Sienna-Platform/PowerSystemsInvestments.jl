@@ -1,77 +1,9 @@
-mutable struct InvestmentModel{S <: SolutionAlgorithm}
-    name::Symbol
-    template::InvestmentModelTemplate
-    portfolio::PSIP.Portfolio
-    internal::Union{Nothing, IOM.ModelInternal}
-    simulation_info::SimulationInfo
-    store::InvestmentModelStore
-    ext::Dict{String, Any}
-end
-
-function InvestmentModel(
-    template::AbstractInvestmentModelTemplate,
-    M::Type{SingleInstanceSolve},
-    portfolio::PSIP.Portfolio,
-    settings::Settings,
-    jump_model::Union{Nothing, JuMP.Model}=nothing;
-)
-    internal = IOM.ModelInternal(SingleOptimizationContainer(settings, jump_model))
-
-    model = InvestmentModel{M}(
-        :CEM,
-        template,
-        portfolio,
-        internal,
-        SimulationInfo(),
-        InvestmentModelStore(),
-        Dict{String, Any}(),
-    )
-    return model
-end
-
-function InvestmentModel(
-    template::AbstractInvestmentModelTemplate,
-    alg::Type{SingleInstanceSolve},
-    portfolio::PSIP.Portfolio,
-    jump_model::Union{Nothing, JuMP.Model}=nothing;
-    name=nothing,
-    optimizer=nothing,
-    horizon=UNSET_HORIZON,
-    resolution=UNSET_RESOLUTION,
-    portfolio_to_file=true,
-    optimizer_solve_log_print=false,
-    detailed_optimizer_stats=false,
-    calculate_conflict=false,
-    direct_mode_optimizer=false,
-    store_variable_names=false,
-    check_numerical_bounds=true,
-    initial_time=UNSET_INI_TIME,
-    time_series_cache_size::Int=IS.TIME_SERIES_CACHE_SIZE_BYTES,
-)
-    settings = Settings(
-        portfolio;
-        initial_time=initial_time,
-        time_series_cache_size=time_series_cache_size,
-        horizon=horizon,
-        resolution=resolution,
-        optimizer=optimizer,
-        direct_mode_optimizer=direct_mode_optimizer,
-        optimizer_solve_log_print=optimizer_solve_log_print,
-        detailed_optimizer_stats=detailed_optimizer_stats,
-        calculate_conflict=calculate_conflict,
-        portfolio_to_file=portfolio_to_file,
-        check_numerical_bounds=check_numerical_bounds,
-        store_variable_names=store_variable_names,
-    )
-    return InvestmentModel(template, alg, portfolio, settings, jump_model)
-end
-
 function build_impl!(::InvestmentModel{T}) where {T}
     error("Build not implemented for $T")
     return
 end
 
-function build_if_not_already_built!(model::InvestmentModel{<:SolutionAlgorithm}; kwargs...)
+function build_if_not_already_built!(model::InvestmentModel{<:AbstractInvestmentProblem}; kwargs...)
     status = get_status(model)
     if status == ModelBuildStatus.EMPTY
         if !haskey(kwargs, :output_dir)
@@ -84,236 +16,19 @@ function build_if_not_already_built!(model::InvestmentModel{<:SolutionAlgorithm}
         end
     end
     if status != ModelBuildStatus.BUILT
-        error("build! of the $(typeof(model)) $(get_name(model)) failed: $status")
+        error("build! of the $(typeof(model)) $(IOM.get_name(model)) failed: $status")
     end
     return
 end
 
-# Default implementations of getter/setter functions for InvestmentModel.
-is_built(model::InvestmentModel) =
-    IOM.get_status(get_internal(model)) == ModelBuildStatus.BUILT
-isempty(model::InvestmentModel) =
-    IOM.get_status(get_internal(model)) == ModelBuildStatus.EMPTY
-
-get_constraints(model::InvestmentModel) = IOM.get_constraints(get_internal(model))
-get_internal(model::InvestmentModel) = model.internal
-
-function get_jump_model(model::InvestmentModel)
-    return get_jump_model(IOM.get_container(get_internal(model)))
-end
-
-get_name(model::InvestmentModel) = model.name
-get_store(model::InvestmentModel) = model.store
-
-function get_optimization_container(model::InvestmentModel)
-    return IOM.get_optimization_container(get_internal(model))
-end
-
-function get_timestamps(model::InvestmentModel)
-    optimization_container = get_optimization_container(model)
-    start_time = get_initial_time(optimization_container)
-    resolution = get_resolution(model)
-    horizon_count = get_time_steps(optimization_container)[end]
-    return range(start_time; length=horizon_count, step=resolution)
-end
-
-# No Base Power for Portfolio models. Always in Natural Units.
-# TODO: Decide if we will remove base power
-get_problem_base_power(model::InvestmentModel) = 1.0
-get_settings(model::InvestmentModel) = get_optimization_container(model).settings
-get_optimizer_stats(model::InvestmentModel) =
-    get_optimizer_stats(get_optimization_container(model))
-
-get_status(model::InvestmentModel) = IOM.get_status(get_internal(model))
-get_portfolio(model::InvestmentModel) = model.portfolio
-get_template(model::InvestmentModel) = model.template
-get_time_stamps(model::InvestmentModel) =
-    get_time_stamps(model.internal.container.time_mapping)
-
-get_store_params(model::InvestmentModel) = IOM.get_store_params(get_internal(model))
-get_output_dir(model::InvestmentModel) = IOM.get_output_dir(get_internal(model))
-get_recorder_dir(model::InvestmentModel) = joinpath(get_output_dir(model), "recorder")
-
-get_variables(model::InvestmentModel) = get_variables(get_optimization_container(model))
-get_duals(model::InvestmentModel) = get_duals(get_optimization_container(model))
-get_initial_conditions(model::InvestmentModel) =
-    get_initial_conditions(get_optimization_container(model))
-
-get_simulation_info(model::InvestmentModel) = model.simulation_info
-get_executions(model::InvestmentModel) = IOM.get_executions(get_internal(model))
-
-get_run_status(model::InvestmentModel) = get_run_status(get_simulation_info(model))
-set_run_status!(model::InvestmentModel, status) =
-    set_run_status!(get_simulation_info(model), status)
-
-get_initial_time(model::InvestmentModel) = get_initial_time(get_settings(model))
-get_resolution(model::InvestmentModel) = get_resolution(get_settings(model))
-
-function write_results!(
-    store,
-    model::InvestmentModel,
-    index::Dates.Date,
-    update_timestamp::Dates.Date;
-    exports=nothing,
-)
-    if exports !== nothing
-        export_params = Dict{Symbol, Any}(
-            :exports => exports,
-            :exports_path => joinpath(exports.path, string(get_name(model))),
-            :file_type => get_export_file_type(exports),
-            :resolution => get_resolution(model),
-            :horizon_count => get_horizon(get_settings(model)) ÷ get_resolution(model),
+# Called by the InvestmentModel constructor. Operational time series are read per
+# representative period during the build, so this only checks that there is data to read.
+function IOM.validate_time_series!(model::InvestmentModel{<:AbstractInvestmentProblem})
+    counts = IS.get_time_series_counts(get_portfolio(model).data)
+    if counts.static_time_series_count < 1
+        error(
+            "The portfolio does not contain any time series data. An InvestmentModel can't be built.",
         )
-    else
-        export_params = nothing
-    end
-
-    write_model_dual_results!(store, model, index, update_timestamp, export_params)
-    write_model_variable_results!(store, model, index, update_timestamp, export_params)
-    write_model_aux_variable_results!(store, model, index, update_timestamp, export_params)
-    write_model_expression_results!(store, model, index, update_timestamp, export_params)
-    return
-end
-
-function write_model_dual_results!(
-    store,
-    model::T,
-    index::Dates.Date,
-    update_timestamp::Dates.Date,
-    export_params::Union{Dict{Symbol, Any}, Nothing},
-) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
-    model_name = get_name(model)
-    if export_params !== nothing
-        exports_path = joinpath(export_params[:exports_path], "duals")
-        mkpath(exports_path)
-    end
-
-    for (key, constraint) in get_duals(container)
-        !should_write_resulting_value(get_entry_type(key)) && continue
-        data = jump_value.(constraint)
-        write_result!(store, model_name, key, index, update_timestamp, data)
-
-        if export_params !== nothing &&
-           should_export_dual(export_params[:exports], index, model_name, key)
-            horizon_count = export_params[:horizon_count]
-            resolution = export_params[:resolution]
-            file_type = export_params[:file_type]
-            df = to_dataframe(jump_value.(constraint), key)
-            time_col = range(index; length=horizon_count, step=resolution)
-            DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            IOM.export_output(file_type, exports_path, key, index, df)
-        end
-    end
-    return
-end
-
-function write_model_variable_results!(
-    store,
-    model::T,
-    index::Dates.Date,
-    update_timestamp::Dates.Date,
-    export_params::Union{Dict{Symbol, Any}, Nothing},
-) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
-    model_name = get_name(model)
-    if export_params !== nothing
-        exports_path = joinpath(export_params[:exports_path], "variables")
-        mkpath(exports_path)
-    end
-
-    if !isempty(container.primal_values_cache)
-        variables = container.primal_values_cache.variables_cache
-    else
-        variables = get_variables(container)
-    end
-
-    for (key, variable) in variables
-        !should_write_resulting_value(get_entry_type(key)) && continue
-        data = jump_value.(variable)
-        write_result!(store, model_name, key, index, update_timestamp, data)
-        if export_params !== nothing &&
-           should_export_variable(export_params[:exports], index, model_name, key)
-            horizon_count = export_params[:horizon_count]
-            resolution = export_params[:resolution]
-            file_type = export_params[:file_type]
-            df = to_dataframe(data, key)
-            time_col = range(index; length=horizon_count, step=resolution)
-            DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            IOM.export_output(file_type, exports_path, key, index, df)
-        end
-    end
-    return
-end
-
-function write_model_aux_variable_results!(
-    store,
-    model::T,
-    index::Dates.Date,
-    update_timestamp::Dates.Date,
-    export_params::Union{Dict{Symbol, Any}, Nothing},
-) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
-    model_name = get_name(model)
-    if export_params !== nothing
-        exports_path = joinpath(export_params[:exports_path], "aux_variables")
-        mkpath(exports_path)
-    end
-
-    for (key, variable) in get_aux_variables(container)
-        !should_write_resulting_value(get_entry_type(key)) && continue
-        data = jump_value.(variable)
-        write_result!(store, model_name, key, index, update_timestamp, data)
-
-        if export_params !== nothing &&
-           should_export_aux_variable(export_params[:exports], index, model_name, key)
-            horizon_count = export_params[:horizon_count]
-            resolution = export_params[:resolution]
-            file_type = export_params[:file_type]
-            df = to_dataframe(data, key)
-            time_col = range(index; length=horizon_count, step=resolution)
-            DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            IOM.export_output(file_type, exports_path, key, index, df)
-        end
-    end
-    return
-end
-
-function write_model_expression_results!(
-    store,
-    model::T,
-    index::Dates.Date,
-    update_timestamp::Dates.Date,
-    export_params::Union{Dict{Symbol, Any}, Nothing},
-) where {T <: InvestmentModel}
-    container = get_optimization_container(model)
-    model_name = get_name(model)
-    if export_params !== nothing
-        exports_path = joinpath(export_params[:exports_path], "expressions")
-        mkpath(exports_path)
-    end
-
-    if !isempty(container.primal_values_cache)
-        expressions = container.primal_values_cache.expressions_cache
-    else
-        expressions = get_expressions(container)
-    end
-
-    for (key, expression) in expressions
-        !should_write_resulting_value(get_entry_type(key)) && continue
-        data = jump_value.(expression)
-        write_result!(store, model_name, key, index, update_timestamp, data)
-
-        if export_params !== nothing &&
-           should_export_expression(export_params[:exports], index, model_name, key)
-            horizon_count = export_params[:horizon_count]
-            resolution = export_params[:resolution]
-            file_type = export_params[:file_type]
-            df = to_dataframe(data, key)
-            time_col = range(index; length=horizon_count, step=resolution)
-            DataFrames.insertcols!(df, 1, :DateTime => time_col)
-            IOM.export_output(file_type, exports_path, key, index, df)
-        end
     end
     return
 end
@@ -328,7 +43,7 @@ function init_model_store_params!(model::InvestmentModel)
     interval = resolution
     num_executions = get_executions(model)
 
-    store_params = IOM.ModelStoreParams(
+    store_params = ModelStoreParams(
         num_executions,
         horizon_count,
         interval,
@@ -337,7 +52,7 @@ function init_model_store_params!(model::InvestmentModel)
         port_uuid,
         get_metadata(container),
     )
-    IOM.set_store_params!(get_internal(model), store_params)
+    set_store_params!(get_internal(model), store_params)
     return
 end
 
@@ -353,7 +68,7 @@ function build_pre_step!(model::InvestmentModel)
         # Initial time are set here because the information is specified in the
         # Simulation Sequence object and not at the problem creation.
         @info "Initializing Optimization Container For an InvestmentModel"
-        init_optimization_container!(
+        IOM.init_optimization_container!(
             get_optimization_container(model),
             get_template(model),
             get_portfolio(model),
@@ -369,14 +84,14 @@ Build the Investment Model.
 
 # Arguments
 
-    - `model::InvestmentModel{<:SolutionAlgorithm}`: InvestmentModel object
+    - `model::InvestmentModel{<:AbstractInvestmentProblem}`: InvestmentModel object
     - `output_dir::String`: Output directory for results
     - `console_level = Logging.Error`:
     - `file_level = Logging.Info`:
     - `disable_timer_outputs = false` : Enable/Disable timing outputs
 """
 function build!(
-    model::InvestmentModel{<:SolutionAlgorithm};
+    model::InvestmentModel{<:AbstractInvestmentProblem};
     output_dir::String,
     console_level=Logging.Error,
     file_level=Logging.Info,
@@ -394,13 +109,13 @@ function build!(
     try
         Logging.with_logger(logger) do
             try
-                TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Model $(get_name(model))" begin
+                TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Model $(IOM.get_name(model))" begin
                     build_impl!(model)
                 end
-                set_status!(model, ISOPT.ModelBuildStatus.BUILT)
+                set_status!(model, ModelBuildStatus.BUILT)
                 @info "\n$(BUILD_PROBLEMS_TIMER)\n"
             catch e
-                set_status!(model, ISOPT.ModelBuildStatus.FAILED)
+                set_status!(model, ModelBuildStatus.FAILED)
                 bt = catch_backtrace()
                 @error "InvestmentModel Build Failed" exception = e, bt
             end
@@ -412,8 +127,33 @@ function build!(
     return get_status(model)
 end
 
+function reset!(model::InvestmentModel{<:AbstractInvestmentProblem})
+    was_built_for_recurrent_solves = built_for_recurrent_solves(model)
+    if was_built_for_recurrent_solves
+        IOM.set_execution_count!(model, 0)
+    end
+    port = IOM.get_portfolio(model)
+    IOM.set_container!(
+        get_internal(model),
+        OptimizationContainer(
+            port,
+            get_settings(model),
+            nothing,
+            IS.SingleTimeSeries
+        ),
+    )
+    get_optimization_container(model).built_for_recurrent_solves =
+        was_built_for_recurrent_solves
+    internal = get_internal(model)
+    IOM.set_initial_conditions_model_container!(internal, nothing)
+    IOM.empty_time_series_cache!(model)
+    empty!(get_store(model))
+    set_status!(model, ModelBuildStatus.EMPTY)
+    return
+end
+
 function solve!(
-    model::InvestmentModel{<:SolutionAlgorithm};
+    model::InvestmentModel{<:AbstractInvestmentProblem};
     export_problem_results=false,
     console_level=Logging.Error,
     file_level=Logging.Info,
@@ -434,7 +174,7 @@ function solve!(
     disable_timer_outputs && TimerOutputs.disable_timer!(RUN_OPERATION_MODEL_TIMER)
     file_mode = "a"
     register_recorders!(model, file_mode)
-    logger = IOM.configure_logging(get_internal(model), PROBLEM_LOG_FILENAME, file_mode)
+    logger = configure_logging(get_internal(model), PROBLEM_LOG_FILENAME, file_mode)
     optimizer = get(kwargs, :optimizer, nothing)
     try
         Logging.with_logger(logger) do
@@ -452,7 +192,8 @@ function solve!(
                     time_mapping = get_time_mapping(container)
                     current_time = get_base_date(time_mapping)
 
-                    write_results!(get_store(model), model, current_time, current_time)
+                    timestamp = Dates.DateTime(current_time)
+                    IOM.write_outputs!(get_store(model), model, timestamp, timestamp)
                     write_optimizer_stats!(
                         get_store(model),
                         get_optimizer_stats(model),
@@ -490,27 +231,19 @@ function solve_impl!(model::InvestmentModel)
     status = solve_model!(container, get_portfolio(model))
     set_run_status!(model, status)
     if status != RunStatus.SUCCESSFULLY_FINALIZED
-        model_name = get_name(model)
+        model_name = IOM.get_name(model)
+        ts = get_initial_time(model)
+        settings = get_settings(model)
         output_dir = get_output_dir(model)
         infeasible_opt_path = joinpath(output_dir, "infeasible_$(model_name).json")
         @error("Serializing Infeasible Problem at $(infeasible_opt_path)")
         serialize_optimization_model(container, infeasible_opt_path)
-        error("Solving model $(model_name) failed")
+        if !get_allow_fails(settings)
+            error("Solving model $(model_name) failed at $(ts)")
+        else
+            @error "Solving model $(model_name) failed at $(ts). Failure Allowed"
+        end
     end
-    return
-end
-
-set_console_level!(model::InvestmentModel, val) =
-    IOM.set_console_level!(get_internal(model), val)
-set_file_level!(model::InvestmentModel, val) = IOM.set_file_level!(get_internal(model), val)
-
-function set_status!(model::InvestmentModel, status::ISOPT.ModelBuildStatus)
-    IOM.set_status!(get_internal(model), status)
-    return
-end
-
-function set_output_dir!(model::InvestmentModel, path::AbstractString)
-    IOM.set_output_dir!(get_internal(model), path)
     return
 end
 
@@ -537,39 +270,32 @@ function _read_col_name(axes)
 end
 
 function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
-    store_data = read_results(get_store(model), key)  # OrderedDict{Date, DenseAxisArray{Float64,2}}
-    frames = DataFrames.DataFrame[]
-    t_offset = 0
-    for (_, arr) in store_data
-        col_names = string.(_read_col_name(axes(arr)))
-        n_times = size(arr.data, 2)
-        df_wide = DataFrames.DataFrame(permutedims(arr.data), col_names)
-        df_wide.time_index = (t_offset + 1):(t_offset + n_times)
-        push!(
-            frames,
-            DataFrames.stack(
-                df_wide,
-                DataFrames.Not(:time_index);
-                variable_name=:name,
-                value_name=:value,
-            ),
-        )
-        t_offset += n_times
-    end
-    return vcat(frames...)
+    arr = IOM.read_outputs(get_store(model), key)
+    col_names = string.(_read_col_name(axes(arr)))
+    df_wide = DataFrames.DataFrame(permutedims(arr.data), col_names)
+    df_wide.time_index = 1:size(arr.data, 2)
+    return DataFrames.stack(
+        df_wide,
+        DataFrames.Not(:time_index);
+        variable_name=:name,
+        value_name=:value,
+    )
 end
 
 read_optimizer_stats(model::InvestmentModel) = read_optimizer_stats(get_store(model))
 
 list_aux_variable_keys(x::InvestmentModel) =
-    IOM.list_keys(get_store(x), ISOPT.AuxVariableType)
-list_aux_variable_names(x::InvestmentModel) = _list_names(x, ISOPT.AuxVariableType)
-list_variable_keys(x::InvestmentModel) = IOM.list_keys(get_store(x), ISOPT.VariableType)
-list_variable_names(x::InvestmentModel) = _list_names(x, ISOPT.VariableType)
-list_dual_keys(x::InvestmentModel) = IOM.list_keys(get_store(x), ISOPT.ConstraintType)
-list_dual_names(x::InvestmentModel) = _list_names(x, ISOPT.ConstraintType)
-list_expression_keys(x::InvestmentModel) = IOM.list_keys(get_store(x), ISOPT.ExpressionType)
-list_expression_names(x::InvestmentModel) = _list_names(x, ISOPT.ExpressionType)
+    list_keys(get_store(x), AuxVariableType)
+list_aux_variable_names(x::InvestmentModel) = _list_names(x, AuxVariableType)
+list_variable_keys(x::InvestmentModel) =
+    list_keys(get_store(x), VariableType)
+list_variable_names(x::InvestmentModel) = _list_names(x, VariableType)
+list_dual_keys(x::InvestmentModel) =
+    list_keys(get_store(x), ConstraintType)
+list_dual_names(x::InvestmentModel) = _list_names(x, ConstraintType)
+list_expression_keys(x::InvestmentModel) =
+    list_keys(get_store(x), ExpressionType)
+list_expression_names(x::InvestmentModel) = _list_names(x, ExpressionType)
 
 function list_all_keys(x::InvestmentModel)
     return Iterators.flatten(
@@ -577,23 +303,22 @@ function list_all_keys(x::InvestmentModel)
     )
 end
 
-function _list_names(
-    model::InvestmentModel,
-    container_type::Type{<:ISOPT.OptimizationKeyType},
-)
-    return encode_keys_as_strings(IOM.list_keys(get_store(model), container_type))
+function _list_names(model::InvestmentModel, container_type::Type{T}) where {T <: OptimizationKeyType}
+    return encode_keys_as_strings(
+        list_keys(get_store(model), container_type),
+    )
 end
 
 function register_recorders!(model::InvestmentModel, file_mode)
     recorder_dir = get_recorder_dir(model)
     mkpath(recorder_dir)
-    for name in IOM.get_recorders(get_internal(model))
+    for name in get_recorders(get_internal(model))
         IS.register_recorder!(name; mode=file_mode, directory=recorder_dir)
     end
 end
 
 function unregister_recorders!(model::InvestmentModel)
-    for name in IOM.get_recorders(get_internal(model))
+    for name in get_recorders(get_internal(model))
         IS.unregister_recorder!(name)
     end
 end

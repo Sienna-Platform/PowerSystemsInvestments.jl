@@ -1,13 +1,3 @@
-abstract type SparseVariableType <: ISOPT.VariableType end
-
-abstract type InvestmentVariableType <: ISOPT.VariableType end
-abstract type OperationsVariableType <: ISOPT.VariableType end
-abstract type FeasibilityVariableType <: ISOPT.VariableType end
-
-### Investment Variables ###
-
-abstract type BuildInvestmentVariableType <: InvestmentVariableType end
-
 """
 Total installed capacity for a technology
 """
@@ -82,11 +72,3 @@ struct ActivePowerSolarVariable <: OperationsVariableType end
 Struct to dispatch the creation of bidirectional Active Power Flow Variables
 """
 struct FlowActivePowerVariable <: OperationsVariableType end
-
-is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
-is_operation_entry(::Type{<:OperationsVariableType}) = true
-is_operation_entry(::Type{<:InvestmentVariableType}) = false
-
-is_investment_entry(::Type{<:ISOPT.VariableType}) = error()
-is_investment_entry(::Type{<:OperationsVariableType}) = false
-is_investment_entry(::Type{<:InvestmentVariableType}) = true

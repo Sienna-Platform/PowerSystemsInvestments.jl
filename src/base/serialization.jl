@@ -29,7 +29,7 @@ end
 struct ProblemSerializationWrapper
     template::InvestmentModelTemplate
     sys::Union{Nothing, String}
-    settings::Settings
+    settings::IOM.Settings
     model_type::DataType
     name::String
     optimizer::OptimizerAttributes
@@ -48,7 +48,7 @@ function serialize_problem(model::InvestmentModel; optimizer=nothing)
     else
         portfolio_filename = nothing
     end
-    container = get_optimization_container(model)
+    container = IOM.get_optimization_container(model)
 
     if optimizer === nothing
         optimizer = get_optimizer(get_settings(model))
@@ -58,9 +58,9 @@ function serialize_problem(model::InvestmentModel; optimizer=nothing)
     obj = ProblemSerializationWrapper(
         model.template,
         portfolio_filename,
-        container.settings_copy,
+        get_settings(model),
         typeof(model),
-        string(get_name(model)),
+        string(IOM.get_name(model)),
         OptimizerAttributes(model, optimizer),
     )
     bin_file_name = joinpath(get_output_dir(model), _SERIALIZED_MODEL_FILENAME)

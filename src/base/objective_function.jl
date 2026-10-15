@@ -1,47 +1,45 @@
-mutable struct ObjectiveFunction
-    expression::JuMP.AbstractJuMPScalar
-    capital_terms::JuMP.AbstractJuMPScalar
-    operation_terms::JuMP.AbstractJuMPScalar
-    sense::MOI.OptimizationSense
-    function ObjectiveFunction(
-        capital_terms::JuMP.AbstractJuMPScalar,
-        operation_terms::JuMP.AbstractJuMPScalar,
-        sense::MOI.OptimizationSense=MOI.MIN_SENSE,
-    )
-        new(zero(JuMP.AffExpr), capital_terms, operation_terms, sense)
-    end
+# PSI uses IOM.ObjectiveFunction directly.
+# PSI's public API keeps explicit capital/operation term accessors; maintain a sidecar map for
+# those terms while IOM stores solver-facing invariant/variant expressions.
+
+mutable struct _PSIObjectiveTerms
+    capital_terms
+    operation_terms
 end
 
-get_capital_terms(v::ObjectiveFunction) = v.capital_terms
-get_operation_terms(v::ObjectiveFunction) = v.operation_terms
+const _OBJECTIVE_TERMS = IdDict{IOM.ObjectiveFunction, _PSIObjectiveTerms}()
+const _LAST_OBJECTIVE_FUNCTION = Ref{Union{Nothing, IOM.ObjectiveFunction}}(nothing)
 
-function get_objective_expression(v::ObjectiveFunction)
-    return v.capital_terms + v.operation_terms
+function _register_objective_function!(obj::IOM.ObjectiveFunction)
+    _OBJECTIVE_TERMS[obj] = _PSIObjectiveTerms(zero(JuMP.AffExpr), zero(JuMP.AffExpr))
+    _LAST_OBJECTIVE_FUNCTION[] = obj
+    return
 end
-get_sense(v::ObjectiveFunction) = v.sense
 
-set_sense!(v::ObjectiveFunction, sense::MOI.OptimizationSense) = v.sense = sense
+function _track_objective_capital_terms!(obj::IOM.ObjectiveFunction, expr)
+    terms = get!(_OBJECTIVE_TERMS, obj, _PSIObjectiveTerms(zero(JuMP.AffExpr), zero(JuMP.AffExpr)))
+    terms.capital_terms = terms.capital_terms + expr
+    return
+end
+
+function _track_objective_operation_terms!(obj::IOM.ObjectiveFunction, expr)
+    terms = get!(_OBJECTIVE_TERMS, obj, _PSIObjectiveTerms(zero(JuMP.AffExpr), zero(JuMP.AffExpr)))
+    terms.operation_terms = terms.operation_terms + expr
+    return
+end
 
 function ObjectiveFunction()
-    return ObjectiveFunction(zero(JuMP.AffExpr), zero(JuMP.AffExpr), MOI.MIN_SENSE)
+    obj = _LAST_OBJECTIVE_FUNCTION[]
+    return isnothing(obj) ? IOM.ObjectiveFunction() : obj
 end
 
-function add_to_capital_terms(v::ObjectiveFunction, val::Union{JuMP.AffExpr, Float64})
-    JuMP.add_to_expression!(v.capital_terms, val)
-    return
+function get_capital_terms(v::IOM.ObjectiveFunction)
+    return get(_OBJECTIVE_TERMS, v, _PSIObjectiveTerms(IOM.get_invariant_terms(v), IOM.get_variant_terms(v))).capital_terms
 end
 
-function add_to_operation_terms(v::ObjectiveFunction, val::Union{JuMP.AffExpr, Float64})
-    JuMP.add_to_expression!(v.operation_terms, val)
-    return
+function get_operation_terms(v::IOM.ObjectiveFunction)
+    return get(_OBJECTIVE_TERMS, v, _PSIObjectiveTerms(IOM.get_invariant_terms(v), IOM.get_variant_terms(v))).operation_terms
 end
 
-function add_to_capital_terms(v::ObjectiveFunction, val::JuMP.QuadExpr)
-    v.capital_terms += val
-    return
-end
-
-function add_to_operation_terms(v::ObjectiveFunction, val::JuMP.QuadExpr)
-    v.operation_terms += val
-    return
-end
+get_sense(v::IOM.ObjectiveFunction) = IOM.get_sense(v)
+set_sense!(v::IOM.ObjectiveFunction, sense::MOI.OptimizationSense) = IOM.set_sense!(v, sense)

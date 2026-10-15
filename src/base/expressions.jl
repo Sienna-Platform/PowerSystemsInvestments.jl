@@ -1,9 +1,3 @@
-abstract type InvestmentExpressionType <: ISOPT.ExpressionType end
-abstract type OperationsExpressionType <: ISOPT.ExpressionType end
-abstract type FeasibilityExpressionType <: ISOPT.ExpressionType end
-
-abstract type CumulativeInvestmentExpressionType <: InvestmentExpressionType end
-
 struct SupplyTotal <: OperationsExpressionType end
 struct DemandTotal <: OperationsExpressionType end
 struct EnergyBalance <: OperationsExpressionType end
@@ -27,7 +21,7 @@ struct CumulativeInverterCapacity <: CumulativeInvestmentExpressionType end
 struct CapitalCost <: InvestmentExpressionType end
 struct FixedOperationModelCost <: InvestmentExpressionType end
 
-struct TotalCapitalCost <: ISOPT.ExpressionType end
+struct TotalCapitalCost <: ExpressionType end
 
 struct VariableOMCost <: OperationsExpressionType end
 
@@ -44,9 +38,3 @@ should_write_resulting_value(::Type{WeightedEnergyGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyDemand}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareDemand}) = true
-
-is_operation_entry(::Type{<:OperationsExpressionType}) = true
-is_operation_entry(::Type{<:InvestmentExpressionType}) = false
-
-is_investment_entry(::Type{<:OperationsExpressionType}) = false
-is_investment_entry(::Type{<:InvestmentExpressionType}) = true
