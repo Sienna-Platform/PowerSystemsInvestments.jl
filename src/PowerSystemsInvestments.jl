@@ -129,6 +129,8 @@ import Logging
 import TimerOutputs
 import Serialization
 import DataFrames
+import LinearAlgebra
+import SparseArrays
 
 const IS = InfrastructureSystems
 const ISOPT = InfrastructureSystems.Optimization
@@ -271,6 +273,7 @@ include("technology_models/technologies/storage_tech.jl")
 include("technology_models/technologies/colocated_tech.jl")
 include("technology_models/technologies/branch_tech.jl")
 # Network #
+include("network_models/network_matrices.jl")
 include("network_models/singleregion_model.jl")
 include("network_models/multiregion_model.jl")
 include("network_models/nodal_model.jl")
