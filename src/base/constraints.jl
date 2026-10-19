@@ -4,6 +4,8 @@ abstract type MaximumCumulativeInvestmentConstraint <: ISOPT.ConstraintType end
 
 struct MaximumCumulativeCapacity <: MaximumCumulativeInvestmentConstraint end
 
+struct SingleUnitInvestmentConstraint <: ISOPT.ConstraintType end
+
 struct MaximumCumulativePowerCapacity <: MaximumCumulativeInvestmentConstraint end
 
 struct MaximumCumulativeEnergyCapacity <: MaximumCumulativeInvestmentConstraint end

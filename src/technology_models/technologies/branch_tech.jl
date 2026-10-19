@@ -1,11 +1,14 @@
 #! format: off
-_supported_investment_formulations(::Type{<:PSIP.AggregateTransportTechnology}) = (ContinuousInvestment,)
-_supported_investment_formulations(::Type{<:PSIP.NodalACTransportTechnology}) = (ContinuousInvestment,)
+_supported_investment_formulations(::Type{<:PSIP.AggregateTransportTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment)
+_supported_investment_formulations(::Type{<:PSIP.NodalACTransportTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment)
 
 # New capacity is limited by the maximum cumulative capacity constraint, which accounts for
 # the existing capacity
 get_variable_upper_bound(::BuildCapacity, d::PSIP.TransmissionTechnology, ::InvestmentTechnologyFormulation) = nothing
 get_variable_lower_bound(::BuildCapacity, d::PSIP.TransmissionTechnology, ::InvestmentTechnologyFormulation) = 0.0
+
+# Capacity (MW) added by one unit of the build variable
+get_variable_multiplier(::BuildCapacity, d::PSIP.TransmissionTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = PSIP.get_unit_size(d)
 
 # Aggregate flows are only limited by the cumulative capacity constraints
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTechnology, ::OperationsTechnologyFormulation) = nothing
@@ -58,7 +61,7 @@ function add_expression!(
     formulation::S,
 ) where {
     T <: CumulativeCapacity,
-    S <: AbstractTechnologyFormulation,
+    S <: ContinuousInvestment,
     U <: Vector{D},
 } where {D <: PSIP.AggregateTransportTechnology}
     IS.@assert_op length(devices) > 0
@@ -83,6 +86,47 @@ function add_expression!(
         running = JuMP.AffExpr(init_cap)
         for t in time_steps
             JuMP.add_to_expression!(running, var[name, t])
+            expression[name, t] = copy(running)
+        end
+    end
+
+    return
+end
+
+# Discrete investments count units of unit_size MW
+function add_expression!(
+    container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
+    expression_type::T,
+    devices::U,
+    formulation::S,
+) where {
+    T <: CumulativeCapacity,
+    S <: Union{IntegerInvestment, BinaryInvestment},
+    U <: Vector{D},
+} where {D <: Union{PSIP.AggregateTransportTechnology, PSIP.NodalACTransportTechnology}}
+    IS.@assert_op length(devices) > 0
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(S)
+
+    var = get_variable(container, BuildCapacity(), D, tech_model)
+
+    expression = add_expression_container!(
+        container,
+        expression_type,
+        D,
+        [PSIP.get_name(d) for d in devices],
+        time_steps,
+        meta=tech_model,
+    )
+
+    for d in devices
+        name = PSIP.get_name(d)
+        unit_size = get_unit_size(BuildCapacity(), d, S())
+        running = JuMP.AffExpr(PSIP.get_existing_capacity_mw(portfolio, d))
+        for t in time_steps
+            JuMP.add_to_expression!(running, var[name, t], unit_size)
             expression[name, t] = copy(running)
         end
     end
@@ -227,7 +271,7 @@ function add_constraints!(
     formulation::S,
 ) where {
     T <: MaximumCumulativeCapacity,
-    S <: ContinuousInvestment,
+    S <: InvestmentTechnologyFormulation,
     U <: Vector{D},
     V <: CumulativeCapacity,
 } where {D <: PSIP.AggregateTransportTechnology}
@@ -269,7 +313,7 @@ function add_constraints!(
     formulation::S,
 ) where {
     T <: MaximumCumulativeCapacity,
-    S <: ContinuousInvestment,
+    S <: InvestmentTechnologyFormulation,
     U <: Vector{D},
     V <: CumulativeCapacity,
 } where {D <: PSIP.NodalACTransportTechnology}
@@ -308,7 +352,7 @@ function objective_function!(
     container::SingleOptimizationContainer,
     devices::Vector{T},
     formulation::S,
-) where {T <: PSIP.AggregateTransportTechnology, S <: ContinuousInvestment}
+) where {T <: PSIP.AggregateTransportTechnology, S <: InvestmentTechnologyFormulation}
     tech_model = string(S)
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     # TODO: Decide if we want to include fixed OM cost for Transport Paths
@@ -320,7 +364,7 @@ function objective_function!(
     container::SingleOptimizationContainer,
     devices::Vector{T},
     formulation::S,
-) where {T <: PSIP.NodalACTransportTechnology, S <: ContinuousInvestment}
+) where {T <: PSIP.NodalACTransportTechnology, S <: InvestmentTechnologyFormulation}
     tech_model = string(S)
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     return
@@ -442,7 +486,7 @@ function add_expression!(
     formulation::S,
 ) where {
     T <: CumulativeCapacity,
-    S <: AbstractTechnologyFormulation,
+    S <: ContinuousInvestment,
     U <: Vector{D},
 } where {D <: PSIP.NodalACTransportTechnology}
     IS.@assert_op length(devices) > 0

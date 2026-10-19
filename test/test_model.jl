@@ -913,6 +913,10 @@ end
         @test unit_cost ≈ unit_size * mw_cost
 
         @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        if formulation == BinaryInvestment
+            # One unit at most over the whole horizon
+            @test sum(JuMP.value.(build["expensive_thermal", :])) <= 1.0 + 1e-6
+        end
     end
 
     # A discrete investment needs a positive unit size.

@@ -10,7 +10,7 @@ function construct_technologies!(
     tech_model_vector::Vector{X},
 ) where {
     T <: PSIP.AggregateTransportTechnology,
-    B <: ContinuousInvestment,
+    B <: Union{ContinuousInvestment, IntegerInvestment, BinaryInvestment},
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
@@ -76,7 +76,7 @@ function construct_technologies!(
     tech_model_vector::Vector{X},
 ) where {
     T <: PSIP.AggregateTransportTechnology,
-    B <: ContinuousInvestment,
+    B <: InvestmentTechnologyFormulation,
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
@@ -89,6 +89,13 @@ function construct_technologies!(
         container,
         MaximumCumulativeCapacity(),
         CumulativeCapacity(),
+        devices,
+        B(),
+    )
+    add_constraints!(
+        container,
+        SingleUnitInvestmentConstraint(),
+        BuildCapacity(),
         devices,
         B(),
     )
@@ -158,7 +165,7 @@ function construct_technologies!(
     tech_model_vector::Vector{X},
 ) where {
     T <: PSIP.NodalACTransportTechnology,
-    B <: ContinuousInvestment,
+    B <: Union{ContinuousInvestment, IntegerInvestment, BinaryInvestment},
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
@@ -203,7 +210,7 @@ function construct_technologies!(
     tech_model_vector::Vector{X},
 ) where {
     T <: PSIP.NodalACTransportTechnology,
-    B <: ContinuousInvestment,
+    B <: InvestmentTechnologyFormulation,
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
@@ -216,6 +223,13 @@ function construct_technologies!(
         container,
         MaximumCumulativeCapacity(),
         CumulativeCapacity(),
+        devices,
+        B(),
+    )
+    add_constraints!(
+        container,
+        SingleUnitInvestmentConstraint(),
+        BuildCapacity(),
         devices,
         B(),
     )
