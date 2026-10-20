@@ -38,12 +38,15 @@ struct UnitLine
     technology::BranchTechnology
 end
 
-# PTDF rows follow the order merged corridors, new corridors, unit lines
+# PTDF rows follow the order merged corridors, new corridors, unit lines. The PTDF is kept
+# whole: `tol` only drops the small injection terms of the flows, so the coefficients that
+# cancel the flow of an unbuilt branch are never cut.
 struct PTDFNetworkData <: AbstractNetworkData
     merged_corridors::Vector{MergedCorridor}
     new_corridors::Vector{NewCorridor}
     unit_lines::Vector{UnitLine}
     ptdf::PTDF
+    tol::Float64
 end
 
 const CorridorLines = Dict{
@@ -201,9 +204,8 @@ function PTDFNetworkData(
         Tuple{String, String}[b.arc for b in branches],
         Float64[b.susceptance for b in branches];
         reference_nodes=_reference_nodes(nodes),
-        tol=tol,
     )
-    return PTDFNetworkData(merged_corridors, new_corridors, unit_lines, ptdf)
+    return PTDFNetworkData(merged_corridors, new_corridors, unit_lines, ptdf, tol)
 end
 
 # Only the PTDF model needs network data

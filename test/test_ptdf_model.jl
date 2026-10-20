@@ -8,7 +8,15 @@ const PTDF_TECHNOLOGIES = (
 
 const PTDF_LINE_TYPE = PSIP.NodalACTransportTechnology{PSY.Line}
 
-function _ptdf_line(name, from, to; reactance=0.1, unit_size=1.0, max_capacity=1000.0)
+function _ptdf_line(
+    name,
+    from,
+    to;
+    reactance=0.1,
+    unit_size=1.0,
+    max_capacity=1000.0,
+    capital_cost=5000.0,
+)
     return PTDF_LINE_TYPE(;
         name=name,
         start_node=from,
@@ -16,7 +24,7 @@ function _ptdf_line(name, from, to; reactance=0.1, unit_size=1.0, max_capacity=1
         reactance=reactance,
         unit_size=unit_size,
         capacity_limits=(min=0, max=max_capacity),
-        capital_costs=PSIP.CapitalCost(LinearCurve(5000.0), 0.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(capital_cost), 0.0),
         available=true,
         power_systems_type="Line",
         id=1,
@@ -33,8 +41,9 @@ end
 
 # Model of the 2-zone test portfolio on nodes. `placement` maps technology names to nodes (the
 # first node is the reference) and `lines` are (name, from, to, reactance, existing device),
-# where the existing device is a line of the base system whose rating is the line's capacity.
-# Lines cannot be expanded. `ratings` overrides the rating of base system lines.
+# where the existing device is a line of the base system whose rating is the line's capacity,
+# so it cannot be expanded. A line without an existing device is a candidate of up to 1000 MW
+# costing `candidate_cost` per MW. `ratings` overrides the rating of base system lines.
 function _nodal_test_model(
     transport;
     nodes,
@@ -42,6 +51,7 @@ function _nodal_test_model(
     lines,
     ratings=Dict{String, Float64}(),
     use_slacks=false,
+    candidate_cost=5000.0,
 )
     p_5bus, op_days = test_2_zone_portfolio()
     sys = build_system(PSITestSystems, "c_sys5_re")
@@ -99,6 +109,17 @@ function _nodal_test_model(
     )
 
     for (name, from, to, reactance, device) in lines
+        if isnothing(device)
+            line = _ptdf_line(
+                name,
+                regions[from],
+                regions[to];
+                reactance=reactance,
+                capital_cost=candidate_cost,
+            )
+            PSIP.add_technology!(p_5bus, line)
+            continue
+        end
         rating = PSY.get_rating(PSY.get_component(PSY.Line, sys, device))
         line = _ptdf_line(
             name,
@@ -449,4 +470,146 @@ end
     )
     @test build!(m; output_dir=mktempdir(; cleanup=true), console_level=Logging.Error) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+end
+
+# A ring of existing lines n1-n2-n3-n4 (n1-n2 limited to 100 MW, the others to 2000 MW), two
+# candidate diagonals that
+# interact, and a candidate to n5, which has no other line. The cheap generator is at n1, the
+# expensive one at n2, wind at n5 and demand at n2 and n4.
+const RING_LINES = [
+    ("r12", "n1", "n2", 0.1, "1"),
+    ("r23", "n2", "n3", 0.2, "4"),
+    ("r34", "n3", "n4", 0.1, "5"),
+    ("r41", "n4", "n1", 0.2, "2"),
+]
+const RING_CANDIDATES = [
+    ("d13", "n1", "n3", 0.1, nothing),
+    ("d24", "n2", "n4", 0.1, nothing),
+    ("r45", "n4", "n5", 0.1, nothing),
+]
+
+function _ring_model(lines; candidate_cost=5000.0)
+    m = _nodal_test_model(
+        NodalPTDFModel;
+        nodes=["n1", "n2", "n3", "n4", "n5"],
+        placement=Dict(
+            "cheap_thermal" => "n1",
+            "expensive_thermal" => "n2",
+            "wind" => "n5",
+            "demand1" => "n2",
+            "demand2" => "n4",
+            "test_storage" => "n2",
+        ),
+        lines=lines,
+        ratings=Dict("1" => 100.0, "2" => 2000.0, "4" => 2000.0, "5" => 2000.0),
+        use_slacks=true,
+        candidate_cost=candidate_cost,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    return m
+end
+
+_ring_branch(name, from, to) = isnothing(name) ? join(minmax(from, to), "_") : name
+
+# Checks that the solved flows are a DC power flow of the branches in service: the injection at
+# each node leaves on its branches (Kirchhoff's current law), and there are angles that give every
+# branch in service its flow (Kirchhoff's voltage law). All lines are at 230 kV, so susceptance is
+# proportional to 1 / reactance.
+function _test_dc_power_flow(container, lines, in_service)
+    flow = JuMP.value.(PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio))
+    injection =
+        JuMP.value.(PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio))
+    nodes = collect(axes(injection, 1))
+    node_ix = Dict(n => i for (i, n) in enumerate(nodes))
+    branches = [
+        (_ring_branch(isnothing(device) ? name : nothing, from, to), from, to, x) for
+        (name, from, to, x, device) in lines
+    ]
+    # Merged corridors run from the alphabetically first node
+    arcs = Dict(
+        branch => (isnothing(device) ? (from, to) : minmax(from, to)) for
+        ((branch, from, to, _), (_, _, _, _, device)) in zip(branches, lines)
+    )
+    for t in axes(flow, 2)
+        for node in nodes
+            outflow = sum(
+                (arcs[b][1] == node ? 1.0 : arcs[b][2] == node ? -1.0 : 0.0) * flow[b, t] for (b, _, _, _) in branches
+            )
+            @test isapprox(outflow, injection[node, t]; atol=1e-5)
+        end
+        served = [(b, x) for (b, _, _, x) in branches if b in in_service]
+        A = zeros(length(served), length(nodes))
+        for (row, (b, _)) in enumerate(served)
+            A[row, node_ix[arcs[b][1]]] = 1.0
+            A[row, node_ix[arcs[b][2]]] = -1.0
+        end
+        angle_differences = [flow[b, t] * x for (b, x) in served]
+        theta = A \ angle_differences
+        @test isapprox(A * theta, angle_differences; atol=1e-5)
+    end
+    return flow
+end
+
+@testset "Unbuilt new corridors have no effect on the network" begin
+    ring = _ring_model(RING_LINES)
+    ring_objective = _solved_objective(ring)
+    # The candidates cost too much to be built
+    with_candidates = _ring_model([RING_LINES; RING_CANDIDATES]; candidate_cost=1e12)
+    @test isapprox(_solved_objective(with_candidates), ring_objective; rtol=1e-6)
+
+    container = PSIN.get_optimization_container(with_candidates)
+    # Nothing is built. The built binary of a corridor with no capacity may still be 1, since a
+    # corridor without capacity carries no flow either way.
+    capacity = PSIN.get_expression(
+        container,
+        PSIN.CumulativeCapacity(),
+        PTDF_LINE_TYPE,
+        "ContinuousInvestment",
+    )
+    for candidate in ("d13", "d24", "r45")
+        @test all(JuMP.value.(capacity[candidate, :]) .<= 1e-6)
+    end
+    ring_names = ["n1_n2", "n2_n3", "n3_n4", "n1_n4"]
+    flow = _test_dc_power_flow(container, [RING_LINES; RING_CANDIDATES], ring_names)
+    for candidate in ("d13", "d24", "r45")
+        @test all(abs.(flow[candidate, :]) .<= 1e-6)
+    end
+    ring_flow =
+        JuMP.value.(
+            PSIN.get_expression(
+                PSIN.get_optimization_container(ring),
+                PTDFBranchFlow(),
+                PSIP.Portfolio,
+            ),
+        )
+    for name in ring_names
+        @test isapprox(flow[name, :].data, ring_flow[name, :].data; atol=1e-4)
+    end
+end
+
+@testset "Built new corridors carry their PTDF flow" begin
+    m = _ring_model([RING_LINES; RING_CANDIDATES]; candidate_cost=1.0)
+    _solved_objective(m)
+    container = PSIN.get_optimization_container(m)
+    built =
+        JuMP.value.(
+            PSIN.get_variable(container, NewCorridorBuiltVariable(), PSIP.Portfolio),
+        )
+    # Cheap candidates relieve the 100 MW line and connect the wind at n5
+    @test built["r45", 1] > 0.5
+    @test any(built[c, 1] > 0.5 for c in ("d13", "d24"))
+    in_service = [
+        ["n1_n2", "n2_n3", "n3_n4", "n1_n4"]
+        [c for c in ("d13", "d24", "r45") if built[c, 1] > 0.5]
+    ]
+    _test_dc_power_flow(container, [RING_LINES; RING_CANDIDATES], in_service)
+    transactions =
+        JuMP.value.(
+            PSIN.get_variable(container, VirtualTransactionVariable(), PSIP.Portfolio),
+        )
+    for c in ("d13", "d24", "r45")
+        built[c, 1] > 0.5 || continue
+        @test all(abs.(transactions[c, :]) .<= 1e-6)
+    end
 end

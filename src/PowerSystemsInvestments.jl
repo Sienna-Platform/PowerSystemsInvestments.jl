@@ -74,6 +74,8 @@ export ActivePowerDischargeVariable
 export ActivePowerWindVariable
 export ActivePowerSolarVariable
 export FlowActivePowerVariable
+export NewCorridorBuiltVariable
+export VirtualTransactionVariable
 
 ### Expressions ###
 export CumulativeCapacity
