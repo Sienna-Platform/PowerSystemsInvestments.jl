@@ -26,3 +26,12 @@ function construct_transport!(
     add_constraints!(container, NodalBalanceConstraint, p, get_use_slacks(transport_model))
     return
 end
+
+function construct_transport!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    transport_model::TransportModel{NodalPTDFModel},
+)
+    # add_constraints!(container, NodalBalanceConstraint, p, get_use_slacks(transport_model))
+    return
+end

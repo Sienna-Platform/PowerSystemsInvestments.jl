@@ -639,7 +639,7 @@ end
 
 function _make_system_expressions!(
     container::SingleOptimizationContainer,
-    ::Type{NodalBalanceModel},
+    ::Type{<:AbstractNodalTransportAggregation},
     port::PSIP.Portfolio,
 )
     nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
@@ -679,7 +679,7 @@ function initialize_system_expressions!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel{T},
     port::PSIP.Portfolio,
-) where {T <: NodalBalanceModel}
+) where {T <: AbstractNodalTransportAggregation}
     _make_system_expressions!(container, T, port)
     return
 end

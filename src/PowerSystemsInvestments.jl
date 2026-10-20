@@ -51,6 +51,7 @@ export RequirementEnergyShare
 export SingleRegionBalanceModel
 export MultiRegionBalanceModel
 export NodalBalanceModel
+export NodalPTDFModel
 export NodalBalanceConstraint
 export EnergyShareRequirementConstraint
 export HydroEnergyBudgetConstraint

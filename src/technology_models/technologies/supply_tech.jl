@@ -365,7 +365,7 @@ function add_to_expression!(
     S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
     T <: EnergyBalance,
     U <: Vector{D},
-    V <: NodalBalanceModel,
+    V <: AbstractNodalTransportAggregation,
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
