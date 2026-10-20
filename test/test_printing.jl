@@ -49,6 +49,20 @@
         BasicDispatchFeasibility,
     )
 
+    set_technology_model!(
+        template,
+        ["test_branch"],
+        PSIP.AggregateTransportTechnology{PSY.ACBranch},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    # Transmission technologies are kept apart from the other technologies
+    @test collect(values(PSIN.get_branch_models(template))) == [["test_branch"]]
+    @test all(
+        !in("test_branch", names) for names in values(PSIN.get_technology_models(template))
+    )
+
     @testset "text/plain InvestmentModelTemplate" begin
         buf = IOBuffer()
         show(buf, MIME("text/plain"), template)
@@ -56,6 +70,8 @@
 
         @test occursin("Template Model", out)
         @test occursin("Technology Models", out)
+        @test occursin("Branch Models", out)
+        @test occursin("AggregateTransportTechnology", out)
         @test occursin("MultiRegionBalanceModel", out)
         @test occursin("DiscountedCashFlow", out)
     end
@@ -67,6 +83,8 @@
 
         @test occursin("Template Model", out)
         @test occursin("Technology Models", out)
+        @test occursin("Branch Models", out)
+        @test occursin("AggregateTransportTechnology", out)
         @test occursin("<table", out)
     end
 end

@@ -86,6 +86,24 @@ function _show_method(io::IO, template::InvestmentModelTemplate, backend::Symbol
     )
 
     println(io)
+    table = Matrix{String}(undef, length(template.branch_models), length(column_labels))
+    for (ix, model) in enumerate(keys(template.branch_models))
+        table[ix, 1] = string(get_technology_type(model))
+        table[ix, 2] = string(get_investment_formulation(model))
+        table[ix, 3] = string(get_operations_formulation(model))
+        table[ix, 4] = string(model.use_slacks)
+    end
+
+    PrettyTables.pretty_table(
+        io,
+        table;
+        backend=backend,
+        column_labels=column_labels,
+        title="Branch Models",
+        alignment=:l,
+    )
+
+    println(io)
     requirement_labels = ["Requirement Type", "Requirement Name", "Formulation"]
     table = Matrix{String}(
         undef,

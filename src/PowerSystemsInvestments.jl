@@ -275,6 +275,7 @@ include("technology_models/technologies/colocated_tech.jl")
 include("technology_models/technologies/branch_tech.jl")
 # Network #
 include("network_models/network_matrices.jl")
+include("network_models/ptdf_network.jl")
 include("network_models/singleregion_model.jl")
 include("network_models/multiregion_model.jl")
 include("network_models/nodal_model.jl")

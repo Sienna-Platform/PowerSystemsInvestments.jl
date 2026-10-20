@@ -727,8 +727,12 @@ function build_model!(
 )
     transport_model = get_transport_model(template)
     initialize_system_expressions!(container, transport_model, port)
+    initialize_network!(transport_model, template, port)
 
-    tech_names = collect(values(template.technology_models))
+    tech_names = [
+        collect(values(template.technology_models))
+        collect(values(template.branch_models))
+    ]
 
     # Check for duplicate technologies
     flattened_list = collect(Iterators.flatten(tech_names))

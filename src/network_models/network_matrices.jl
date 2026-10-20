@@ -118,8 +118,20 @@ function PTDF(
     )
 end
 
-# Available AC lines of the portfolio. Reactances in ohms are converted to per unit with the
-# line voltage in kV, on a 1 MVA base (the base cancels out of the PTDF).
+# Reactance in ohms converted to per unit with the line voltage in kV, on a 1 MVA base (the
+# base cancels out of the PTDF)
+function _susceptance(line::PSIP.NodalACTransportTechnology)
+    x = PSIP.get_reactance(line)
+    voltage = PSIP.get_voltage(line)
+    (iszero(x) || iszero(voltage)) &&
+        error("Line $(PSIP.get_name(line)) has zero reactance or voltage")
+    return voltage^2 / x
+end
+
+_reference_nodes(nodes) =
+    Set(PSIP.get_name(n) for n in nodes if PSIP.get_bus_type(n) == PSY.ACBusTypes.REF)
+
+# Available AC lines of the portfolio
 function PTDF(portfolio::PSIP.Portfolio; tol::Float64=0.0)
     nodes = sort!(collect(PSIP.get_regions(PSIP.Node, portfolio)); by=PSIP.get_name)
     lines = sort!(
@@ -136,21 +148,12 @@ function PTDF(portfolio::PSIP.Portfolio; tol::Float64=0.0)
         (PSIP.get_name(PSIP.get_start_node(l)), PSIP.get_name(PSIP.get_end_node(l))) for
         l in lines
     ]
-    susceptances = map(lines) do l
-        x = PSIP.get_reactance(l)
-        voltage = PSIP.get_voltage(l)
-        (iszero(x) || iszero(voltage)) &&
-            error("Line $(PSIP.get_name(l)) has zero reactance or voltage")
-        return voltage^2 / x
-    end
-    reference_nodes =
-        Set(PSIP.get_name(n) for n in nodes if PSIP.get_bus_type(n) == PSY.ACBusTypes.REF)
     return PTDF(
         PSIP.get_name.(nodes),
         PSIP.get_name.(lines),
         arcs,
-        susceptances;
-        reference_nodes=reference_nodes,
+        _susceptance.(lines);
+        reference_nodes=_reference_nodes(nodes),
         tol=tol,
     )
 end
