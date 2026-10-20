@@ -165,21 +165,6 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    ::SingleOptimizationContainer,
-    ::T,
-    ::U,
-    ::BasicDispatch,
-    ::TransportModel{V},
-) where {
-    T <: EnergyBalance,
-    U <: Vector{D},
-    V <: NodalPTDFModel,
-} where {D <: PSIP.NodalACTransportTechnology}
-    # Flows are set by the PTDF, so lines do not add to the nodal injections
-    return
-end
-
-function add_to_expression!(
     container::SingleOptimizationContainer,
     ::T,
     devices::U,

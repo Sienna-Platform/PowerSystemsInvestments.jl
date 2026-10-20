@@ -261,3 +261,33 @@ function construct_technologies!(
     )
     return
 end
+
+# Under the PTDF model, nodal line flows are expressions of the nodal injections and are limited
+# by the transport model, so the lines add no operation variables or constraints
+function construct_technologies!(
+    ::SingleOptimizationContainer,
+    ::PSIP.Portfolio,
+    ::Vector{String},
+    ::ArgumentConstructStage,
+    ::OperationCostModel,
+    ::Type{T},
+    ::Type{C},
+    ::TransportModel{NodalPTDFModel},
+    ::Vector{X},
+) where {T <: PSIP.NodalACTransportTechnology, C <: BasicDispatch, X <: TechnologyModel}
+    return
+end
+
+function construct_technologies!(
+    ::SingleOptimizationContainer,
+    ::PSIP.Portfolio,
+    ::Vector{String},
+    ::ModelConstructStage,
+    ::OperationCostModel,
+    ::Type{T},
+    ::Type{C},
+    ::TransportModel{NodalPTDFModel},
+    ::Vector{X},
+) where {T <: PSIP.NodalACTransportTechnology, C <: BasicDispatch, X <: TechnologyModel}
+    return
+end

@@ -7,6 +7,8 @@ abstract type CumulativeInvestmentExpressionType <: InvestmentExpressionType end
 struct SupplyTotal <: OperationsExpressionType end
 struct DemandTotal <: OperationsExpressionType end
 struct EnergyBalance <: OperationsExpressionType end
+# Flow on each PTDF branch, from the injections at every node
+struct PTDFBranchFlow <: OperationsExpressionType end
 
 # Weighted (representative-day) energy expressions. Always created (where
 # applicable) so users can inspect them in the results and requirement models can

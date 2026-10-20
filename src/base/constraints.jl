@@ -31,6 +31,10 @@ struct SingleRegionBalanceConstraint <: ISOPT.ConstraintType end
 struct MultiRegionBalanceConstraint <: ISOPT.ConstraintType end
 
 struct NodalBalanceConstraint <: ISOPT.ConstraintType end
+# One balance per island of the PTDF network, keyed by its reference node
+struct IslandBalanceConstraint <: ISOPT.ConstraintType end
+# Limits on the PTDF branch flows
+struct FlowRateConstraint <: ISOPT.ConstraintType end
 
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end
 

@@ -53,6 +53,8 @@ export MultiRegionBalanceModel
 export NodalBalanceModel
 export NodalPTDFModel
 export NodalBalanceConstraint
+export IslandBalanceConstraint
+export FlowRateConstraint
 export EnergyShareRequirementConstraint
 export HydroEnergyBudgetConstraint
 
@@ -84,6 +86,7 @@ export StartUpCost
 export ShutDownCost
 export FuelConsumptionExpression
 export EnergyBalance
+export PTDFBranchFlow
 export CumulativePowerCapacity
 export CumulativeEnergyCapacity
 export CumulativeSolarCapacity
@@ -279,6 +282,7 @@ include("network_models/ptdf_network.jl")
 include("network_models/singleregion_model.jl")
 include("network_models/multiregion_model.jl")
 include("network_models/nodal_model.jl")
+include("network_models/ptdf_model.jl")
 include("network_models/transport_constructor.jl")
 # Constructors #
 include("technology_models/technology_constructors/supply_constructor.jl")

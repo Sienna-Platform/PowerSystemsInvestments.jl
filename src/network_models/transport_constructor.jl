@@ -32,6 +32,19 @@ function construct_transport!(
     p::PSIP.Portfolio,
     transport_model::TransportModel{NodalPTDFModel},
 )
-    # add_constraints!(container, NodalBalanceConstraint, p, get_use_slacks(transport_model))
+    network = get_network_data(transport_model)
+    if !isempty(network.new_corridors) || !isempty(network.unit_lines)
+        error(
+            "NodalPTDFModel does not support lines on corridors without existing capacity " *
+            "or discrete line investments yet",
+        )
+    end
+    # Slacks are injections at their node, so they are added before the flows
+    if get_use_slacks(transport_model)
+        _add_balance_slacks!(container, PSIP.Portfolio, network.ptdf.axes[1])
+    end
+    add_expression!(container, PTDFBranchFlow(), p, network)
+    add_constraints!(container, IslandBalanceConstraint, p, network)
+    add_constraints!(container, FlowRateConstraint, p, network)
     return
 end

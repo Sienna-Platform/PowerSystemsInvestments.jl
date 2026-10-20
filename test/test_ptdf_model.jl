@@ -1,125 +1,10 @@
-# Two nodes with a line between them, holding the technologies of the 2-zone test portfolio
-function _two_node_model(transport)
-    p_5bus, op_days = test_2_zone_portfolio()
-    periods = [
-        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
-        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
-    ]
-    template = InvestmentModelTemplate(
-        DiscountedCashFlow(0.07, Year(2025), periods),
-        OperationalRepresentativeDays(op_days, [365, 365]),
-        RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(transport, use_slacks=false),
-    )
-    nodes = [PSIP.Node(; name="Node_1", id=1), PSIP.Node(; name="Node_2", id=2)]
-    for node in nodes
-        PSIP.add_region!(p_5bus, node)
-    end
-    technologies = (
-        (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind", 2, ContinuousInvestment),
-        (
-            PSIP.SupplyTechnology{PSY.ThermalStandard},
-            "cheap_thermal",
-            1,
-            ContinuousInvestment,
-        ),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1", 1, StaticLoadInvestment),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2", 2, StaticLoadInvestment),
-    )
-    for (type, name, node, investment) in technologies
-        PSIP.set_region!(PSIP.get_technology(type, p_5bus, name), [nodes[node]])
-        set_technology_model!(
-            template,
-            [name],
-            type,
-            investment,
-            BasicDispatch,
-            BasicDispatchFeasibility,
-        )
-    end
-    storage_type = PSIP.StorageTechnology{EnergyReservoirStorage}
-    PSIP.set_region!(PSIP.get_technology(storage_type, p_5bus, "test_storage"), [nodes[2]])
-    set_technology_model!(
-        template,
-        ["test_storage"],
-        storage_type,
-        ContinuousInvestment,
-        CyclicalStorageDispatch,
-        BasicDispatchFeasibility,
-    )
-
-    line_type = PSIP.NodalACTransportTechnology{PSY.ACBranch}
-    line = line_type(;
-        name="nodal_line",
-        start_node=nodes[1],
-        end_node=nodes[2],
-        capacity_limits=(min=0, max=1000),
-        capital_costs=PSIP.CapitalCost(LinearCurve(5000.0), 0.0),
-        available=true,
-        power_systems_type="ACBranch",
-        id=2,
-        financial_data=PSIP.TechnologyFinancialData(;
-            capital_recovery_period=30,
-            technology_base_year=2025,
-            debt_fraction=0.6,
-            debt_rate=0.04,
-            return_on_equity=0.10,
-            tax_rate=0.21,
-        ),
-    )
-    PSIP.add_technology!(p_5bus, line)
-    set_technology_model!(
-        template,
-        ["nodal_line"],
-        line_type,
-        ContinuousInvestment,
-        BasicDispatch,
-        BasicDispatchFeasibility,
-    )
-
-    m = InvestmentModel(
-        template,
-        SingleInstanceSolve,
-        p_5bus;
-        optimizer=HiGHS.Optimizer,
-        portfolio_to_file=false,
-        store_variable_names=true,
-    )
-    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
-    return m
-end
-
-# Coefficients of an expression by variable name, so expressions of two models can be compared
-_terms_by_name(expression) =
-    Dict(JuMP.name(var) => coef for (coef, var) in JuMP.linear_terms(expression))
-
-@testset "Nodal injections are the same under the PTDF model" begin
-    nodal = PSIN.get_optimization_container(_two_node_model(NodalBalanceModel))
-    ptdf = PSIN.get_optimization_container(_two_node_model(NodalPTDFModel))
-    line_type = PSIP.NodalACTransportTechnology{PSY.ACBranch}
-    nodal_balance = PSIN.get_expression(nodal, PSIN.EnergyBalance(), PSIP.Portfolio)
-    ptdf_balance = PSIN.get_expression(ptdf, PSIN.EnergyBalance(), PSIP.Portfolio)
-    @test axes(ptdf_balance) == axes(nodal_balance)
-
-    line_flow =
-        PSIN.get_variable(nodal, PSIN.FlowActivePowerVariable(), line_type, "BasicDispatch")
-    line_flow_names = Set(JuMP.name.(line_flow.data))
-    for node in axes(nodal_balance, 1), t in axes(nodal_balance, 2)
-        nodal_terms = _terms_by_name(nodal_balance[node, t])
-        # Under the nodal transport model the line adds its flow to both nodes
-        @test count(in(line_flow_names), keys(nodal_terms)) == 1
-        injections = filter(((name, _),) -> !in(name, line_flow_names), nodal_terms)
-        @test _terms_by_name(ptdf_balance[node, t]) == injections
-        @test JuMP.constant(ptdf_balance[node, t]) == JuMP.constant(nodal_balance[node, t])
-    end
-
-    # Nodes are not balanced one by one under the PTDF model
-    @test !haskey(
-        PSIN.get_constraints(ptdf),
-        PSIN.ConstraintKey(NodalBalanceConstraint, PSIP.Portfolio),
-    )
-end
+const PTDF_TECHNOLOGIES = (
+    (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal", ContinuousInvestment),
+    (PSIP.SupplyTechnology{PSY.ThermalStandard}, "expensive_thermal", ContinuousInvestment),
+    (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind", ContinuousInvestment),
+    (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1", StaticLoadInvestment),
+    (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2", StaticLoadInvestment),
+)
 
 const PTDF_LINE_TYPE = PSIP.NodalACTransportTechnology{PSY.Line}
 
@@ -143,6 +28,171 @@ function _ptdf_line(name, from, to; reactance=0.1, unit_size=1.0, max_capacity=1
             return_on_equity=0.10,
             tax_rate=0.21,
         ),
+    )
+end
+
+# Model of the 2-zone test portfolio on nodes. `placement` maps technology names to nodes (the
+# first node is the reference) and `lines` are (name, from, to, reactance, existing device),
+# where the existing device is a line of the base system whose rating is the line's capacity.
+# Lines cannot be expanded. `ratings` overrides the rating of base system lines.
+function _nodal_test_model(
+    transport;
+    nodes,
+    placement,
+    lines,
+    ratings=Dict{String, Float64}(),
+    use_slacks=false,
+)
+    p_5bus, op_days = test_2_zone_portfolio()
+    sys = build_system(PSITestSystems, "c_sys5_re")
+    set_units_base_system!(sys, "NATURAL_UNITS")
+    for (device, rating) in ratings
+        PSY.set_rating!(PSY.get_component(PSY.Line, sys, device), rating)
+    end
+    PSIP.set_base_system!(p_5bus, sys)
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{Dates}}()),
+        TransportModel(transport, use_slacks=use_slacks),
+    )
+    regions = Dict(
+        n => PSIP.Node(;
+            name=n,
+            id=i,
+            bus_type=(i == 1 ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ),
+        ) for (i, n) in enumerate(nodes)
+    )
+    for node in values(regions)
+        PSIP.add_region!(p_5bus, node)
+    end
+    for (type, name, investment) in PTDF_TECHNOLOGIES
+        PSIP.set_region!(
+            PSIP.get_technology(type, p_5bus, name),
+            [regions[placement[name]]],
+        )
+        set_technology_model!(
+            template,
+            [name],
+            type,
+            investment,
+            BasicDispatch,
+            BasicDispatchFeasibility,
+        )
+    end
+    storage_type = PSIP.StorageTechnology{EnergyReservoirStorage}
+    PSIP.set_region!(
+        PSIP.get_technology(storage_type, p_5bus, "test_storage"),
+        [regions[placement["test_storage"]]],
+    )
+    set_technology_model!(
+        template,
+        ["test_storage"],
+        storage_type,
+        ContinuousInvestment,
+        CyclicalStorageDispatch,
+        BasicDispatchFeasibility,
+    )
+
+    for (name, from, to, reactance, device) in lines
+        rating = PSY.get_rating(PSY.get_component(PSY.Line, sys, device))
+        line = _ptdf_line(
+            name,
+            regions[from],
+            regions[to];
+            reactance=reactance,
+            max_capacity=rating,
+        )
+        PSIP.add_technology!(p_5bus, line)
+        PSIP.add_supplemental_attribute!(
+            p_5bus,
+            line,
+            PSIP.ExistingDevices(; existing_devices=[device]),
+        )
+    end
+    set_technology_model!(
+        template,
+        [l[1] for l in lines],
+        PTDF_LINE_TYPE,
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+
+    return InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+end
+
+const TWO_NODE_PLACEMENT = Dict(
+    "cheap_thermal" => "Node_1",
+    "expensive_thermal" => "Node_1",
+    "wind" => "Node_2",
+    "demand1" => "Node_1",
+    "demand2" => "Node_2",
+    "test_storage" => "Node_2",
+)
+
+# Two nodes joined by an existing line
+function _two_node_model(transport; kwargs...)
+    m = _nodal_test_model(
+        transport;
+        nodes=["Node_1", "Node_2"],
+        placement=TWO_NODE_PLACEMENT,
+        lines=[("nodal_line", "Node_1", "Node_2", 0.1, "1")],
+        kwargs...,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    return m
+end
+
+# Coefficients of an expression by variable name, so expressions of two models can be compared
+_terms_by_name(expression) =
+    Dict(JuMP.name(var) => coef for (coef, var) in JuMP.linear_terms(expression))
+
+@testset "Nodal injections are the same under the PTDF model" begin
+    nodal = PSIN.get_optimization_container(_two_node_model(NodalBalanceModel))
+    ptdf = PSIN.get_optimization_container(_two_node_model(NodalPTDFModel))
+    nodal_balance = PSIN.get_expression(nodal, PSIN.EnergyBalance(), PSIP.Portfolio)
+    ptdf_balance = PSIN.get_expression(ptdf, PSIN.EnergyBalance(), PSIP.Portfolio)
+    @test axes(ptdf_balance) == axes(nodal_balance)
+
+    line_flow = PSIN.get_variable(
+        nodal,
+        PSIN.FlowActivePowerVariable(),
+        PTDF_LINE_TYPE,
+        "BasicDispatch",
+    )
+    line_flow_names = Set(JuMP.name.(line_flow.data))
+    for node in axes(nodal_balance, 1), t in axes(nodal_balance, 2)
+        nodal_terms = _terms_by_name(nodal_balance[node, t])
+        # Under the nodal transport model the line adds its flow to both nodes
+        @test count(in(line_flow_names), keys(nodal_terms)) == 1
+        injections = filter(((name, _),) -> !in(name, line_flow_names), nodal_terms)
+        @test _terms_by_name(ptdf_balance[node, t]) == injections
+        @test JuMP.constant(ptdf_balance[node, t]) == JuMP.constant(nodal_balance[node, t])
+    end
+
+    # Nodes are not balanced one by one under the PTDF model, and lines have no flow variables
+    @test !haskey(
+        PSIN.get_constraints(ptdf),
+        PSIN.ConstraintKey(NodalBalanceConstraint, PSIP.Portfolio),
+    )
+    @test !PSIN.has_container_key(
+        ptdf,
+        PSIN.FlowActivePowerVariable,
+        PTDF_LINE_TYPE,
+        "BasicDispatch",
     )
 end
 
@@ -266,11 +316,137 @@ end
 @testset "PTDF network data is built with the model" begin
     m = _two_node_model(NodalPTDFModel)
     network = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m)))
-    @test network.ptdf.axes == (["Node_1", "Node_2"], ["nodal_line"])
-    @test only(network.new_corridors).name == "nodal_line"
+    @test network.ptdf.axes == (["Node_1", "Node_2"], ["Node_1_Node_2"])
+    @test [t.name for t in only(network.merged_corridors).technologies] == ["nodal_line"]
     @test isnothing(
         PSIN.get_network_data(
             PSIN.get_transport_model(PSIN.get_template(_two_node_model(NodalBalanceModel))),
         ),
     )
+end
+
+function _solved_objective(m)
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    return JuMP.objective_value(PSIN.get_jump_model(PSIN.get_optimization_container(m)))
+end
+
+@testset "PTDF model matches the nodal model on a radial network" begin
+    # With a single path between nodes there are no loop flows, so DC power flow adds nothing
+    nodal = _two_node_model(NodalBalanceModel)
+    ptdf = _two_node_model(NodalPTDFModel)
+    @test isapprox(_solved_objective(ptdf), _solved_objective(nodal); rtol=1e-6)
+end
+
+# A triangle of existing lines with different reactances: the cheap generator at n1, the
+# expensive one at n2, and demand at n2 and n3. The n1-n2 line is limited to 100 MW.
+const TRIANGLE_LINES = [
+    ("l12", "n1", "n2", 0.1, "1"),
+    ("l23", "n2", "n3", 0.2, "4"),
+    ("l13", "n1", "n3", 0.3, "3"),
+]
+
+function _triangle_model(transport)
+    m = _nodal_test_model(
+        transport;
+        nodes=["n1", "n2", "n3"],
+        placement=Dict(
+            "cheap_thermal" => "n1",
+            "expensive_thermal" => "n2",
+            "wind" => "n3",
+            "demand1" => "n2",
+            "demand2" => "n3",
+            "test_storage" => "n2",
+        ),
+        lines=TRIANGLE_LINES,
+        ratings=Dict("1" => 100.0),
+        use_slacks=true,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    return m
+end
+
+@testset "PTDF model on a meshed network" begin
+    m = _triangle_model(NodalPTDFModel)
+    container = PSIN.get_optimization_container(m)
+    ptdf_objective = _solved_objective(m)
+
+    flow = JuMP.value.(PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio))
+    injection =
+        JuMP.value.(PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio))
+    # Each corridor runs from its alphabetically first node
+    arcs = Dict(
+        "n1_n2" => ("n1", "n2", 0.1),
+        "n2_n3" => ("n2", "n3", 0.2),
+        "n1_n3" => ("n1", "n3", 0.3),
+    )
+    limits = Dict("n1_n2" => 100.0, "n2_n3" => 796.0, "n1_n3" => 796.0)
+    time_steps = axes(flow, 2)
+    for t in time_steps
+        # Kirchhoff's current law: the injection at each node leaves on its lines
+        for node in ("n1", "n2", "n3")
+            outflow = sum(
+                (from == node ? 1.0 : to == node ? -1.0 : 0.0) * flow[branch, t] for
+                (branch, (from, to, _)) in arcs
+            )
+            @test isapprox(outflow, injection[node, t]; atol=1e-6)
+        end
+        # Kirchhoff's voltage law around n1 -> n2 -> n3 -> n1 (all lines at 230 kV)
+        @test isapprox(
+            0.1 * flow["n1_n2", t] + 0.2 * flow["n2_n3", t] - 0.3 * flow["n1_n3", t],
+            0.0;
+            atol=1e-6,
+        )
+        for (branch, limit) in limits
+            @test abs(flow[branch, t]) <= limit + 1e-6
+        end
+    end
+    # The 100 MW line limits the dispatch
+    @test maximum(abs.(flow["n1_n2", :])) ≈ 100.0
+
+    # One island, balanced as a whole
+    balance = PSIN.get_constraint(container, IslandBalanceConstraint(), PSIP.Portfolio)
+    @test axes(balance, 1) == ["n1"]
+
+    # No demand is left unserved
+    for slack in (PSIN.BalanceSlackUp(), PSIN.BalanceSlackDown())
+        @test all(
+            JuMP.value.(PSIN.get_variable(container, slack, PSIP.Portfolio).data) .<= 1e-6,
+        )
+    end
+
+    # The transport model ignores Kirchhoff's voltage law and routes the cheap generation
+    # around the 100 MW line, so it is cheaper
+    nodal_objective = _solved_objective(_triangle_model(NodalBalanceModel))
+    @test nodal_objective < ptdf_objective * (1 - 1e-3)
+end
+
+@testset "PTDF model rejects lines it does not support yet" begin
+    m = _nodal_test_model(
+        NodalPTDFModel;
+        nodes=["Node_1", "Node_2"],
+        placement=TWO_NODE_PLACEMENT,
+        lines=[("nodal_line", "Node_1", "Node_2", 0.1, "1")],
+    )
+    # Discrete candidates are separate unit lines, which are not supported yet
+    portfolio = PSIN.get_portfolio(m)
+    nodes = Dict(PSIP.get_name(n) => n for n in PSIP.get_regions(PSIP.Node, portfolio))
+    candidate = _ptdf_line(
+        "new_units",
+        nodes["Node_1"],
+        nodes["Node_2"];
+        unit_size=100.0,
+        max_capacity=200.0,
+    )
+    PSIP.add_technology!(portfolio, candidate)
+    set_technology_model!(
+        PSIN.get_template(m),
+        ["new_units"],
+        PTDF_LINE_TYPE,
+        IntegerInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true), console_level=Logging.Error) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end
