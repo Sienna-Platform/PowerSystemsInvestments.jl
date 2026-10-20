@@ -88,7 +88,7 @@ function add_fixed_om_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        fixed_cost_data = PSIP.get_operation_costs(d)
+        fixed_cost_data = PSIP.get_operation_costs(d, PSIP.NU)
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
@@ -106,7 +106,7 @@ function add_fixed_om_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        fixed_cost_data = PSIP.get_operation_costs(d)
+        fixed_cost_data = PSIP.get_operation_costs(d, PSIP.NU)
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
@@ -124,7 +124,7 @@ function add_fixed_om_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        fixed_cost_data = PSIP.get_operation_costs(d)
+        fixed_cost_data = PSIP.get_operation_costs(d, PSIP.NU)
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
@@ -162,7 +162,7 @@ function add_capital_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        capital_cost_data = PSIP.get_capital_costs_energy(d)
+        capital_cost_data = PSIP.get_energy_capital_cost(PSIP.get_capital_costs(d))
         _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
     end
     return
@@ -184,8 +184,16 @@ function add_capital_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        capital_cost_data = PSIP.get_capital_costs_discharge(d)
-        _add_cost_to_objective!(container, U(), d, capital_cost_data, V(), tech_model)
+        storage_capital_costs = PSIP.get_capital_costs(d)
+        _add_cost_to_objective!(
+            container,
+            U(),
+            d,
+            PSIP.get_discharge_capital_cost(storage_capital_costs),
+            V(),
+            tech_model;
+            interconnection_cost=PSIP.get_interconnection_cost(storage_capital_costs),
+        )
     end
     return
 end

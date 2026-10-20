@@ -30,10 +30,13 @@ function _add_cost_to_objective!(
     technology::PSIP.Technology,
     value_curve::IS.ValueCurve,
     ::U,
-    tech_model::String,
+    tech_model::String;
+    interconnection_cost::Float64=0.0,
 ) where {T <: VariableType, U <: AbstractTechnologyFormulation}
     cost_component = PSY.get_function_data(value_curve)
-    proportional_term = PSY.get_proportional_term(cost_component)
+    # Overnight capital and last-mile interconnection costs are both in \$/MW,
+    # so the interconnection term is added directly to the proportional term.
+    proportional_term = PSY.get_proportional_term(cost_component) + interconnection_cost
     @debug "Cost is assumed to be in natural units: \$/MWh"
     multiplier = objective_function_multiplier(T(), U())
     _add_linearcurve_cost!(
@@ -45,6 +48,25 @@ function _add_cost_to_objective!(
         tech_model,
     )
     return
+end
+
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    capital_cost::PSIP.CapitalCost,
+    ::U,
+    tech_model::String,
+) where {T <: VariableType, U <: AbstractTechnologyFormulation}
+    return _add_cost_to_objective!(
+        container,
+        T(),
+        technology,
+        PSIP.get_capital_cost(capital_cost),
+        U(),
+        tech_model;
+        interconnection_cost=PSIP.get_interconnection_cost(capital_cost),
+    )
 end
 
 #Fixed OM calculated from build capacity
@@ -78,7 +100,7 @@ function _add_cost_to_objective!(
     ::U,
     tech_model::String,
 ) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
-    cost_curve = PSY.get_variable(om_cost)
+    cost_curve = PSY.get_variable_operation_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
     multiplier = objective_function_multiplier(T(), U())

@@ -34,7 +34,7 @@ function build_model!(
     for tech in supply_techs
         name = PSIP.get_name(tech)
         cap_limits = try
-            PSIP.get_capacity_limits(tech)
+            PSIP.get_capacity_limits(tech, PSIP.NU)
         catch
             (min=0, max=1000)
         end
@@ -51,8 +51,8 @@ function build_model!(
     for tech in storage_techs
         name = PSIP.get_name(tech)
         try
-            power_limits = PSIP.get_capacity_limits_discharge(tech)
-            energy_limits = PSIP.get_capacity_limits_energy(tech)
+            power_limits = PSIP.get_capacity_limits_discharge(tech, PSIP.NU)
+            energy_limits = PSIP.get_capacity_limits_energy(tech, PSIP.NU)
             @variable(model, 0 <= build_storage_power[name] <= power_limits.max)
             @variable(model, 0 <= build_storage_energy[name] <= energy_limits.max)
         catch
@@ -197,7 +197,7 @@ function build_model!(
                 if h == 1 && p == 1
                     # First period: assume starting from 50% charge
                     initial_soc = try
-                        energy_cap = PSIP.get_capacity_limits_energy(tech)
+                        energy_cap = PSIP.get_capacity_limits_energy(tech, PSIP.NU)
                         energy_cap.max * 0.5
                     catch
                         0.0

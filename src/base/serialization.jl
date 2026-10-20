@@ -53,11 +53,7 @@ function serialize_problem(model::InvestmentModel; optimizer=nothing)
         # Skip serialization if the system is already in the folder
         if !ispath(portfolio_filename)
             # Write to file explicitly, ensuring it goes to the correct directory
-            IS.prepare_for_serialization_to_file!(portfolio.data, portfolio_filename; force=true)
-            data = PSIP.to_json(portfolio)
-            open(portfolio_filename, "w") do io
-                write(io, data)
-            end
+            PSIP.to_file(portfolio, portfolio_filename; force=true)
         end
     else
         portfolio_filename = nothing

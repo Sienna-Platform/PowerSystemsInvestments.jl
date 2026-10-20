@@ -35,8 +35,8 @@ get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 
 # TODO: Defaulting to using discharge values for symmetric storage, but we need to be careful if we implement asymmetric storage investments
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d).max
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_limits_energy(d).max
+get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d, PSIP.NU).max
+get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_limits_energy(d, PSIP.NU).max
 
 get_init_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 get_init_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mwh(p, d)
@@ -61,16 +61,16 @@ function get_existing_capacity_power(
     d::PSIP.StorageTechnology{X},
     p::PSIP.Portfolio,
 ) where {X <: PSY.EnergyReservoirStorage}
-    attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+    attrs = IS.get_supplemental_attributes(PSIP.ExistingDevices, d)
 
     if length(attrs) != 1
-        @debug length(attrs) > 1 ? "Multiple ExistingCapacity attributes – returning 0.0" :
-               "No ExistingCapacity attribute – returning 0.0"
+        @debug length(attrs) > 1 ? "Multiple ExistingDevices attributes – returning 0.0" :
+               "No ExistingDevices attribute – returning 0.0"
         return 0.0
     end
 
-    techs = attrs[1].existing_technologies
-    isempty(techs) && (@warn "ExistingCapacity has no listed technologies – returning 0.0";
+    techs = PSIP.get_existing_devices(attrs[1])
+    isempty(techs) && (@warn "ExistingDevices has no listed devices – returning 0.0";
     return 0.0)
 
     comps = PSY.get_components(X, p.base_system)
@@ -97,23 +97,23 @@ function get_existing_capacity_power(
     end
 
     # return sum up the ratings of all matched components
-    return sum(PSY.get_rating(c) for c in matched)
+    return sum(PSY.get_rating(c, u"MW") for c in matched)
 end
 
 function get_existing_capacity_energy(
     d::PSIP.StorageTechnology{X},
     p::PSIP.Portfolio,
 ) where {X <: PSY.EnergyReservoirStorage}
-    attrs = IS.get_supplemental_attributes(PSIP.ExistingCapacity, d)
+    attrs = IS.get_supplemental_attributes(PSIP.ExistingDevices, d)
 
     if length(attrs) != 1
-        @debug length(attrs) > 1 ? "Multiple ExistingCapacity attributes – returning 0.0" :
-               "No ExistingCapacity attribute – returning 0.0"
+        @debug length(attrs) > 1 ? "Multiple ExistingDevices attributes – returning 0.0" :
+               "No ExistingDevices attribute – returning 0.0"
         return 0.0
     end
 
-    techs = attrs[1].existing_technologies
-    isempty(techs) && (@warn "ExistingCapacity has no listed technologies – returning 0.0";
+    techs = PSIP.get_existing_devices(attrs[1])
+    isempty(techs) && (@warn "ExistingDevices has no listed devices – returning 0.0";
     return 0.0)
 
     comps = PSY.get_components(X, p.base_system)
@@ -140,7 +140,7 @@ function get_existing_capacity_energy(
     end
 
     # return sum up the ratings of all matched components
-    return sum(PSY.get_storage_capacity(c) for c in matched)
+    return sum(PSY.get_storage_capacity(c, u"MW*h") for c in matched)
 end
 
 ################### Variables ####################
@@ -254,7 +254,7 @@ function add_expression!(
     )
 
     for t in time_steps, d in devices
-        unit_size = PSIP.get_unit_size_energy(d)
+        unit_size = PSIP.get_unit_size_energy(d, PSIP.NU)
         name = PSIP.get_name(d)
         init_cap = PSIP.get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
@@ -295,7 +295,7 @@ function add_expression!(
     )
 
     for t in time_steps, d in devices
-        unit_size = PSIP.get_unit_size_energy(d)
+        unit_size = PSIP.get_unit_size_energy(d, PSIP.NU)
         name = PSIP.get_name(d)
         init_cap = PSIP.get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
@@ -366,7 +366,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -402,7 +402,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region (node) supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -471,7 +471,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -506,7 +506,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region (node) supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],

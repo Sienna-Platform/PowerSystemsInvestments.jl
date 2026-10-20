@@ -360,8 +360,8 @@ function _type_to_string(t::Type)
     return string(t)
 end
 
-# Override IS.Optimization.encode_key for our custom key types
-function IS.Optimization.encode_key(key::Union{VariableKey, ConstraintKey, ExpressionKey, AuxVarKey, ParameterKey})
+# encode_key for our custom key types (IS.Optimization.encode_key moved to InfrastructureOptimizationModels in IS4)
+function encode_key(key::Union{VariableKey, ConstraintKey, ExpressionKey, AuxVarKey, ParameterKey})
     try
         # For our VariableKey{T, U} type, extract T and U from type parameters
         t = typeof(key)

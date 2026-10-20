@@ -1,5 +1,5 @@
 # Nodal power balance model: energy balance constraint at each bus (node).
-# Structure mirrors multiregion_model.jl but uses PSIP.Node instead of PSIP.Zone.
+# Structure mirrors multiregion_model.jl but balances buses (nodes) instead of zones.
 # Now includes slack variables for infeasible scenarios.
 
 const NODAL_BALANCE_SLACK_PENALTY = 1_000_000.0  # $1M/MWh penalty for power balance violations
@@ -13,7 +13,7 @@ function add_constraints!(
 
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    nodes = PSY.get_name.(get_nodes(port))
     expressions = get_expression(container, EnergyBalance(), U)
     constraint = add_constraints_container!(container, T(), U, nodes, time_steps)
 

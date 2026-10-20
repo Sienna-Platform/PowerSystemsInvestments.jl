@@ -65,7 +65,7 @@ get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCa
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = PSIP.get_operation_costs_energy(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildWindCapacity) = PSIP.get_operation_costs_wind(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildSolarCapacity) = PSIP.get_operation_costs_solar(d)
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildInverterCapacity) = PSIP.get_operation_costs_inverter(d)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildInverterCapacity) = PSIP.get_operation_costs_inverter(d, PSIP.NU)
 
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerChargeVariable) = PSIP.get_operation_costs_power(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerDischargeVariable) = PSIP.get_operation_costs_power(d)
@@ -292,9 +292,9 @@ function add_constraints!(
             time_slices = consecutive_slices[op_ix]
             ts_name = get_default_time_series_names(D, V())
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping, ts_name)
-            ts_data = TimeSeries.values(time_series.data)
+            ts_data = TimeSeries.values(IS.get_data(time_series))
             first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
             if first_tstamp != first_ts_tstamp
                 @error(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $name does not match with the expected representative day $op_ix"

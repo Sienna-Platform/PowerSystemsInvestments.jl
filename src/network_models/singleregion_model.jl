@@ -90,17 +90,21 @@ end
     get_peak_demand(portfolio::PSIP.Portfolio) -> Float64
 
 Extract total peak demand in MW from the portfolio's demand requirements.
-Sums peak_demand_mw across all DemandRequirement technologies and applies reserve margin.
+Sums the peak demand of all DemandRequirement technologies (new_demand_mw for new demand, the
+attached existing loads otherwise) and applies reserve margin.
 """
 function get_peak_demand(portfolio::PSIP.Portfolio)
     demands = PSIP.get_technologies(PSIP.DemandRequirement, portfolio)
     if isempty(demands)
         return 0.0
     end
-    total_peak = sum(PSIP.get_peak_demand_mw(d) for d in demands)
+    total_peak = sum(_peak_demand_mw(portfolio, d) for d in demands)
     reserve_margin = something(portfolio.metadata.reserve_margin, 0.0)
     return total_peak * (1 + reserve_margin)
 end
+
+_peak_demand_mw(portfolio::PSIP.Portfolio, d::PSIP.DemandRequirement) =
+    PSIP.is_new(d) ? PSIP.get_new_demand_mw(d, PSIP.NU) : PSIP.get_peak_demand_mw(portfolio, d)
 
 
 """
@@ -282,7 +286,7 @@ function add_capacity_adequacy_constraint!(container, portfolio::PSIP.Portfolio,
 
         if credit > 0.0
             try
-                cap = PSY.get_max_active_power(gen)
+                cap = PSY.get_max_active_power(gen, u"MW")
                 existing_effective_capacity += cap * credit
             catch
                 # Skip generators we can't get capacity for

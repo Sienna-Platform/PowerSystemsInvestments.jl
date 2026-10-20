@@ -114,7 +114,7 @@ function add_variable!(
     # so BuildCapacity values are either 0 or max_capacity (the binary decision recoverable as capacity/max_capacity)
     for t in time_steps, d in devices
         name = PSY.get_name(d)
-        max_capacity = PSIP.get_capacity_limits(d).max
+        max_capacity = PSIP.get_capacity_limits(d, PSIP.NU).max
 
         # Create binary decision variable (0 or 1: build this unit or not)
         binary_decision = JuMP.@variable(

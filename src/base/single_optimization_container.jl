@@ -237,8 +237,8 @@ end
 
 function _assign_container!(container::Dict, key::OptimizationContainerKey, value)
     if haskey(container, key)
-        @error "$(IS.Optimization.encode_key(key)) is already stored" sort!(
-            IS.Optimization.encode_key.(keys(container)),
+        @error "$(encode_key(key)) is already stored" sort!(
+            encode_key.(keys(container)),
         )
         throw(IS.InvalidValue("$key is already stored"))
     end
@@ -374,8 +374,8 @@ end
 function get_variable(container::SingleOptimizationContainer, key::VariableKey)
     var = get(container.variables, key, nothing)
     if var === nothing
-        name = IS.Optimization.encode_key(key)
-        keys = IS.Optimization.encode_key.(get_variable_keys(container))
+        name = encode_key(key)
+        keys = encode_key.(get_variable_keys(container))
         throw(IS.InvalidValue("variable $name is not stored. $keys"))
     end
     return var
@@ -438,8 +438,8 @@ end
 function get_constraint(container::SingleOptimizationContainer, key::ConstraintKey)
     var = get(container.constraints, key, nothing)
     if var === nothing
-        name = IS.Optimization.encode_key(key)
-        keys = IS.Optimization.encode_key.(get_constraint_keys(container))
+        name = encode_key(key)
+        keys = encode_key.(get_constraint_keys(container))
         throw(IS.InvalidValue("constraint $name is not stored. $keys"))
     end
 
@@ -624,7 +624,7 @@ function _make_system_expressions!(
     ::Type{MultiRegionBalanceModel},
     port::PSIP.Portfolio,
 )
-    regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
+    regions = PSY.get_name.(get_zones(port))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     container.expressions = Dict(
@@ -641,7 +641,7 @@ function _make_system_expressions!(
     ::Type{NodalBalanceModel},
     port::PSIP.Portfolio,
 )
-    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    nodes = PSY.get_name.(get_nodes(port))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     container.expressions = Dict(
@@ -722,7 +722,7 @@ end
 function _base_thermal_marginal_cost(device::PSY.ThermalStandard)
     cost = PSY.get_operation_cost(device)
     cost isa PSY.ThermalGenerationCost || return 0.0
-    variable = PSY.get_variable(cost)
+    variable = PSY.get_variable_operation_cost(cost)
     variable isa InfrastructureSystems.ProductionVariableCostCurve || return 0.0
     slopes = InfrastructureSystems.get_slopes(InfrastructureSystems.get_function_data(variable))
     return isempty(slopes) ? 0.0 : Float64(last(slopes))
@@ -752,8 +752,8 @@ function construct_devices!(
     # Build node/region mapping for nodal models
     node_map = Dict()
     if is_nodal
-        nodes = PSIP.get_regions(PSIP.Node, port)
-        node_map = Dict(PSIP.get_name(n) => PSIP.get_name(n) for n in nodes)
+        nodes = get_nodes(port)
+        node_map = Dict(PSY.get_name(n) => PSY.get_name(n) for n in nodes)
     end
 
     # Process each device type configured in device_models
@@ -783,7 +783,7 @@ function construct_devices!(
             # Create JuMP variables and set bounds using PSI2 pattern
             for device in device_list
                 name = PSY.get_name(device)
-                ub = PSY.get_max_active_power(device)
+                ub = PSY.get_max_active_power(device, u"MW")
 
                 for t in time_steps
                     # Create variable with proper naming pattern
@@ -847,7 +847,7 @@ function construct_devices!(
         elseif component_type <: PSY.PowerLoad
             for device in device_list
                 device_name = PSY.get_name(device)
-                fixed_demand = PSY.get_max_active_power(device)
+                fixed_demand = PSY.get_max_active_power(device, u"MW")
 
                 for t in time_steps
                     if is_nodal
@@ -896,7 +896,7 @@ function _add_renewable_dispatch_constraints!(
 
     for device in devices
         name = PSY.get_name(device)
-        max_power = PSY.get_max_active_power(device)
+        max_power = PSY.get_max_active_power(device, u"MW")
 
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
@@ -915,7 +915,7 @@ function _add_renewable_dispatch_constraints!(
                     device,
                     ts_name,
                 )
-                ts_data = TimeSeries.values(ts.data)
+                ts_data = TimeSeries.values(IS.get_data(ts))
             catch
                 # Time series not found - constraint will use max power only
             end
@@ -1199,7 +1199,7 @@ Each Tuple corresponds to (con_name, internal_index, moi_index)
 """
 function get_all_variable_index(container::SingleOptimizationContainer)
     var_keys = get_all_variable_keys(container)
-    return [IS.Optimization.encode_key(v) for v in var_keys]
+    return [encode_key(v) for v in var_keys]
 end
 
 # Probably a more efficiency way of doing this
@@ -1247,15 +1247,15 @@ function serialize_metadata!(container::SingleOptimizationContainer, output_dir:
         keys(container.expressions),
     ))
         encoded_key = encode_key_as_string(key)
-        if IS.Optimization.has_container_key(container.metadata, encoded_key)
+        if has_container_key(container.metadata, encoded_key)
             # Constraints and Duals can store the same key.
             IS.@assert_op key ==
                           IS.Optimization.get_container_key(container.metadata, encoded_key)
         end
-        IS.Optimization.add_container_key!(container.metadata, encoded_key, key)
+        add_container_key!(container.metadata, encoded_key, key)
     end
 
-    filename = IS.Optimization._make_metadata_filename(output_dir)
+    filename = _make_metadata_filename(output_dir)
     # TODO: Fix Serialization Metadata
     #Serialization.serialize(filename, container.metadata)
 end

@@ -17,25 +17,25 @@ get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.AggregateTransportTe
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = nothing
 
-get_max_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
-get_min_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).min
+get_max_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, PSIP.NU).max
+get_min_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, PSIP.NU).min
 
 get_init_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 
 function get_max_new_capacity(d::PSIP.NodalACTransportTechnology)
-    return PSIP.get_capacity_limits(d).max
+    return PSIP.get_capacity_limits(d, PSIP.NU).max
 end
 
 #! format: on
 
 function get_max_new_capacity(d::PSIP.AggregateTransportTechnology)
-    return PSIP.get_capacity_limits(d).max
+    return PSIP.get_capacity_limits(d, PSIP.NU).max
 end
 
 # TODO: Check if there is a different way we can get the existing line capacity
 function get_existing_line_capacity(d::PSIP.AggregateTransportTechnology)
     @warn "get_existing_line_capacity is not implemented for AggregateTransportTechnology. Returning minimum limits."
-    return PSIP.get_capacity_limits(d).min
+    return PSIP.get_capacity_limits(d, PSIP.NU).min
 end
 
 function get_default_attributes(
@@ -161,8 +161,8 @@ function add_to_expression!(
     # Assuming that energy travels from start to end, so if dispatch of Branch is positive, it is subtracted from start_region
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        start_region = PSIP.get_name(PSIP.get_start_region(d))
-        end_region = PSIP.get_name(PSIP.get_end_region(d))
+        start_region = PSY.get_name(PSIP.get_start_region(d))
+        end_region = PSY.get_name(PSIP.get_end_region(d))
         losses = PSIP.get_line_loss(d)
         _add_to_jump_expression!(expression[start_region, t], variable[name, t], -1.0)
         _add_to_jump_expression!(
@@ -334,7 +334,7 @@ end
 ########################### Nodal AC Transport Technology Methods #################################
 
 # Investment variable bounds
-get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
+get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d, PSIP.NU).max
 get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::InvestmentTechnologyFormulation) = 0.0
 get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::ContinuousInvestment) = false
 get_variable_binary(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = true
@@ -342,17 +342,17 @@ get_variable_upper_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::
 get_variable_lower_bound(::BuildCapacity, d::PSIP.NodalACTransportTechnology, ::BinaryInvestment) = 0.0
 
 # Cumulative capacity bounds
-get_max_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
-get_min_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).min
+get_max_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, PSIP.NU).max
+get_min_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, PSIP.NU).min
 get_init_cap(d::PSIP.NodalACTransportTechnology, ::CumulativeCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 
 # Operations variable bounds: bidirectional flow with magnitude <= capacity
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = let
-    cap_max = PSIP.get_capacity_limits(d).max
+    cap_max = PSIP.get_capacity_limits(d, PSIP.NU).max
     -cap_max
 end
 
-get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = PSIP.get_capacity_limits(d).max
+get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = PSIP.get_capacity_limits(d, PSIP.NU).max
 
 # Energy balance contribution: negative at start node, positive at end node (no losses for now)
 function add_to_expression!(
@@ -377,8 +377,8 @@ function add_to_expression!(
 
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        start_node = PSIP.get_name(PSIP.get_start_node(d))
-        end_node = PSIP.get_name(PSIP.get_end_node(d))
+        start_node = PSY.get_name(PSIP.get_start_node(d))
+        end_node = PSY.get_name(PSIP.get_end_node(d))
         # Flow leaves start node, enters end node (no losses assumed)
         _add_to_jump_expression!(expression[start_node, t], variable[name, t], -1.0)
         _add_to_jump_expression!(expression[end_node, t], variable[name, t], 1.0)

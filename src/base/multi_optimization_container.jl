@@ -126,7 +126,6 @@ function init_optimization_container!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     portfolio::PSIP.Portfolio,
 )
-    PSY.set_units_base_system!(portfolio, "NATURAL_UNITS")
     # The order of operations matter
     settings = get_settings(container)
 

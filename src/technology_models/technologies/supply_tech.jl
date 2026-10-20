@@ -1,6 +1,6 @@
 #! format: off
-get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
-get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).min
+get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d, PSIP.NU).max
+get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d, PSIP.NU).min
 get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::BinaryInvestment) = nothing
 get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::BinaryInvestment) = 0.0
 get_variable_binary(::BuildCapacity, d::PSIP.SupplyTechnology, ::ContinuousInvestment) = false
@@ -108,7 +108,7 @@ function add_expression!(
     )
 
     for t in time_steps, d in devices
-        unit_size = PSIP.get_unit_size(d)
+        unit_size = PSIP.get_unit_size(d, PSIP.NU)
         name = PSIP.get_name(d)
         init_cap = get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
@@ -148,7 +148,7 @@ function add_expression!(
     )
 
     for t in time_steps, d in devices
-        unit_size = PSIP.get_unit_size(d)
+        unit_size = PSIP.get_unit_size(d, PSIP.NU)
         name = PSIP.get_name(d)
         init_cap = get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
@@ -242,7 +242,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -277,7 +277,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         # Get each node the technology is assigned to
         for node in PSIP.get_region(d)
-            node_name = PSIP.get_name(node)
+            node_name = PSY.get_name(node)
             _add_to_jump_expression!(
                 expression[node_name, t],
                 variable[name, t],
@@ -356,7 +356,7 @@ function add_to_expression!(
     for d in devices
         name = PSIP.get_name(d)
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         for op_ix in feasibility_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
@@ -426,9 +426,9 @@ function add_constraints!(
             month_actual = Dates.month(first_ts)
             # retrieve_ops_time_series extracts month from timestamp, so pass op_ix
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-            ts_data = TimeSeries.values(time_series.data)
+            ts_data = TimeSeries.values(IS.get_data(time_series))
             first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
             if first_tstamp != first_ts_tstamp
                 @error(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $name does not match with the expected representative day $op_ix"
@@ -597,7 +597,7 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        max_capacity = PSIP.get_capacity_limits(d).max
+        max_capacity = PSIP.get_capacity_limits(d, PSIP.NU).max
         for t in time_steps
             con_ub[name, t] = JuMP.@constraint(
                 get_jump_model(container),

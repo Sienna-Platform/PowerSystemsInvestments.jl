@@ -105,13 +105,12 @@ export print_results_summary
 using InfrastructureSystems
 import InfrastructureSystems
 import PowerSystems
+import PowerSystems: @u_str
 import JuMP
 import MathOptInterface
 import PowerSystemsInvestmentsPortfolios
 import Dates
-import PowerModels
 import DataStructures
-import PowerNetworkMatrices
 import PrettyTables
 import TimeSeries
 import Logging
@@ -124,8 +123,6 @@ const IS = InfrastructureSystems
 const PSY = PowerSystems
 const MOI = MathOptInterface
 const PSIP = PowerSystemsInvestmentsPortfolios
-const PM = PowerModels
-const PNM = PowerNetworkMatrices
 const MOPFM = MOI.FileFormats.Model
 
 using DocStringExtensions

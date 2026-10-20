@@ -46,9 +46,9 @@ function add_to_expression!(
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
-            ts_data = TimeSeries.values(time_series.data)
+            ts_data = TimeSeries.values(IS.get_data(time_series))
             first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
             if first_tstamp != first_ts_tstamp
                 @error(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
@@ -83,14 +83,14 @@ function add_to_expression!(
 
     for d in devices
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
-            ts_data = TimeSeries.values(time_series.data)
+            ts_data = TimeSeries.values(IS.get_data(time_series))
             first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
             if first_tstamp != first_ts_tstamp
                 @error(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
@@ -124,14 +124,14 @@ function add_to_expression!(
 
     for d in devices
         # Only 1 region (node) supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
-            ts_data = TimeSeries.values(time_series.data)
+            ts_data = TimeSeries.values(IS.get_data(time_series))
             first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
             if first_tstamp != first_ts_tstamp
                 @error(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
@@ -168,9 +168,9 @@ function add_to_expression!(
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
-            ts_data = TimeSeries.values(time_series.data)
+            ts_data = TimeSeries.values(IS.get_data(time_series))
             first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
             if first_tstamp != first_ts_tstamp
                 @error(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
@@ -205,14 +205,14 @@ function add_to_expression!(
 
     for d in devices
         # Only one region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
-            ts_data = TimeSeries.values(time_series.data)
+            ts_data = TimeSeries.values(IS.get_data(time_series))
             first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
             if first_tstamp != first_ts_tstamp
                 @error(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
@@ -250,9 +250,9 @@ function add_to_expression!(
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
-            ts_data = TimeSeries.values(time_series.data)
+            ts_data = TimeSeries.values(IS.get_data(time_series))
             first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
             if first_tstamp != first_ts_tstamp
                 @error(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
@@ -286,14 +286,14 @@ function add_to_expression!(
 
     for d in devices
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
-            ts_data = TimeSeries.values(time_series.data)
+            ts_data = TimeSeries.values(IS.get_data(time_series))
             first_tstamp = time_stamps[first(time_slices)]
-            first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+            first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
             if first_tstamp != first_ts_tstamp
                 @error(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
@@ -329,14 +329,14 @@ function add_to_expression!(
     for d in devices
         # Get each node the demand is assigned to
         for node in PSIP.get_region(d)
-            node_name = PSIP.get_name(node)
+            node_name = PSY.get_name(node)
             for op_ix in operational_indexes
                 time_slices = consecutive_slices[op_ix]
                 time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
                 # Load Data is in MW
-                ts_data = TimeSeries.values(time_series.data)
+                ts_data = TimeSeries.values(IS.get_data(time_series))
                 first_tstamp = time_stamps[first(time_slices)]
-                first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+                first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
                 if first_tstamp != first_ts_tstamp
                     @error(
                         "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
@@ -372,14 +372,14 @@ function add_to_expression!(
     for d in devices
         # Get each node the demand is assigned to
         for node in PSIP.get_region(d)
-            node_name = PSIP.get_name(node)
+            node_name = PSY.get_name(node)
             for op_ix in operational_indexes
                 time_slices = consecutive_slices[op_ix]
                 time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
                 # Load Data is in MW
-                ts_data = TimeSeries.values(time_series.data)
+                ts_data = TimeSeries.values(IS.get_data(time_series))
                 first_tstamp = time_stamps[first(time_slices)]
-                first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+                first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
                 if first_tstamp != first_ts_tstamp
                     @error(
                         "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
@@ -416,14 +416,14 @@ function add_to_expression!(
     for d in devices
         # Get each node the demand is assigned to
         for node in PSIP.get_region(d)
-            node_name = PSIP.get_name(node)
+            node_name = PSY.get_name(node)
             for op_ix in operational_indexes
                 time_slices = consecutive_slices[op_ix]
                 time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
                 # Load Data is in MW
-                ts_data = TimeSeries.values(time_series.data)
+                ts_data = TimeSeries.values(IS.get_data(time_series))
                 first_tstamp = time_stamps[first(time_slices)]
-                first_ts_tstamp = first(TimeSeries.timestamp(time_series.data))
+                first_ts_tstamp = first(TimeSeries.timestamp(IS.get_data(time_series)))
                 if first_tstamp != first_ts_tstamp
                     @error(
                         "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
