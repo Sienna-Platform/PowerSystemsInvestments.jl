@@ -111,16 +111,23 @@ Only created when the TransportModel is built with `use_slacks = true`.
 struct BalanceSlackDown <: OperationsVariableType end
 
 """
-Whether a line on a corridor without existing capacity has been built by an investment
-period, under the PTDF transport model.
+Whether a PTDF branch that may not be built, a line on a corridor without existing capacity or a
+unit of a discrete line, has been built by an investment period.
 """
-struct NewCorridorBuiltVariable <: InvestmentVariableType end
+struct BranchBuiltVariable <: InvestmentVariableType end
 
 """
 Flow-cancelling transaction of a PTDF branch that may not be built: injected at its start node
 and withdrawn at its end node, it equals the branch's flow when the branch is not built.
 """
 struct VirtualTransactionVariable <: OperationsVariableType end
+
+"""
+Flow on each nodal AC line technology under the PTDF transport model, from its start node to its
+end node, computed after the solve. A corridor's flow is shared among its existing lines and
+continuous candidates in proportion to their capacity, so they are equally loaded.
+"""
+struct LineFlow <: ISOPT.AuxVariableType end
 
 is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
 is_operation_entry(::Type{<:OperationsVariableType}) = true
@@ -129,3 +136,6 @@ is_operation_entry(::Type{<:InvestmentVariableType}) = false
 is_investment_entry(::Type{<:ISOPT.VariableType}) = error()
 is_investment_entry(::Type{<:OperationsVariableType}) = false
 is_investment_entry(::Type{<:InvestmentVariableType}) = true
+
+is_operation_entry(::Type{LineFlow}) = true
+is_investment_entry(::Type{LineFlow}) = false

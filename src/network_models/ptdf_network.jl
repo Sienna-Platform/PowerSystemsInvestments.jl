@@ -13,13 +13,17 @@ end
 
 # Its limit is `fixed_capacity` plus the cumulative capacity of `technologies` (the continuous
 # ones); `fixed_capacity` is the existing capacity of the corridor's discrete technologies.
-# Susceptance is that of the lines with existing capacity, whatever the candidates build.
+# Susceptance is that of the lines with existing capacity, whatever the candidates build. An
+# unmonitored corridor stays in the PTDF but its flow is not limited.
 struct MergedCorridor
     name::String
     arc::Tuple{String, String}
     susceptance::Float64
     fixed_capacity::Float64
     technologies::Vector{BranchTechnology}
+    monitored::Bool
+    # Existing capacity of each discrete technology, which makes up fixed_capacity
+    fixed_technologies::Vector{Tuple{BranchTechnology, Float64}}
 end
 
 struct NewCorridor
@@ -125,10 +129,14 @@ function _check_susceptance_per_mw(corridor_name, lines)
     return
 end
 
+# `monitored` lists the merged corridors whose flow is limited, by corridor name or by the name
+# of one of their technologies; all of them are monitored when it is `nothing`. New corridors and
+# unit lines are always limited, since their limits also decide whether they are built.
 function PTDFNetworkData(
     portfolio::PSIP.Portfolio,
     template::InvestmentModelTemplate;
     tol::Float64=0.0,
+    monitored::Union{Nothing, Vector{String}}=nothing,
 )
     corridors = CorridorLines()
     for (model, names) in get_branch_models(template)
@@ -154,6 +162,8 @@ function PTDFNetworkData(
                     ],
                 ),
             )
+            technologies =
+                [technology for ((_, technology), c) in zip(lines, continuous) if c]
             push!(
                 merged_corridors,
                 MergedCorridor(
@@ -161,7 +171,14 @@ function PTDFNetworkData(
                     corridor,
                     sum(_susceptance, existing_lines),
                     sum(mw for (mw, c) in zip(existing, continuous) if !c; init=0.0),
-                    [technology for ((_, technology), c) in zip(lines, continuous) if c],
+                    technologies,
+                    isnothing(monitored) ||
+                        any(in(monitored), [corridor_name; [t.name for t in technologies]]),
+                    [
+                        (technology, mw) for
+                        ((_, technology), mw, c) in zip(lines, existing, continuous) if
+                        !c && mw > 0.0
+                    ],
                 ),
             )
         else
@@ -196,6 +213,16 @@ function PTDFNetworkData(
         end
     end
 
+    if !isnothing(monitored)
+        known = Set([c.name for c in merged_corridors])
+        for c in merged_corridors, t in c.technologies
+            push!(known, t.name)
+        end
+        unknown = setdiff(monitored, known)
+        isempty(unknown) ||
+            error("Monitored lines $unknown are not corridors with existing capacity")
+    end
+
     branches = [merged_corridors; new_corridors; unit_lines]
     nodes = sort!(collect(PSIP.get_regions(PSIP.Node, portfolio)); by=PSIP.get_name)
     ptdf = PTDF(
@@ -220,6 +247,7 @@ function initialize_network!(
         portfolio,
         template;
         tol=get(transport_model.attributes, "tol", 0.0),
+        monitored=get(transport_model.attributes, "monitored", nothing),
     )
     return
 end

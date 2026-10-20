@@ -59,6 +59,7 @@ should_write_resulting_value(::Type{FuelConsumptionExpression}) = true
 should_write_resulting_value(::Type{FuelCost}) = true
 should_write_resulting_value(::Type{StartUpCost}) = true
 should_write_resulting_value(::Type{ShutDownCost}) = true
+should_write_resulting_value(::Type{PTDFBranchFlow}) = true
 
 is_operation_entry(::Type{<:OperationsExpressionType}) = true
 is_operation_entry(::Type{<:InvestmentExpressionType}) = false

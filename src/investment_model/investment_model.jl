@@ -484,6 +484,13 @@ end
 function solve_impl!(model::InvestmentModel)
     container = get_optimization_container(model)
     status = solve_model!(container, get_portfolio(model))
+    if status == RunStatus.SUCCESSFULLY_FINALIZED
+        calculate_network_values!(
+            container,
+            get_transport_model(get_template(model)),
+            get_portfolio(model),
+        )
+    end
     set_run_status!(model, status)
     if status != RunStatus.SUCCESSFULLY_FINALIZED
         model_name = get_name(model)

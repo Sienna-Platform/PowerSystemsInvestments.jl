@@ -39,6 +39,8 @@ struct FlowRateConstraint <: ISOPT.ConstraintType end
 struct NewCorridorBuiltConstraint <: ISOPT.ConstraintType end
 # A virtual transaction is zero once its branch is built
 struct VirtualTransactionLimitConstraint <: ISOPT.ConstraintType end
+# The units built of a discrete line are its first unit lines
+struct UnitLineBuiltConstraint <: ISOPT.ConstraintType end
 
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end
 
