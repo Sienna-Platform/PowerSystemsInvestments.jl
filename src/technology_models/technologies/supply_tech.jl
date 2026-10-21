@@ -147,13 +147,13 @@ function add_expression!(
         meta=tech_model,
     )
 
+    # BuildCapacity is already in MW (BuildCapacity = binary decision * max capacity)
     for t in time_steps, d in devices
-        unit_size = PSIP.get_unit_size(d)
         name = PSIP.get_name(d)
         init_cap = get_init_cap(d, T(), portfolio)
         expression[name, t] = JuMP.@expression(
             get_jump_model(container),
-            init_cap + sum(var[name, t_p] * unit_size for t_p in time_steps if t_p <= t),
+            init_cap + sum(var[name, t_p] for t_p in time_steps if t_p <= t),
         )
     end
 
@@ -550,23 +550,6 @@ function add_constraints!(
 end
 
 # Maximum cumulative capacity
-function add_constraints!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::V,
-    devices::U,
-    formulation::S,
-) where {
-    T <: MaximumCumulativeCapacity,
-    S <: BinaryInvestment,
-    U <: Vector{D},
-    V <: CumulativeCapacity,
-} where {D <: PSIP.SupplyTechnology}
-    # For BinaryInvestment, the equality constraint BuildCapacity = binary * max_capacity
-    # already enforces the capacity limit, so this constraint is not needed
-    return
-end
-
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
