@@ -798,14 +798,24 @@ function construct_devices!(
                 end
             end
 
-            # Existing thermal units: add marginal fuel cost to the objective
+            # Existing thermal units: add marginal fuel cost to the objective, weighted and
+            # discounted like technology operating costs (see _add_linearcurve_cost!)
+            operational_weights = get_operational_weights(container)
+            consecutive_slices = get_consecutive_slices(time_mapping)
+            years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
+            discount_factor = 1.0 / (1.0 + get_discount_rate(container))
+            base_year = get_base_year(container)
             for device in device_list
                 device isa PSY.ThermalStandard || continue
                 name = PSY.get_name(device)
                 marginal = _base_thermal_marginal_cost(device)
                 marginal > 0.0 || continue
-                for t in time_steps
-                    add_to_objective_operations_expression!(container, marginal * dispatch_vars[name, t])
+                for op_ix in get_operational_indexes(time_mapping)
+                    weight = operational_weights[op_ix]
+                    for t in consecutive_slices[op_ix]
+                        npv = weight * discount_factor^(years[t] - base_year)
+                        add_to_objective_operations_expression!(container, marginal * npv * dispatch_vars[name, t])
+                    end
                 end
             end
 
