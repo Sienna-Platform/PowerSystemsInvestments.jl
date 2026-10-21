@@ -830,13 +830,15 @@ function construct_devices!(
                 end
             end
 
-            # Apply capacity factor constraints for renewable devices
-            if component_type <: PSY.RenewableDispatch
+            # Apply capacity factor constraints for renewable devices. Check each device: the
+            # template can register base-system devices under an abstract type such as PSY.Generator.
+            renewable_devices = filter(d -> d isa PSY.RenewableDispatch, device_list)
+            if !isempty(renewable_devices)
                 _add_renewable_dispatch_constraints!(
                     container,
                     jump_model,
                     dispatch_vars,
-                    device_list,
+                    renewable_devices,
                     time_mapping,
                     component_type,
                     tech_model_str,
@@ -909,15 +911,18 @@ function _add_renewable_dispatch_constraints!(
             ts_name = "max_active_power"
 
             try
-                # Get raw time series (capacity factors)
-                ts = IS.get_time_series(
+                # Capacity factors for this operational period's own hours (unscaled values)
+                ts_data = IS.get_time_series_values(
                     IS.SingleTimeSeries,
                     device,
-                    ts_name,
+                    ts_name;
+                    start_time = first_ts,
+                    len = length(time_slices),
+                    ignore_scaling_factors = true,
                 )
-                ts_data = TimeSeries.values(ts.data)
-            catch
-                # Time series not found - constraint will use max power only
+            catch e
+                # Time series not found or does not cover the period - constraint will use max power only
+                @warn "No $ts_name time series for $name at $first_ts; limiting dispatch to max power" exception = e maxlog = 1
             end
 
             # Apply capacity constraints
