@@ -10,6 +10,9 @@ export OptimizationProblemResults
 
 ### Algorithms ###
 export SingleInstanceSolve
+export IterativeMonitoring
+export get_monitoring_log
+export get_monitored_corridors
 
 ### Technology Models ###
 export TechnologyModel
@@ -263,6 +266,7 @@ include("investment_model/investment_problem_results.jl")
 include("base/serialization.jl")
 # Solve Instance #
 include("model_build/SingleInstanceSolve.jl")
+include("model_build/IterativeMonitoring.jl")
 # Utils #
 @static if pkgversion(PrettyTables).major == 2
     include("utils/printing_pt_v2.jl")

@@ -16,9 +16,12 @@ _virtual_branches(network::PTDFNetworkData) = [
     [(l.name, l.arc, l.susceptance) for l in network.unit_lines]
 ]
 
+_monitored_corridors(network::PTDFNetworkData) =
+    [c for c in network.merged_corridors if c.name in network.monitored]
+
 # Monitored merged corridors and every branch that may not be built
 _limited_branches(network::PTDFNetworkData) = [
-    [c.name for c in network.merged_corridors if c.monitored]
+    [c.name for c in _monitored_corridors(network)]
     first.(_virtual_branches(network))
 ]
 
@@ -44,25 +47,30 @@ function add_variable!(
     network::PTDFNetworkData,
 ) where {T <: FlowActivePowerVariable, U <: PSIP.Portfolio}
     time_steps = get_time_steps(get_time_mapping(container))
-    branches = [
-        [c for c in network.merged_corridors if c.monitored]
-        network.new_corridors
-        network.unit_lines
-    ]
+    branches = [_monitored_corridors(network); network.new_corridors; network.unit_lines]
     variable =
         add_variable_container!(container, T(), U, [b.name for b in branches], time_steps)
+    for branch in branches
+        _add_flow_variable!(variable, container, branch.name, _max_flow(branch, portfolio))
+    end
+    return
+end
+
+function _add_flow_variable!(
+    variable,
+    container::SingleOptimizationContainer,
+    name,
+    max_flow,
+)
     jump_model = get_jump_model(container)
     store_names = get_store_variable_names(get_settings(container))
-    for branch in branches
-        max_flow = _max_flow(branch, portfolio)
-        for t in time_steps
-            variable[branch.name, t] = JuMP.@variable(
-                jump_model,
-                lower_bound = -max_flow,
-                upper_bound = max_flow,
-                base_name = store_names ? "FlowActivePower_{$(branch.name), $(t)}" : ""
-            )
-        end
+    for t in get_time_steps(get_time_mapping(container))
+        variable[name, t] = JuMP.@variable(
+            jump_model,
+            lower_bound = -max_flow,
+            upper_bound = max_flow,
+            base_name = store_names ? "FlowActivePower_{$(name), $(t)}" : ""
+        )
     end
     return
 end
@@ -80,11 +88,24 @@ function add_constraints!(
     flow = get_expression(container, PTDFBranchFlow(), U)
     variable = get_variable(container, FlowActivePowerVariable(), U)
     constraint = add_constraints_container!(container, T(), U, branches, time_steps)
+    for branch in branches
+        _add_network_flow!(constraint, flow, variable, container, branch)
+    end
+    return
+end
+
+function _add_network_flow!(
+    constraint,
+    flow,
+    variable,
+    container::SingleOptimizationContainer,
+    name,
+)
     jump_model = get_jump_model(container)
-    for branch in branches, t in time_steps
-        constraint[branch, t] =
-            JuMP.@constraint(jump_model, variable[branch, t] == flow[branch, t])
-        flow[branch, t] = JuMP.AffExpr(0.0, variable[branch, t] => 1.0)
+    for t in get_time_steps(get_time_mapping(container))
+        constraint[name, t] =
+            JuMP.@constraint(jump_model, variable[name, t] == flow[name, t])
+        flow[name, t] = JuMP.AffExpr(0.0, variable[name, t] => 1.0)
     end
     return
 end
@@ -137,35 +158,46 @@ function add_expression!(
     network::PTDFNetworkData,
 ) where {T <: PTDFBranchFlow, U <: PSIP.Portfolio}
     time_steps = get_time_steps(get_time_mapping(container))
+    branches = _limited_branches(network)
+    flow = add_expression_container!(container, T(), U, branches, time_steps)
+    for branch in branches
+        _add_branch_flow!(flow, container, network, branch)
+    end
+    return
+end
+
+function _add_branch_flow!(
+    flow,
+    container::SingleOptimizationContainer,
+    network::PTDFNetworkData,
+    branch,
+)
     ptdf = network.ptdf
     nodes = ptdf.axes[1]
     node_lookup = ptdf.lookup[1]
-    branches = _limited_branches(network)
-    injections = get_expression(container, EnergyBalance(), U)
-    transactions = get_variable(container, VirtualTransactionVariable(), U)
-    flow = add_expression_container!(container, T(), U, branches, time_steps)
-    for branch in branches
-        ix = ptdf.lookup[2][branch]
-        factors = [(nodes[n], ptdf.data[n, ix]) for n in eachindex(nodes)]
-        filter!(((_, factor),) -> abs(factor) > network.tol, factors)
-        # Flow on this branch per unit of each virtual transaction, less the branch's own
-        transfers = [
-            (
-                name,
-                ptdf.data[node_lookup[arc[1]], ix] - ptdf.data[node_lookup[arc[2]], ix] - (name == branch ? 1.0 : 0.0),
-            ) for (name, arc, _) in _virtual_branches(network)
-        ]
-        filter!(((_, factor),) -> !iszero(factor), transfers)
-        for t in time_steps
-            expression = JuMP.AffExpr()
-            for (node, factor) in factors
-                JuMP.add_to_expression!(expression, factor, injections[node, t])
-            end
-            for (name, factor) in transfers
-                JuMP.add_to_expression!(expression, factor, transactions[name, t])
-            end
-            flow[branch, t] = expression
+    injections = get_expression(container, EnergyBalance(), PSIP.Portfolio)
+    transactions = get_variable(container, VirtualTransactionVariable(), PSIP.Portfolio)
+    ix = ptdf.lookup[2][branch]
+    factors = [(nodes[n], ptdf.data[n, ix]) for n in eachindex(nodes)]
+    filter!(((_, factor),) -> abs(factor) > network.tol, factors)
+    # Flow on this branch per unit of each virtual transaction, less the branch's own
+    transfers = [
+        (
+            name,
+            ptdf.data[node_lookup[arc[1]], ix] - ptdf.data[node_lookup[arc[2]], ix] -
+            (name == branch ? 1.0 : 0.0),
+        ) for (name, arc, _) in _virtual_branches(network)
+    ]
+    filter!(((_, factor),) -> !iszero(factor), transfers)
+    for t in get_time_steps(get_time_mapping(container))
+        expression = JuMP.AffExpr()
+        for (node, factor) in factors
+            JuMP.add_to_expression!(expression, factor, injections[node, t])
         end
+        for (name, factor) in transfers
+            JuMP.add_to_expression!(expression, factor, transactions[name, t])
+        end
+        flow[branch, t] = expression
     end
     return
 end
@@ -214,7 +246,7 @@ function add_constraints!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     flow = get_expression(container, PTDFBranchFlow(), U)
-    monitored = [c for c in network.merged_corridors if c.monitored]
+    monitored = _monitored_corridors(network)
     constant = [c for c in monitored if isempty(c.technologies)]
     limits = [
         [
@@ -235,10 +267,8 @@ function add_constraints!(
         meta="range",
     )
     jump_model = get_jump_model(container)
-    for corridor in constant, t in time_steps
-        limit = corridor.fixed_capacity
-        con_range[corridor.name, t] =
-            JuMP.@constraint(jump_model, -limit <= flow[corridor.name, t] <= limit)
+    for corridor in constant
+        _add_constant_limit!(con_range, flow, container, corridor)
     end
     built = get_variable(container, BranchBuiltVariable(), U)
     for line in network.unit_lines, op_ix in get_operational_indexes(time_mapping)
@@ -250,18 +280,138 @@ function add_constraints!(
         end
     end
     for (name, fixed_capacity, technologies) in limits
-        capacities = [_capacity_expression(container, tech) for tech in technologies]
-        for op_ix in get_operational_indexes(time_mapping)
-            period = inverse_invest_mapping[op_ix]
-            limit = JuMP.AffExpr(fixed_capacity)
-            for (technology, capacity) in zip(technologies, capacities)
-                JuMP.add_to_expression!(limit, capacity[technology.name, period])
-            end
-            for t in consecutive_slices[op_ix]
-                con_ub[name, t] = JuMP.@constraint(jump_model, flow[name, t] <= limit)
-                con_lb[name, t] = JuMP.@constraint(jump_model, flow[name, t] >= -limit)
-            end
+        _add_capacity_limit!(
+            con_lb,
+            con_ub,
+            flow,
+            container,
+            name,
+            fixed_capacity,
+            technologies,
+        )
+    end
+    return
+end
+
+function _add_constant_limit!(
+    con_range,
+    flow,
+    container::SingleOptimizationContainer,
+    corridor::MergedCorridor,
+)
+    jump_model = get_jump_model(container)
+    limit = corridor.fixed_capacity
+    for t in get_time_steps(get_time_mapping(container))
+        con_range[corridor.name, t] =
+            JuMP.@constraint(jump_model, -limit <= flow[corridor.name, t] <= limit)
+    end
+    return
+end
+
+# Limit of a branch whose capacity can be built, in the investment period of each time step
+function _add_capacity_limit!(
+    con_lb,
+    con_ub,
+    flow,
+    container::SingleOptimizationContainer,
+    name,
+    fixed_capacity,
+    technologies,
+)
+    time_mapping = get_time_mapping(container)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    jump_model = get_jump_model(container)
+    capacities = [_capacity_expression(container, tech) for tech in technologies]
+    for op_ix in get_operational_indexes(time_mapping)
+        period = inverse_invest_mapping[op_ix]
+        limit = JuMP.AffExpr(fixed_capacity)
+        for (technology, capacity) in zip(technologies, capacities)
+            JuMP.add_to_expression!(limit, capacity[technology.name, period])
         end
+        for t in consecutive_slices[op_ix]
+            con_ub[name, t] = JuMP.@constraint(jump_model, flow[name, t] <= limit)
+            con_lb[name, t] = JuMP.@constraint(jump_model, flow[name, t] >= -limit)
+        end
+    end
+    return
+end
+
+# Replaces a container by a copy with rows added for `names`, keeping the entries it has
+function _add_rows!(containers::Dict, key, names::Vector{String})
+    old = containers[key]
+    new = DenseAxisArray{eltype(old)}(undef, [axes(old, 1); names], axes(old, 2))
+    new.data[1:size(old.data, 1), :] .= old.data
+    containers[key] = new
+    return new
+end
+
+# Starts monitoring merged corridors in a built model: adds their flows, flow variables and
+# limits as the build would have, without rebuilding the rest
+function add_monitored_corridors!(
+    container::SingleOptimizationContainer,
+    transport_model::TransportModel{NodalPTDFModel},
+    portfolio::PSIP.Portfolio,
+    names::Vector{String},
+)
+    network = get_network_data(transport_model)
+    corridors = [c for c in network.merged_corridors if c.name in names]
+    isempty(corridors) && return
+    union!(network.monitored, names)
+    U = PSIP.Portfolio
+    flow = _add_rows!(container.expressions, ExpressionKey(PTDFBranchFlow, U), names)
+    for name in names
+        _add_branch_flow!(flow, container, network, name)
+    end
+    if get(transport_model.attributes, "flow_variables", false)
+        variable =
+            _add_rows!(container.variables, VariableKey(FlowActivePowerVariable, U), names)
+        constraint = _add_rows!(
+            container.constraints,
+            ConstraintKey(NetworkFlowConstraint, U),
+            names,
+        )
+        for corridor in corridors
+            _add_flow_variable!(
+                variable,
+                container,
+                corridor.name,
+                _max_flow(corridor, portfolio),
+            )
+            _add_network_flow!(constraint, flow, variable, container, corridor.name)
+        end
+    end
+    constant = [c for c in corridors if isempty(c.technologies)]
+    expandable = [c for c in corridors if !isempty(c.technologies)]
+    con_range = _add_rows!(
+        container.constraints,
+        ConstraintKey(FlowRateConstraint, U, "range"),
+        [c.name for c in constant],
+    )
+    for corridor in constant
+        _add_constant_limit!(con_range, flow, container, corridor)
+    end
+    expandable_names = [c.name for c in expandable]
+    con_lb = _add_rows!(
+        container.constraints,
+        ConstraintKey(FlowRateConstraint, U, "lb"),
+        expandable_names,
+    )
+    con_ub = _add_rows!(
+        container.constraints,
+        ConstraintKey(FlowRateConstraint, U, "ub"),
+        expandable_names,
+    )
+    for corridor in expandable
+        _add_capacity_limit!(
+            con_lb,
+            con_ub,
+            flow,
+            container,
+            corridor.name,
+            corridor.fixed_capacity,
+            corridor.technologies,
+        )
     end
     return
 end
@@ -465,6 +615,40 @@ calculate_aux_variable_value!(
     ::AuxVarKey{<:Union{LineFlow, BranchFlow}, <:PSIP.Portfolio},
     ::PSIP.Portfolio,
 ) = nothing
+
+# Largest exact flow (BranchFlow) of each merged corridor over the time steps, relative to its
+# limit in the step's investment period, and its largest flow above that limit (MW)
+function _corridor_loading(container::SingleOptimizationContainer, network::PTDFNetworkData)
+    time_mapping = get_time_mapping(container)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    flow = get_aux_variables(container)[AuxVarKey(BranchFlow, PSIP.Portfolio)]
+    capacities = Dict{Tuple{DataType, DataType}, Any}()
+    loading = Dict{String, Tuple{Float64, Float64}}()
+    for corridor in network.merged_corridors
+        corridor_capacities = [
+            get!(capacities, (t.type, t.formulation)) do
+                jump_value.(_capacity_expression(container, t))
+            end for t in corridor.technologies
+        ]
+        ratio, excess = 0.0, -Inf
+        for op_ix in get_operational_indexes(time_mapping)
+            period = inverse_invest_mapping[op_ix]
+            limit =
+                corridor.fixed_capacity + sum(
+                    capacity[t.name, period] for
+                    (t, capacity) in zip(corridor.technologies, corridor_capacities);
+                    init=0.0,
+                )
+            for t in consecutive_slices[op_ix]
+                ratio = max(ratio, abs(flow[corridor.name, t]) / limit)
+                excess = max(excess, abs(flow[corridor.name, t]) - limit)
+            end
+        end
+        loading[corridor.name] = (ratio, excess)
+    end
+    return loading
+end
 
 # Values computed from the solution and the transport model's network data
 calculate_network_values!(

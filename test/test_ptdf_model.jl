@@ -57,6 +57,7 @@ function _nodal_test_model(
     candidate_costs=Dict{String, Float64}(),
     discrete_lines=[],
     attributes=Dict{String, Any}(),
+    algorithm=SingleInstanceSolve,
 )
     p_5bus, op_days = test_2_zone_portfolio()
     sys = build_system(PSITestSystems, "c_sys5_re")
@@ -171,7 +172,7 @@ function _nodal_test_model(
 
     return InvestmentModel(
         template,
-        SingleInstanceSolve,
+        algorithm,
         p_5bus;
         optimizer=HiGHS.Optimizer,
         portfolio_to_file=false,
@@ -395,7 +396,11 @@ const TRIANGLE_LINES = [
     ("l13", "n1", "n3", 0.3, "3"),
 ]
 
-function _triangle_model(transport; attributes=Dict{String, Any}())
+function _triangle_model(
+    transport;
+    attributes=Dict{String, Any}(),
+    algorithm=SingleInstanceSolve,
+)
     m = _nodal_test_model(
         transport;
         nodes=["n1", "n2", "n3"],
@@ -411,6 +416,7 @@ function _triangle_model(transport; attributes=Dict{String, Any}())
         ratings=Dict("1" => 100.0),
         use_slacks=true,
         attributes=attributes,
+        algorithm=algorithm,
     )
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
@@ -794,6 +800,65 @@ end
     model_flow = JuMP.value.(flow)
     reported = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
     @test maximum(abs.(model_flow.data .- reported[axes(model_flow, 1), :].data)) > 1.0
+end
+
+@testset "Iterative monitoring" begin
+    full = _triangle_model(NodalPTDFModel)
+    full_objective = _solved_objective(full)
+    full_flow =
+        PSIN.get_aux_variables(PSIN.get_optimization_container(full))[PSIN.AuxVarKey(
+            BranchFlow,
+            PSIP.Portfolio,
+        )]
+    for flow_variables in (false, true)
+        m = _triangle_model(
+            NodalPTDFModel;
+            attributes=Dict{String, Any}("flow_variables" => flow_variables),
+            algorithm=IterativeMonitoring,
+        )
+        # The first solve limits no corridor
+        @test isempty(PSIN.get_monitored_corridors(m))
+        @test isapprox(_solved_objective(m), full_objective; rtol=1e-6)
+        log = get_monitoring_log(m)
+        @test size(log, 1) >= 2
+        @test log.added[1] > 0
+        @test last(log.added) == 0
+        @test last(log.overloaded) == 0
+        monitored = PSIN.get_monitored_corridors(m)
+        @test !isempty(monitored)
+        # The corridors added after a solve have their flows and limits in the model
+        container = PSIN.get_optimization_container(m)
+        @test sort(
+            axes(PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio), 1),
+        ) == monitored
+        limits =
+            PSIN.get_constraint(container, FlowRateConstraint(), PSIP.Portfolio, "range")
+        @test sort(axes(limits, 1)) == monitored
+        flow = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
+        @test isapprox(flow.data, full_flow.data; atol=1e-3)
+    end
+    # Stopping before the overloads are gone leaves them in the log
+    m = _triangle_model(
+        NodalPTDFModel;
+        attributes=Dict{String, Any}("max_iterations" => 0),
+        algorithm=IterativeMonitoring,
+    )
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test size(get_monitoring_log(m), 1) == 1
+    @test last(get_monitoring_log(m).overloaded) > 0
+    # Only the PTDF transport model monitors corridors
+    transport = _nodal_test_model(
+        NodalBalanceModel;
+        nodes=["Node_1", "Node_2"],
+        placement=TWO_NODE_PLACEMENT,
+        lines=[("nodal_line", "Node_1", "Node_2", 0.1, "1")],
+        algorithm=IterativeMonitoring,
+    )
+    @test build!(
+        transport;
+        output_dir=mktempdir(; cleanup=true),
+        console_level=Logging.Error,
+    ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end
 
 @testset "Flow variables" begin

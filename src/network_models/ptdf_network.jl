@@ -14,15 +14,13 @@ end
 # Its limit is `fixed_capacity` plus the cumulative capacity of `technologies` (the continuous
 # ones that can be expanded); `fixed_capacity` is the existing capacity of the others (discrete
 # ones, and continuous ones whose maximum is their existing capacity).
-# Susceptance is that of the lines with existing capacity, whatever the candidates build. An
-# unmonitored corridor stays in the PTDF but its flow is not limited.
+# Susceptance is that of the lines with existing capacity, whatever the candidates build.
 struct MergedCorridor
     name::String
     arc::Tuple{String, String}
     susceptance::Float64
     fixed_capacity::Float64
     technologies::Vector{BranchTechnology}
-    monitored::Bool
     # Existing capacity of each technology that cannot be expanded, which make up fixed_capacity
     fixed_technologies::Vector{Tuple{BranchTechnology, Float64}}
 end
@@ -45,13 +43,16 @@ end
 
 # PTDF rows follow the order merged corridors, new corridors, unit lines. The PTDF is kept
 # whole: `tol` only drops the small injection terms of the flows, so the coefficients that
-# cancel the flow of an unbuilt branch are never cut.
+# cancel the flow of an unbuilt branch are never cut. `monitored` holds the merged corridors whose
+# flow is limited; an unmonitored corridor stays in the PTDF but its flow is not limited.
+# IterativeMonitoring adds to it between solves.
 struct PTDFNetworkData <: AbstractNetworkData
     merged_corridors::Vector{MergedCorridor}
     new_corridors::Vector{NewCorridor}
     unit_lines::Vector{UnitLine}
     ptdf::PTDF
     tol::Float64
+    monitored::Set{String}
 end
 
 const CorridorLines = Dict{
@@ -183,14 +184,6 @@ function PTDFNetworkData(
                     sum(_susceptance, existing_lines),
                     sum(last, fixed_technologies; init=0.0),
                     technologies,
-                    isnothing(monitored) || any(
-                        in(monitored),
-                        [
-                            corridor_name
-                            [t.name for t in technologies]
-                            [t.name for (t, _) in fixed_technologies]
-                        ],
-                    ),
                     fixed_technologies,
                 ),
             )
@@ -237,6 +230,17 @@ function PTDFNetworkData(
             error("Monitored lines $unknown are not corridors with existing capacity")
     end
 
+    # A corridor is monitored when its name or the name of one of its technologies is listed
+    monitored_corridors = Set(
+        c.name for c in merged_corridors if isnothing(monitored) || any(
+            in(monitored),
+            [
+                c.name
+                [t.name for t in c.technologies]
+                [t.name for (t, _) in c.fixed_technologies]
+            ],
+        )
+    )
     branches = [merged_corridors; new_corridors; unit_lines]
     nodes = sort!(collect(PSIP.get_regions(PSIP.Node, portfolio)); by=PSIP.get_name)
     ptdf = PTDF(
@@ -246,7 +250,14 @@ function PTDFNetworkData(
         Float64[b.susceptance for b in branches];
         reference_nodes=_reference_nodes(nodes),
     )
-    return PTDFNetworkData(merged_corridors, new_corridors, unit_lines, ptdf, tol)
+    return PTDFNetworkData(
+        merged_corridors,
+        new_corridors,
+        unit_lines,
+        ptdf,
+        tol,
+        monitored_corridors,
+    )
 end
 
 # Only the PTDF model needs network data

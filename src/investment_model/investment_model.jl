@@ -10,7 +10,7 @@ end
 
 function InvestmentModel(
     template::AbstractInvestmentModelTemplate,
-    M::Type{SingleInstanceSolve},
+    M::Type{<:SolutionAlgorithm},
     portfolio::PSIP.Portfolio,
     settings::Settings,
     jump_model::Union{Nothing, JuMP.Model}=nothing;
@@ -31,7 +31,7 @@ end
 
 function InvestmentModel(
     template::AbstractInvestmentModelTemplate,
-    alg::Type{SingleInstanceSolve},
+    alg::Type{<:SolutionAlgorithm},
     portfolio::PSIP.Portfolio,
     jump_model::Union{Nothing, JuMP.Model}=nothing;
     name=nothing,
@@ -435,15 +435,16 @@ function solve!(
     try
         Logging.with_logger(logger) do
             try
-                initialize_storage!(
-                    get_store(model),
-                    get_optimization_container(model),
-                    get_store_params(model),
-                )
                 TimerOutputs.@timeit RUN_OPERATION_MODEL_TIMER "Solve" begin
                     @warn "todo: add pre-solve model check back in"
                     #_pre_solve_model_checks(model, optimizer)
                     solve_impl!(model)
+                    # After the solve, since some algorithms add to the model while solving
+                    initialize_storage!(
+                        get_store(model),
+                        get_optimization_container(model),
+                        get_store_params(model),
+                    )
                     container = get_optimization_container(model)
                     time_mapping = get_time_mapping(container)
                     current_time = get_base_date(time_mapping)
@@ -492,15 +493,16 @@ function solve_impl!(model::InvestmentModel)
         )
     end
     set_run_status!(model, status)
-    if status != RunStatus.SUCCESSFULLY_FINALIZED
-        model_name = get_name(model)
-        output_dir = get_output_dir(model)
-        infeasible_opt_path = joinpath(output_dir, "infeasible_$(model_name).json")
-        @error("Serializing Infeasible Problem at $(infeasible_opt_path)")
-        serialize_optimization_model(container, infeasible_opt_path)
-        error("Solving model $(model_name) failed")
-    end
+    status == RunStatus.SUCCESSFULLY_FINALIZED || _solve_failed(model)
     return
+end
+
+function _solve_failed(model::InvestmentModel)
+    model_name = get_name(model)
+    infeasible_opt_path = joinpath(get_output_dir(model), "infeasible_$(model_name).json")
+    @error("Serializing Infeasible Problem at $(infeasible_opt_path)")
+    serialize_optimization_model(get_optimization_container(model), infeasible_opt_path)
+    error("Solving model $(model_name) failed")
 end
 
 set_console_level!(model::InvestmentModel, val) =
