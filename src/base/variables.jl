@@ -123,6 +123,13 @@ and withdrawn at its end node, it equals the branch's flow when the branch is no
 struct VirtualTransactionVariable <: OperationsVariableType end
 
 """
+Flow on every branch of the PTDF transport model, from its start node to its end node, computed
+after the solve from the full PTDF, the net injection of every node and the virtual transactions. It is exact
+whatever the PTDF cutoff, and includes the branches whose flow is not limited.
+"""
+struct BranchFlow <: ISOPT.AuxVariableType end
+
+"""
 Flow on each nodal AC line technology under the PTDF transport model, from its start node to its
 end node, computed after the solve. A corridor's flow is shared among its existing lines and
 continuous candidates in proportion to their capacity, so they are equally loaded.
@@ -137,5 +144,5 @@ is_investment_entry(::Type{<:ISOPT.VariableType}) = error()
 is_investment_entry(::Type{<:OperationsVariableType}) = false
 is_investment_entry(::Type{<:InvestmentVariableType}) = true
 
-is_operation_entry(::Type{LineFlow}) = true
-is_investment_entry(::Type{LineFlow}) = false
+is_operation_entry(::Type{<:Union{LineFlow, BranchFlow}}) = true
+is_investment_entry(::Type{<:Union{LineFlow, BranchFlow}}) = false

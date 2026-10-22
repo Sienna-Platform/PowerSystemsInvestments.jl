@@ -363,7 +363,11 @@ end
     m = _two_node_model(NodalPTDFModel)
     network = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m)))
     @test network.ptdf.axes == (["Node_1", "Node_2"], ["Node_1_Node_2"])
-    @test [t.name for t in only(network.merged_corridors).technologies] == ["nodal_line"]
+    # The line cannot add capacity, so the corridor's limit is its existing capacity
+    corridor = only(network.merged_corridors)
+    @test isempty(corridor.technologies)
+    @test [t.name for (t, _) in corridor.fixed_technologies] == ["nodal_line"]
+    @test corridor.fixed_capacity > 0.0
     @test isnothing(
         PSIN.get_network_data(
             PSIN.get_transport_model(PSIN.get_template(_two_node_model(NodalBalanceModel))),
@@ -450,6 +454,9 @@ end
     end
     # The 100 MW line limits the dispatch
     @test maximum(abs.(flow["n1_n2", :])) ≈ 100.0
+    # Without a cutoff the reported flows are the model's flows
+    reported = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
+    @test isapprox(reported[axes(flow, 1), :].data, flow.data; atol=1e-6)
 
     # One island, balanced as a whole
     balance = PSIN.get_constraint(container, IslandBalanceConstraint(), PSIP.Portfolio)
@@ -539,7 +546,7 @@ end
 # branch in service its flow (Kirchhoff's voltage law). All lines are at 230 kV, so susceptance is
 # proportional to 1 / reactance.
 function _test_dc_power_flow(container, branches, in_service)
-    flow = JuMP.value.(PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio))
+    flow = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
     injection =
         JuMP.value.(PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio))
     nodes = collect(axes(injection, 1))
@@ -783,6 +790,29 @@ end
         @test JuMP.coefficient(flow[branch, 1], dispatch[generator, 1]) ≈ expected
     end
     _solved_objective(m)
+    # Reported flows use the whole PTDF, so they differ from the model's flows
+    model_flow = JuMP.value.(flow)
+    reported = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
+    @test maximum(abs.(model_flow.data .- reported[axes(model_flow, 1), :].data)) > 1.0
+end
+
+@testset "Flow variables" begin
+    expressions = _triangle_model(NodalPTDFModel)
+    objective = _solved_objective(expressions)
+    m = _triangle_model(
+        NodalPTDFModel;
+        attributes=Dict{String, Any}("flow_variables" => true),
+    )
+    container = PSIN.get_optimization_container(m)
+    variable = PSIN.get_variable(container, FlowActivePowerVariable(), PSIP.Portfolio)
+    @test sort(axes(variable, 1)) == ["n1_n2", "n1_n3", "n2_n3"]
+    @test !isempty(PSIN.get_constraint(container, NetworkFlowConstraint(), PSIP.Portfolio))
+    # The limits only have the flow variable
+    limits = PSIN.get_constraint(container, FlowRateConstraint(), PSIP.Portfolio, "range")
+    @test length(JuMP.constraint_object(limits["n1_n2", 1]).func.terms) == 1
+    @test isapprox(_solved_objective(m), objective; rtol=1e-6)
+    flow = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
+    @test isapprox(JuMP.value.(variable).data, flow[axes(variable, 1), :].data; atol=1e-4)
 end
 
 @testset "Unmonitored corridors" begin
@@ -794,14 +824,18 @@ end
         attributes=Dict{String, Any}("monitored" => ["l23", "l13"]),
     )
     container = PSIN.get_optimization_container(m)
-    limits = PSIN.get_constraint(container, FlowRateConstraint(), PSIP.Portfolio, "ub")
+    # The lines cannot be expanded, so each corridor has one ranged limit
+    limits = PSIN.get_constraint(container, FlowRateConstraint(), PSIP.Portfolio, "range")
     @test sort(axes(limits, 1)) == ["n1_n3", "n2_n3"]
     # Without its 100 MW limit the n1-n2 corridor carries more, and the dispatch is cheaper
     @test _solved_objective(m) < monitored_objective * (1 - 1e-3)
-    flow = JuMP.value.(PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio))
+    # Only the monitored corridors have flow expressions
+    @test sort(axes(PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio), 1)) ==
+          ["n1_n3", "n2_n3"]
+    flow = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
     @test maximum(abs.(flow["n1_n2", :])) > 100.0 + 1e-3
     # Flows of every corridor, monitored or not, are in the results to check for overloads
-    results = read_expression(m, PSIN.ExpressionKey(PTDFBranchFlow, PSIP.Portfolio))
+    results = PSIN.read_aux_variable(m, PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio))
     @test sort(unique(results.name)) == ["n1_n2", "n1_n3", "n2_n3"]
     _test_dc_power_flow(
         container,

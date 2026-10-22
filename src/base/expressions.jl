@@ -7,7 +7,7 @@ abstract type CumulativeInvestmentExpressionType <: InvestmentExpressionType end
 struct SupplyTotal <: OperationsExpressionType end
 struct DemandTotal <: OperationsExpressionType end
 struct EnergyBalance <: OperationsExpressionType end
-# Flow on each PTDF branch, from the injections at every node
+# Flow on each PTDF branch whose flow is limited, from the net injections at every node
 struct PTDFBranchFlow <: OperationsExpressionType end
 
 # Weighted (representative-day) energy expressions. Always created (where
@@ -59,7 +59,6 @@ should_write_resulting_value(::Type{FuelConsumptionExpression}) = true
 should_write_resulting_value(::Type{FuelCost}) = true
 should_write_resulting_value(::Type{StartUpCost}) = true
 should_write_resulting_value(::Type{ShutDownCost}) = true
-should_write_resulting_value(::Type{PTDFBranchFlow}) = true
 
 is_operation_entry(::Type{<:OperationsExpressionType}) = true
 is_operation_entry(::Type{<:InvestmentExpressionType}) = false

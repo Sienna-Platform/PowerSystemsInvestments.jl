@@ -40,11 +40,18 @@ function construct_transport!(
     add_variable!(container, BranchBuiltVariable(), p, network)
     add_variable!(container, VirtualTransactionVariable(), p, network)
     add_expression!(container, PTDFBranchFlow(), p, network)
+    # A flow variable per limited branch, so each PTDF flow is written once instead of in both
+    # of its limits
+    if get(transport_model.attributes, "flow_variables", false)
+        add_variable!(container, FlowActivePowerVariable(), p, network)
+        add_constraints!(container, NetworkFlowConstraint, p, network)
+    end
     add_constraints!(container, IslandBalanceConstraint, p, network)
     add_constraints!(container, FlowRateConstraint, p, network)
     add_constraints!(container, NewCorridorBuiltConstraint, p, network)
     add_constraints!(container, UnitLineBuiltConstraint, p, network)
     add_constraints!(container, VirtualTransactionLimitConstraint, p, network)
+    add_aux_variable!(container, BranchFlow(), p, network)
     add_aux_variable!(container, LineFlow(), p, network)
     return
 end

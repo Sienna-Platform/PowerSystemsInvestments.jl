@@ -55,6 +55,7 @@ export NodalPTDFModel
 export NodalBalanceConstraint
 export IslandBalanceConstraint
 export FlowRateConstraint
+export NetworkFlowConstraint
 export EnergyShareRequirementConstraint
 export HydroEnergyBudgetConstraint
 
@@ -77,6 +78,7 @@ export FlowActivePowerVariable
 export BranchBuiltVariable
 export VirtualTransactionVariable
 export LineFlow
+export BranchFlow
 
 ### Expressions ###
 export CumulativeCapacity

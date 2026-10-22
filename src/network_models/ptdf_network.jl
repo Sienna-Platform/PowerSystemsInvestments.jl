@@ -12,7 +12,8 @@ struct BranchTechnology
 end
 
 # Its limit is `fixed_capacity` plus the cumulative capacity of `technologies` (the continuous
-# ones); `fixed_capacity` is the existing capacity of the corridor's discrete technologies.
+# ones that can be expanded); `fixed_capacity` is the existing capacity of the others (discrete
+# ones, and continuous ones whose maximum is their existing capacity).
 # Susceptance is that of the lines with existing capacity, whatever the candidates build. An
 # unmonitored corridor stays in the PTDF but its flow is not limited.
 struct MergedCorridor
@@ -22,7 +23,7 @@ struct MergedCorridor
     fixed_capacity::Float64
     technologies::Vector{BranchTechnology}
     monitored::Bool
-    # Existing capacity of each discrete technology, which makes up fixed_capacity
+    # Existing capacity of each technology that cannot be expanded, which make up fixed_capacity
     fixed_technologies::Vector{Tuple{BranchTechnology, Float64}}
 end
 
@@ -150,6 +151,11 @@ function PTDFNetworkData(
         lines = corridors[corridor]
         existing = [PSIP.get_existing_capacity_mw(portfolio, line) for (line, _) in lines]
         continuous = [_is_continuous(technology.formulation) for (_, technology) in lines]
+        # Continuous lines that can add capacity; the limit of the others is a constant
+        expandable = [
+            c && PSIP.get_capacity_limits(line).max > mw for
+            ((line, _), mw, c) in zip(lines, existing, continuous)
+        ]
         if any(>(0.0), existing)
             corridor_name = join(corridor, "_")
             existing_lines = [line for ((line, _), mw) in zip(lines, existing) if mw > 0.0]
@@ -163,22 +169,29 @@ function PTDFNetworkData(
                 ),
             )
             technologies =
-                [technology for ((_, technology), c) in zip(lines, continuous) if c]
+                [technology for ((_, technology), e) in zip(lines, expandable) if e]
+            fixed_technologies = [
+                (technology, mw) for
+                ((_, technology), mw, e) in zip(lines, existing, expandable) if
+                !e && mw > 0.0
+            ]
             push!(
                 merged_corridors,
                 MergedCorridor(
                     corridor_name,
                     corridor,
                     sum(_susceptance, existing_lines),
-                    sum(mw for (mw, c) in zip(existing, continuous) if !c; init=0.0),
+                    sum(last, fixed_technologies; init=0.0),
                     technologies,
-                    isnothing(monitored) ||
-                        any(in(monitored), [corridor_name; [t.name for t in technologies]]),
-                    [
-                        (technology, mw) for
-                        ((_, technology), mw, c) in zip(lines, existing, continuous) if
-                        !c && mw > 0.0
-                    ],
+                    isnothing(monitored) || any(
+                        in(monitored),
+                        [
+                            corridor_name
+                            [t.name for t in technologies]
+                            [t.name for (t, _) in fixed_technologies]
+                        ],
+                    ),
+                    fixed_technologies,
                 ),
             )
         else
@@ -215,8 +228,9 @@ function PTDFNetworkData(
 
     if !isnothing(monitored)
         known = Set([c.name for c in merged_corridors])
-        for c in merged_corridors, t in c.technologies
-            push!(known, t.name)
+        for c in merged_corridors
+            union!(known, [t.name for t in c.technologies])
+            union!(known, [t.name for (t, _) in c.fixed_technologies])
         end
         unknown = setdiff(monitored, known)
         isempty(unknown) ||
