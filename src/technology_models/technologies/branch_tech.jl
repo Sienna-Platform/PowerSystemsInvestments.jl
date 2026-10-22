@@ -93,7 +93,6 @@ function add_expression!(
     return
 end
 
-# Discrete investments count units of unit_size MW
 function add_expression!(
     container::SingleOptimizationContainer,
     portfolio::PSIP.Portfolio,

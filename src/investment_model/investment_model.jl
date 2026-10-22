@@ -439,7 +439,7 @@ function solve!(
                     @warn "todo: add pre-solve model check back in"
                     #_pre_solve_model_checks(model, optimizer)
                     solve_impl!(model)
-                    # After the solve, since some algorithms add to the model while solving
+                    # After solve_impl!, which can add to the model
                     initialize_storage!(
                         get_store(model),
                         get_optimization_container(model),

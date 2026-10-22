@@ -262,8 +262,7 @@ function construct_technologies!(
     return
 end
 
-# Under the PTDF model, nodal line flows are expressions of the nodal injections and are limited
-# by the transport model, so the lines add no operation variables or constraints
+# Under the PTDF model line flows come from the transport model
 function construct_technologies!(
     ::SingleOptimizationContainer,
     ::PSIP.Portfolio,

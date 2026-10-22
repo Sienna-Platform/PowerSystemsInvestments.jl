@@ -4,21 +4,13 @@ abstract type SolutionAlgorithm end
 struct SingleInstanceSolve <: SolutionAlgorithm end
 
 """
-Solves a model with the `NodalPTDFModel` transport model, limiting only the corridors whose flow
-needs it. The first solve limits the corridors listed in the `"monitored"` attribute (none when it
-is not set). After each solve, the unmonitored corridors whose exact flow exceeds their limit start
-being monitored, and the model is solved again, until no unmonitored corridor is overloaded.
-Corridors are added to the built model, so each solve starts from the previous one.
+Solves a model with the `NodalPTDFModel` transport model, monitoring only the corridors that
+need it: after each solve, the corridors whose exact flow exceeds their limit are added and the
+model is solved again, until none is overloaded. The first solve monitors the `"monitored"`
+corridors (none by default).
 
-Transport model attributes:
-
-  - `"max_iterations"`: largest number of solves after the first (default 20);
-  - `"overload_tolerance"`: share above its limit at which a corridor counts as overloaded
-    (default 1e-4);
-  - `"add_threshold"`: loading above which unmonitored corridors are added once some are
-    overloaded (default 1.0, only the overloaded ones).
-
-With a PTDF cutoff (`"tol"`), monitored corridors can end slightly above their limits in the exact
-flows; they are reported, not corrected. See [`get_monitoring_log`](@ref).
+Transport model attributes: `"max_iterations"` (default 20), `"overload_tolerance"` (share above
+the limit, default 1e-4) and `"add_threshold"` (once some corridors are overloaded, also add
+those loaded above this share; default 1.0).
 """
 struct IterativeMonitoring <: SolutionAlgorithm end

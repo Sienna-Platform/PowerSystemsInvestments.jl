@@ -111,28 +111,23 @@ Only created when the TransportModel is built with `use_slacks = true`.
 struct BalanceSlackDown <: OperationsVariableType end
 
 """
-Whether a PTDF branch that may not be built, a line on a corridor without existing capacity or a
-unit of a discrete line, has been built by an investment period.
+Whether a prospective PTDF branch is built by an investment period.
 """
 struct BranchBuiltVariable <: InvestmentVariableType end
 
 """
-Flow-cancelling transaction of a PTDF branch that may not be built: injected at its start node
-and withdrawn at its end node, it equals the branch's flow when the branch is not built.
+Transaction that cancels the flow of an unbuilt PTDF branch.
 """
 struct VirtualTransactionVariable <: OperationsVariableType end
 
 """
-Flow on every branch of the PTDF transport model, from its start node to its end node, computed
-after the solve from the full PTDF, the net injection of every node and the virtual transactions. It is exact
-whatever the PTDF cutoff, and includes the branches whose flow is not limited.
+Exact flow on every PTDF branch, computed after the solve.
 """
 struct BranchFlow <: ISOPT.AuxVariableType end
 
 """
-Flow on each nodal AC line technology under the PTDF transport model, from its start node to its
-end node, computed after the solve. A corridor's flow is shared among its existing lines and
-continuous candidates in proportion to their capacity, so they are equally loaded.
+Flow on each nodal AC line under the PTDF model, computed after the solve. A corridor's flow
+is split among its lines in proportion to their capacity.
 """
 struct LineFlow <: ISOPT.AuxVariableType end
 

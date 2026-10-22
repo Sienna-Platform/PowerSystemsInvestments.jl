@@ -1,7 +1,4 @@
-# Soft balance at every node: slack_up (unserved energy) and slack_dn (over-supply) are added
-# to the node's EnergyBalance, so under the PTDF model they are also located injections.
-# Both are penalized in the objective like a variable cost: by the hours of the year each time
-# step stands for, over the years of the investment period, discounted to the base year.
+# Penalized slacks added to the EnergyBalance of every node
 function _add_balance_slacks!(
     container::SingleOptimizationContainer,
     ::Type{U},

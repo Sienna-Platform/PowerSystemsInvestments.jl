@@ -1,6 +1,4 @@
-# DC power flow matrices of the nodal network, computed as in PowerNetworkMatrices so the two
-# can be swapped later: the incidence matrix is branches × nodes, and PTDF and LODF store their
-# transposes, indexed as ptdf[branch, node] and lodf[monitored, outaged].
+# As in PowerNetworkMatrices; indexed ptdf[branch, node] and lodf[monitored, outaged]
 
 struct PTDF
     data::Matrix{Float64}
@@ -47,8 +45,6 @@ function _incidence_matrix(
     return SparseArrays.sparse(rows, cols, vals, length(arcs), length(node_lookup))
 end
 
-# Islands are found with union-find over the branches. Each is keyed by one reference node:
-# the first of its nodes listed in `reference_nodes`, or else its first node.
 function _find_subnetworks(
     nodes::Vector{String},
     arcs::Vector{Tuple{String, String}},
@@ -100,14 +96,12 @@ function PTDF(
     A = _incidence_matrix(arcs, node_lookup)
     BA = SparseArrays.sparse(transpose(A)) * LinearAlgebra.Diagonal(susceptances)
     subnetworks = _find_subnetworks(nodes, arcs, node_lookup, reference_nodes)
-    # Removing each island's reference node makes the nodal susceptance matrix invertible
     valid_ix = setdiff(eachindex(nodes), [node_lookup[r] for r in keys(subnetworks)])
     data = zeros(length(nodes), length(branches))
     if !isempty(valid_ix)
         ABA = (BA * A)[valid_ix, valid_ix]
         data[valid_ix, :] = LinearAlgebra.lu(ABA) \ Matrix(BA[valid_ix, :])
     end
-    # Optional cutoff: entries smaller than `tol` are set to zero
     data[abs.(data) .< tol] .= 0.0
     return PTDF(
         data,
@@ -118,8 +112,7 @@ function PTDF(
     )
 end
 
-# Reactance in ohms converted to per unit with the line voltage in kV, on a 1 MVA base (the
-# base cancels out of the PTDF)
+# Per unit on a 1 MVA base, from ohms and kV
 function _susceptance(line::PSIP.NodalACTransportTechnology)
     x = PSIP.get_reactance(line)
     voltage = PSIP.get_voltage(line)
@@ -131,7 +124,6 @@ end
 _reference_nodes(nodes) =
     Set(PSIP.get_name(n) for n in nodes if PSIP.get_bus_type(n) == PSY.ACBusTypes.REF)
 
-# Available AC lines of the portfolio
 function PTDF(portfolio::PSIP.Portfolio; tol::Float64=0.0)
     nodes = sort!(collect(PSIP.get_regions(PSIP.Node, portfolio)); by=PSIP.get_name)
     lines = sort!(
@@ -158,9 +150,7 @@ function PTDF(portfolio::PSIP.Portfolio; tol::Float64=0.0)
     )
 end
 
-# The row of an outaged branch is A * PTDF scaled by 1 / (1 - its own flow sensitivity), with
-# -1 on the diagonal. A branch whose outage splits its island keeps an unscaled row, as in
-# PowerNetworkMatrices.
+# A branch whose outage splits its island keeps an unscaled row, as in PowerNetworkMatrices
 function LODF(ptdf::PTDF)
     branches = ptdf.axes[2]
     data = _incidence_matrix(ptdf.arcs, ptdf.lookup[1]) * ptdf.data

@@ -136,7 +136,6 @@ end
                 JuMP.objective_function(PSIN.get_jump_model(continuous_container)),
                 continuous_build[name, 1],
             )
-            # Continuous investment builds MW directly
             continuous_capacity = PSIN.get_expression(
                 continuous_container,
                 PSIN.CumulativeCapacity(),
@@ -163,11 +162,10 @@ end
                 )
                 for t in PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
                     @test is_discrete(build[name, t])
-                    # Each unit built adds unit_size MW of capacity
                     @test JuMP.coefficient(capacity[name, t], build[name, 1]) ==
                           TRANSMISSION_UNIT_SIZE
                 end
-                # One unit costs the per-MW cost of the continuous formulation times the unit size
+                # Per-unit cost is the per-MW cost times the unit size
                 unit_cost = JuMP.coefficient(
                     JuMP.objective_function(PSIN.get_jump_model(container)),
                     build[name, 1],
@@ -183,11 +181,9 @@ end
                     line_type,
                     "BasicDispatch",
                 )
-                # Flows stay within the capacity of the units built
                 @test maximum(abs.(JuMP.value.(flow.data))) <=
                       TRANSMISSION_UNIT_SIZE * sum(round.(built)) + 1e-6
                 if formulation == BinaryInvestment
-                    # One unit at most over the whole horizon
                     @test sum(built) <= 1.0 + 1e-6
                     single_unit = PSIN.get_constraint(
                         container,

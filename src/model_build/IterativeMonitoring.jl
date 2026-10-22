@@ -5,7 +5,6 @@ _check_monitoring_transport(::TransportModel{T}) where {T} =
 function build_impl!(model::InvestmentModel{IterativeMonitoring})
     transport_model = get_transport_model(get_template(model))
     _check_monitoring_transport(transport_model)
-    # Without a list of monitored corridors, the first solve limits none
     get!(transport_model.attributes, "monitored", String[])
     build_single_instance!(model)
     return
@@ -38,8 +37,6 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         loading = _corridor_loading(container, network)
         overloaded = [name for (name, (ratio, _)) in loading if ratio > 1 + tolerance]
         new_overloads = setdiff(overloaded, network.monitored)
-        # Once some unmonitored corridors are overloaded, those loaded above the threshold are
-        # added with them
         added =
             isempty(new_overloads) ? String[] :
             sort!(
@@ -63,32 +60,30 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
                 length(overloaded),
             ),
         )
-        @info "Monitoring iteration $iteration: $(length(network.monitored)) corridors monitored, objective $(last(log.objective)), solve $(round(last(log.solve_time); digits=1)) s, $(length(overloaded)) overloaded, $(length(added)) added"
+        @info "Monitoring iteration $iteration" last(log)
         isempty(added) && break
         if iteration == max_iterations
-            @warn "Stopped after $max_iterations iterations with unmonitored corridors overloaded" corridors =
+            @warn "Stopped after $max_iterations iterations with corridors overloaded" corridors =
                 sort!(new_overloads)
             break
         end
         _add_corridors!(container, transport_model, portfolio, added)
     end
-    # With a PTDF cutoff, the limited flows of monitored corridors differ from their exact flows
     residual = [
         name for (name, (ratio, _)) in loading if
         ratio > 1 + tolerance && name in network.monitored
     ]
     if !isempty(residual)
-        excess = maximum(last(loading[name]) for name in residual)
-        @warn "$(length(residual)) monitored corridors are above their limits in the exact flows by up to $(round(excess; digits=3)) MW (PTDF cutoff \"tol\")" corridors =
+        max_excess_mw = maximum(last(loading[name]) for name in residual)
+        @warn "Monitored corridors above their limits (PTDF cutoff)" max_excess_mw corridors =
             sort!(residual)
     end
     model.ext["monitoring_log"] = log
     return
 end
 
-# Adding rows one at a time to a model loaded in the solver costs time in proportion to the
-# model, so the solver is detached, the corridors are added, and the model is loaded again in one
-# copy. For an LP the previous basis is restored, so the next solve starts from it.
+# Adding rows to a model loaded in HiGHS is slow, so the solver is detached while adding and
+# the previous basis is restored for an LP
 function _add_corridors!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel,
@@ -96,7 +91,6 @@ function _add_corridors!(
     names::Vector{String},
 )
     jump_model = get_jump_model(container)
-    # A model in direct mode cannot be detached from its solver
     if get_direct_mode_optimizer(get_settings(container))
         add_monitored_corridors!(container, transport_model, portfolio, names)
         return
@@ -125,12 +119,10 @@ function _get_basis(jump_model::JuMP.Model)
     )
 end
 
-# Status of a new row: the equality that sets a new flow variable is nonbasic (the variable is
-# basic), and a new limit has a basic slack
+# New flow variables are basic, so the equalities that set them are nonbasic
 _new_row_status(::MOI.EqualTo) = MOI.NONBASIC
 _new_row_status(::MOI.AbstractScalarSet) = MOI.BASIC
 
-# The basis can only be set on the solver, so the model is loaded first
 function _restore_basis!(jump_model::JuMP.Model, basis)
     variable_status, constraint_status = basis
     backend = JuMP.backend(jump_model)
@@ -159,16 +151,13 @@ function _restore_basis!(jump_model::JuMP.Model, basis)
 end
 
 """
-Log of a model solved with [`IterativeMonitoring`](@ref): for each solve, the corridors monitored
-in it, the corridors added after it, its objective and solve time, the largest exact loading of a
-corridor (flow over limit), and the number of overloaded corridors.
+Log of each solve of a model solved with [`IterativeMonitoring`](@ref).
 """
 get_monitoring_log(model::InvestmentModel{IterativeMonitoring}) =
     model.ext["monitoring_log"]
 
 """
-Names of the merged corridors whose flow is limited in the model, after its last solve when it is
-solved with [`IterativeMonitoring`](@ref).
+Corridors whose flow is limited in a model with the `NodalPTDFModel` transport model.
 """
 get_monitored_corridors(model::InvestmentModel) =
     sort!(collect(get_network_data(get_transport_model(get_template(model))).monitored))

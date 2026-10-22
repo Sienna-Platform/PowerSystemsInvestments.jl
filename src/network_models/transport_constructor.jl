@@ -33,15 +33,13 @@ function construct_transport!(
     transport_model::TransportModel{NodalPTDFModel},
 )
     network = get_network_data(transport_model)
-    # Slacks are injections at their node, so they are added before the flows
+    # Slacks are injections, so they come before the flows
     if get_use_slacks(transport_model)
         _add_balance_slacks!(container, PSIP.Portfolio, network.ptdf.axes[1])
     end
     add_variable!(container, BranchBuiltVariable(), p, network)
     add_variable!(container, VirtualTransactionVariable(), p, network)
     add_expression!(container, PTDFBranchFlow(), p, network)
-    # A flow variable per limited branch, so each PTDF flow is written once instead of in both
-    # of its limits
     if get(transport_model.attributes, "flow_variables", false)
         add_variable!(container, FlowActivePowerVariable(), p, network)
         add_constraints!(container, NetworkFlowConstraint, p, network)

@@ -31,17 +31,11 @@ struct SingleRegionBalanceConstraint <: ISOPT.ConstraintType end
 struct MultiRegionBalanceConstraint <: ISOPT.ConstraintType end
 
 struct NodalBalanceConstraint <: ISOPT.ConstraintType end
-# One balance per island of the PTDF network, keyed by its reference node
 struct IslandBalanceConstraint <: ISOPT.ConstraintType end
-# Flow variable of a PTDF branch equals its PTDF flow
 struct NetworkFlowConstraint <: ISOPT.ConstraintType end
-# Limits on the PTDF branch flows
 struct FlowRateConstraint <: ISOPT.ConstraintType end
-# Capacity of a new corridor only once it is built, and once built it stays built
 struct NewCorridorBuiltConstraint <: ISOPT.ConstraintType end
-# A virtual transaction is zero once its branch is built
 struct VirtualTransactionLimitConstraint <: ISOPT.ConstraintType end
-# The units built of a discrete line are its first unit lines
 struct UnitLineBuiltConstraint <: ISOPT.ConstraintType end
 
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end

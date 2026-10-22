@@ -1,35 +1,25 @@
-# Branches of the PTDF network, built from the nodal AC line technologies of the template. Lines
-# are grouped into corridors (node pairs):
-#   - the existing lines and continuous candidates of a corridor with existing capacity share one
-#     branch;
-#   - a continuous candidate on a corridor without existing capacity gets its own branch;
-#   - each unit a discrete candidate can build is a separate branch.
-
-struct BranchTechnology
+# A line (NodalACTransportTechnology) of the template
+struct LineKey
     type::DataType
     name::String
     formulation::DataType
 end
 
-# Its limit is `fixed_capacity` plus the cumulative capacity of `technologies` (the continuous
-# ones that can be expanded); `fixed_capacity` is the existing capacity of the others (discrete
-# ones, and continuous ones whose maximum is their existing capacity).
-# Susceptance is that of the lines with existing capacity, whatever the candidates build.
+# Limit: `fixed_capacity` plus the cumulative capacity of `expandable_lines`
 struct MergedCorridor
     name::String
     arc::Tuple{String, String}
     susceptance::Float64
     fixed_capacity::Float64
-    technologies::Vector{BranchTechnology}
-    # Existing capacity of each technology that cannot be expanded, which make up fixed_capacity
-    fixed_technologies::Vector{Tuple{BranchTechnology, Float64}}
+    expandable_lines::Vector{LineKey}
+    fixed_lines::Vector{Tuple{LineKey, Float64}}
 end
 
 struct NewCorridor
     name::String
     arc::Tuple{String, String}
     susceptance::Float64
-    technology::BranchTechnology
+    line::LineKey
 end
 
 struct UnitLine
@@ -38,14 +28,10 @@ struct UnitLine
     susceptance::Float64
     unit_size::Float64
     unit::Int
-    technology::BranchTechnology
+    line::LineKey
 end
 
-# PTDF rows follow the order merged corridors, new corridors, unit lines. The PTDF is kept
-# whole: `tol` only drops the small injection terms of the flows, so the coefficients that
-# cancel the flow of an unbuilt branch are never cut. `monitored` holds the merged corridors whose
-# flow is limited; an unmonitored corridor stays in the PTDF but its flow is not limited.
-# IterativeMonitoring adds to it between solves.
+# The PTDF is kept whole; `tol` only drops injection terms from the flows
 struct PTDFNetworkData <: AbstractNetworkData
     merged_corridors::Vector{MergedCorridor}
     new_corridors::Vector{NewCorridor}
@@ -55,13 +41,16 @@ struct PTDFNetworkData <: AbstractNetworkData
     monitored::Set{String}
 end
 
-const CorridorLines = Dict{
-    Tuple{String, String},
-    Vector{Tuple{PSIP.NodalACTransportTechnology, BranchTechnology}},
-}
+const CorridorLines =
+    Dict{Tuple{String, String}, Vector{Tuple{PSIP.NodalACTransportTechnology, LineKey}}}
 
-_arc(line::PSIP.NodalACTransportTechnology) =
-    (PSIP.get_name(PSIP.get_start_node(line)), PSIP.get_name(PSIP.get_end_node(line)))
+_names(c::MergedCorridor) =
+    [c.name; [l.name for l in c.expandable_lines]; [l.name for (l, _) in c.fixed_lines]]
+
+_arc(technology::PSIP.NodalACTransportTechnology) = (
+    PSIP.get_name(PSIP.get_start_node(technology)),
+    PSIP.get_name(PSIP.get_end_node(technology)),
+)
 
 _is_continuous(::Type{ContinuousInvestment}) = true
 _is_continuous(::Type{<:Union{IntegerInvestment, BinaryInvestment}}) = false
@@ -74,17 +63,17 @@ function _collect_corridor_lines!(
 ) where {D <: PSIP.NodalACTransportTechnology}
     formulation = get_investment_formulation(model)
     for name in names
-        line = PSIP.get_technology(D, portfolio, name)
-        PSIP.get_available(line) || continue
+        technology = PSIP.get_technology(D, portfolio, name)
+        PSIP.get_available(technology) || continue
         push!(
-            get!(corridors, minmax(_arc(line)...), eltype(valtype(corridors))[]),
-            (line, BranchTechnology(D, name, formulation)),
+            get!(corridors, minmax(_arc(technology)...), eltype(valtype(corridors))[]),
+            (technology, LineKey(D, name, formulation)),
         )
     end
     return
 end
 
-# Other branch technologies are not in the PTDF
+# Other transmission technologies are not in the PTDF
 _collect_corridor_lines!(
     ::CorridorLines,
     ::PSIP.Portfolio,
@@ -92,48 +81,46 @@ _collect_corridor_lines!(
     ::Vector{String},
 ) = nothing
 
-# Units a discrete technology can build within its capacity limit
 function _unit_count(
-    line::PSIP.NodalACTransportTechnology,
+    technology::PSIP.NodalACTransportTechnology,
     existing::Float64,
     ::Type{F},
 ) where {F}
-    unit_size = get_unit_size(BuildCapacity(), line, F())
-    count = floor(Int, (PSIP.get_capacity_limits(line).max - existing) / unit_size + 1e-9)
-    return _limit_units(line, max(count, 0), F)
+    unit_size = get_unit_size(BuildCapacity(), technology, F())
+    count =
+        floor(Int, (PSIP.get_capacity_limits(technology).max - existing) / unit_size + 1e-9)
+    return _limit_units(technology, max(count, 0), F)
 end
 
 _limit_units(::PSIP.NodalACTransportTechnology, count::Int, ::Type{BinaryInvestment}) =
     min(count, 1)
 
 function _limit_units(
-    line::PSIP.NodalACTransportTechnology,
+    technology::PSIP.NodalACTransportTechnology,
     count::Int,
     ::Type{IntegerInvestment},
 )
     if count > MAX_UNIT_LINES
         error(
-            "Line $(PSIP.get_name(line)) can build $count units, each a separate PTDF " *
-            "branch, more than the limit of $(MAX_UNIT_LINES). Lower its capacity limit, " *
-            "raise its unit size or use ContinuousInvestment.",
+            "Line $(PSIP.get_name(technology)) can build $count units, each a separate " *
+            "PTDF branch, more than the limit of $(MAX_UNIT_LINES). Lower its capacity " *
+            "limit, raise its unit size or use ContinuousInvestment.",
         )
     end
     return count
 end
 
-function _check_susceptance_per_mw(corridor_name, lines)
-    per_mw = [_susceptance(line) / PSIP.get_unit_size(line) for line in lines]
+function _check_susceptance_per_mw(corridor_name, technologies)
+    per_mw = [_susceptance(t) / PSIP.get_unit_size(t) for t in technologies]
     if length(per_mw) > 1 &&
        maximum(per_mw) > (1 + SUSCEPTANCE_PER_MW_TOLERANCE) * minimum(per_mw)
         @warn "Lines on corridor $corridor_name have different susceptance per MW; the corridor limit overstates what they can carry together" lines =
-            PSIP.get_name.(lines)
+            PSIP.get_name.(technologies)
     end
     return
 end
 
-# `monitored` lists the merged corridors whose flow is limited, by corridor name or by the name
-# of one of their technologies; all of them are monitored when it is `nothing`. New corridors and
-# unit lines are always limited, since their limits also decide whether they are built.
+# New corridors and unit lines are always limited, since their limits decide what is built
 function PTDFNetworkData(
     portfolio::PSIP.Portfolio,
     template::InvestmentModelTemplate;
@@ -149,98 +136,85 @@ function PTDFNetworkData(
     new_corridors = NewCorridor[]
     unit_lines = UnitLine[]
     for corridor in sort!(collect(keys(corridors)))
-        lines = corridors[corridor]
-        existing = [PSIP.get_existing_capacity_mw(portfolio, line) for (line, _) in lines]
-        continuous = [_is_continuous(technology.formulation) for (_, technology) in lines]
-        # Continuous lines that can add capacity; the limit of the others is a constant
+        corridor_lines = corridors[corridor]
+        technologies = first.(corridor_lines)
+        lines = last.(corridor_lines)
+        existing = [PSIP.get_existing_capacity_mw(portfolio, t) for t in technologies]
+        continuous = [_is_continuous(line.formulation) for line in lines]
         expandable = [
-            c && PSIP.get_capacity_limits(line).max > mw for
-            ((line, _), mw, c) in zip(lines, existing, continuous)
+            c && PSIP.get_capacity_limits(t).max > mw for
+            (t, mw, c) in zip(technologies, existing, continuous)
         ]
         if any(>(0.0), existing)
             corridor_name = join(corridor, "_")
-            existing_lines = [line for ((line, _), mw) in zip(lines, existing) if mw > 0.0]
+            existing_technologies =
+                [t for (t, mw) in zip(technologies, existing) if mw > 0.0]
             _check_susceptance_per_mw(
                 corridor_name,
                 unique(
                     [
-                        existing_lines
-                        [line for ((line, _), c) in zip(lines, continuous) if c]
+                        existing_technologies
+                        [t for (t, c) in zip(technologies, continuous) if c]
                     ],
                 ),
             )
-            technologies =
-                [technology for ((_, technology), e) in zip(lines, expandable) if e]
-            fixed_technologies = [
-                (technology, mw) for
-                ((_, technology), mw, e) in zip(lines, existing, expandable) if
-                !e && mw > 0.0
+            fixed_lines = [
+                (line, mw) for
+                (line, mw, e) in zip(lines, existing, expandable) if !e && mw > 0.0
             ]
             push!(
                 merged_corridors,
                 MergedCorridor(
                     corridor_name,
                     corridor,
-                    sum(_susceptance, existing_lines),
-                    sum(last, fixed_technologies; init=0.0),
-                    technologies,
-                    fixed_technologies,
+                    sum(_susceptance, existing_technologies),
+                    sum(last, fixed_lines; init=0.0),
+                    [line for (line, e) in zip(lines, expandable) if e],
+                    fixed_lines,
                 ),
             )
         else
-            for ((line, technology), c) in zip(lines, continuous)
+            for (technology, line, c) in zip(technologies, lines, continuous)
                 c || continue
                 push!(
                     new_corridors,
                     NewCorridor(
-                        technology.name,
-                        _arc(line),
-                        _susceptance(line),
-                        technology,
+                        line.name,
+                        _arc(technology),
+                        _susceptance(technology),
+                        line,
                     ),
                 )
             end
         end
-        for ((line, technology), mw, c) in zip(lines, existing, continuous)
+        for (technology, line, mw, c) in zip(technologies, lines, existing, continuous)
             c && continue
-            for unit in 1:_unit_count(line, mw, technology.formulation)
+            for unit in 1:_unit_count(technology, mw, line.formulation)
                 push!(
                     unit_lines,
                     UnitLine(
-                        "$(technology.name)_unit_$(unit)",
-                        _arc(line),
-                        _susceptance(line),
-                        PSIP.get_unit_size(line),
+                        "$(line.name)_unit_$(unit)",
+                        _arc(technology),
+                        _susceptance(technology),
+                        PSIP.get_unit_size(technology),
                         unit,
-                        technology,
+                        line,
                     ),
                 )
             end
         end
     end
 
-    if !isnothing(monitored)
-        known = Set([c.name for c in merged_corridors])
-        for c in merged_corridors
-            union!(known, [t.name for t in c.technologies])
-            union!(known, [t.name for (t, _) in c.fixed_technologies])
-        end
-        unknown = setdiff(monitored, known)
-        isempty(unknown) ||
-            error("Monitored lines $unknown are not corridors with existing capacity")
-    end
-
-    # A corridor is monitored when its name or the name of one of its technologies is listed
-    monitored_corridors = Set(
-        c.name for c in merged_corridors if isnothing(monitored) || any(
-            in(monitored),
-            [
-                c.name
-                [t.name for t in c.technologies]
-                [t.name for (t, _) in c.fixed_technologies]
-            ],
+    if isnothing(monitored)
+        monitored_corridors = Set(c.name for c in merged_corridors)
+    else
+        unknown = setdiff(monitored, Iterators.flatten(_names.(merged_corridors)))
+        isempty(unknown) || error(
+            "Monitored names $unknown are not merged corridors or lines on merged corridors",
         )
-    )
+        monitored_corridors =
+            Set(c.name for c in merged_corridors if any(in(monitored), _names(c)))
+    end
     branches = [merged_corridors; new_corridors; unit_lines]
     nodes = sort!(collect(PSIP.get_regions(PSIP.Node, portfolio)); by=PSIP.get_name)
     ptdf = PTDF(
@@ -260,7 +234,6 @@ function PTDFNetworkData(
     )
 end
 
-# Only the PTDF model needs network data
 initialize_network!(::TransportModel, ::InvestmentModelTemplate, ::PSIP.Portfolio) = nothing
 
 function initialize_network!(

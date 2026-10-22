@@ -57,7 +57,6 @@
         BasicDispatch,
         BasicDispatchFeasibility,
     )
-    # Transmission technologies are kept apart from the other technologies
     @test collect(values(PSIN.get_branch_models(template))) == [["test_branch"]]
     @test all(
         !in("test_branch", names) for names in values(PSIN.get_technology_models(template))
