@@ -513,6 +513,7 @@ function add_constraints!(
         tech_model = tech_model_vector[ix]
         inv_model = string(get_investment_formulation(tech_model))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        availability = get_availability(d)
         for name in get_variable_names(d), op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
@@ -523,7 +524,7 @@ function add_constraints!(
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     active_power[name, t] <=
-                    ts_data[ix] * installed_cap[name, time_step_inv]
+                    availability * ts_data[ix] * installed_cap[name, time_step_inv]
                 )
             end
         end
@@ -567,13 +568,15 @@ function add_constraints!(
         tech_model = tech_model_vector[ix]
         inv_model = string(get_investment_formulation(tech_model))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        availability = get_availability(d)
         for name in get_variable_names(d), op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
-                    active_power[name, t] <= installed_cap[name, time_step_inv]
+                    active_power[name, t] <=
+                    availability * installed_cap[name, time_step_inv]
                 )
             end
         end
@@ -1070,13 +1073,15 @@ function add_constraints!(
         tech_model_d = tech_model_vector[ix]
         inv_model = string(get_investment_formulation(tech_model_d))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        availability = get_availability(d)
         for name in get_variable_names(d), op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
-                    active_power[name, t] <= installed_cap[name, time_step_inv]
+                    active_power[name, t] <=
+                    availability * installed_cap[name, time_step_inv]
                 )
             end
         end

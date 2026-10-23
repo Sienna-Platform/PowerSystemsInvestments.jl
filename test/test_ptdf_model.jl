@@ -602,11 +602,24 @@ function _ptdf_branches(lines, discrete_lines=[])
     return branches
 end
 
-# Checks KCL and KVL for the branches in service (all lines at 230 kV)
-function _test_dc_power_flow(container, branches, in_service)
+# Checks KCL and KVL for the branches in service (all lines at 230 kV), and that the other
+# branches carry no flow. `in_service` are always in service, and `candidates` when their
+# built binary is 1 in the investment period of the time step.
+function _test_dc_power_flow(container, branches, in_service; candidates=String[])
     flow = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
     injection =
         JuMP.value.(PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio))
+    built = if isempty(candidates)
+        nothing
+    else
+        JuMP.value.(PSIN.get_variable(container, BranchBuiltVariable(), PSIP.Portfolio))
+    end
+    time_mapping = PSIN.get_time_mapping(container)
+    investment_period = Dict(
+        t => PSIN.get_inverse_invest_mapping(time_mapping)[op_ix] for
+        (op_ix, slices) in pairs(PSIN.get_consecutive_slices(time_mapping)) for
+        t in slices
+    )
     nodes = collect(axes(injection, 1))
     node_ix = Dict(n => i for (i, n) in enumerate(nodes))
     for t in axes(flow, 2)
@@ -617,7 +630,12 @@ function _test_dc_power_flow(container, branches, in_service)
             )
             @test isapprox(outflow, injection[node, t]; atol=1e-5)
         end
-        served = [(b, arc, x) for (b, arc, x) in branches if b in in_service]
+        serves(b) =
+            b in in_service || (b in candidates && built[b, investment_period[t]] > 0.5)
+        served = [(b, arc, x) for (b, arc, x) in branches if serves(b)]
+        for (b, _, _) in branches
+            serves(b) || @test abs(flow[b, t]) <= 1e-6
+        end
         A = zeros(length(served), length(nodes))
         for (row, (_, (from, to), _)) in enumerate(served)
             A[row, node_ix[from]] = 1.0
@@ -680,14 +698,11 @@ end
         JuMP.value.(PSIN.get_variable(container, BranchBuiltVariable(), PSIP.Portfolio),)
     @test built["r45", 1] > 0.5
     @test any(built[c, 1] > 0.5 for c in ("d13", "d24"))
-    in_service = [
-        ["n1_n2", "n2_n3", "n3_n4", "n1_n4"]
-        [c for c in ("d13", "d24", "r45") if built[c, 1] > 0.5]
-    ]
     _test_dc_power_flow(
         container,
         _ptdf_branches([RING_LINES; RING_CANDIDATES]),
-        in_service,
+        ["n1_n2", "n2_n3", "n3_n4", "n1_n4"];
+        candidates=["d13", "d24", "r45"],
     )
     transactions =
         JuMP.value.(
@@ -738,7 +753,8 @@ end
     flow = _test_dc_power_flow(
         container,
         _ptdf_branches([("existing", "Node_1", "Node_2", 0.1, "1")], discrete_lines),
-        ["Node_1_Node_2", "units_unit_1", "units_unit_2"],
+        ["Node_1_Node_2"];
+        candidates=["units_unit_1", "units_unit_2"],
     )
     for t in axes(flow, 2)
         # Each unit has half the susceptance of the existing line
@@ -781,14 +797,49 @@ end
     _solved_objective(m)
     container = PSIN.get_optimization_container(m)
     built = JuMP.value.(PSIN.get_variable(container, BranchBuiltVariable(), PSIP.Portfolio))
-    units = ("d13_unit_1", "d13_unit_2", "d24_unit_1")
-    in_service = [
-        ["n1_n2", "n2_n3", "n3_n4", "n1_n4"]
-        [u for u in units if built[u, 1] > 0.5]
-    ]
-    @test length(in_service) > 4
-    @test all(built["d13_unit_2", :] .<= built["d13_unit_1", :] .+ 1e-6)
-    _test_dc_power_flow(container, _ptdf_branches(RING_LINES, RING_DISCRETE), in_service)
+    @test any(built.data .> 0.5)
+    _test_dc_power_flow(
+        container,
+        _ptdf_branches(RING_LINES, RING_DISCRETE),
+        ["n1_n2", "n2_n3", "n3_n4", "n1_n4"];
+        candidates=["d13_unit_1", "d13_unit_2", "d24_unit_1"],
+    )
+end
+
+# An existing 800 MW line and an integer candidate of two 1000 MW units with twice its
+# susceptance: one unit is enough for the 2030 transfers and both are needed in 2035
+@testset "Integer units are built in order" begin
+    discrete_lines =
+        [("units", "Node_1", "Node_2", 0.05, IntegerInvestment, 1000.0, 2000.0)]
+    m = _nodal_test_model(
+        NodalPTDFModel;
+        nodes=["Node_1", "Node_2"],
+        placement=Dict(
+            "cheap_thermal" => "Node_1",
+            "expensive_thermal" => "Node_2",
+            "wind" => "Node_2",
+            "demand1" => "Node_1",
+            "demand2" => "Node_2",
+            "test_storage" => "Node_2",
+        ),
+        lines=[("existing", "Node_1", "Node_2", 0.1, "1")],
+        ratings=Dict("1" => 800.0),
+        candidate_cost=1.0,
+        discrete_lines=discrete_lines,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    _solved_objective(m)
+    container = PSIN.get_optimization_container(m)
+    built = JuMP.value.(PSIN.get_variable(container, BranchBuiltVariable(), PSIP.Portfolio))
+    @test built["units_unit_1", :].data ≈ [1.0, 1.0] atol = 1e-6
+    @test built["units_unit_2", :].data ≈ [0.0, 1.0] atol = 1e-6
+    _test_dc_power_flow(
+        container,
+        _ptdf_branches([("existing", "Node_1", "Node_2", 0.1, "1")], discrete_lines),
+        ["Node_1_Node_2"];
+        candidates=["units_unit_1", "units_unit_2"],
+    )
 end
 
 # Two candidates to n5, which has no existing line: the unbuilt one must cancel the flow of
@@ -813,7 +864,8 @@ end
     _test_dc_power_flow(
         container,
         _ptdf_branches([RING_LINES; [r45, r35]]),
-        ["n1_n2", "n2_n3", "n3_n4", "n1_n4", "r45"],
+        ["n1_n2", "n2_n3", "n3_n4", "n1_n4"];
+        candidates=["r45", "r35"],
     )
 end
 
@@ -896,7 +948,7 @@ end
     @test build!(
         transport;
         output_dir=mktempdir(; cleanup=true),
-        console_level=Logging.Error,
+        console_level=Logging.AboveMaxLevel,
     ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end
 
@@ -982,7 +1034,7 @@ end
     @test build!(
         unknown;
         output_dir=mktempdir(; cleanup=true),
-        console_level=Logging.Error,
+        console_level=Logging.AboveMaxLevel,
     ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end
 

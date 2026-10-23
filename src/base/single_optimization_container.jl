@@ -180,6 +180,21 @@ end
 
 # Weights are per year: the period length is applied when costs are discounted, so weights
 # that include it would count operation costs more than once.
+# The objective is discounted with the discount rate and base year of the portfolio
+function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Portfolio)
+    discount_rate = PSIP.get_discount_rate(portfolio)
+    base_year = PSIP.get_base_year(portfolio)
+    if !isapprox(capital_model.discount_rate, discount_rate) ||
+       Dates.value(capital_model.base_year) != base_year
+        error(
+            "DiscountedCashFlow has discount rate $(capital_model.discount_rate) and base " *
+            "year $(Dates.value(capital_model.base_year)), but the portfolio has discount " *
+            "rate $discount_rate and base year $base_year.",
+        )
+    end
+    return
+end
+
 function check_operational_weights(
     time_mapping::TimeMapping,
     operational_weights::Vector{Float64},
@@ -232,6 +247,7 @@ function init_optimization_container!(
     set_time_mapping!(container, time_map)
     set_operational_weights!(container, operation_model.series_weights)
     check_operational_weights(time_map, operation_model.series_weights)
+    check_discounting(capital_model, portfolio)
     # Set Financial Data in Container from Portfolio
     set_base_year!(container, PSIP.get_base_year(portfolio))
     set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
@@ -934,7 +950,7 @@ end
 function compute_conflict!(container::SingleOptimizationContainer)
     jump_model = get_jump_model(container)
     settings = get_settings(container)
-    JuMP.unset_silent(jump_model)
+    get_optimizer_solve_log_print(settings) && JuMP.unset_silent(jump_model)
     jump_model.is_model_dirty = false
     conflict = container.infeasibility_conflict
     empty!(conflict)

@@ -328,7 +328,11 @@ end
     balance_con = PSIN.get_constraints(container)[balance_key]
     JuMP.set_normalized_rhs(first(balance_con), 1e18)
 
-    @test solve!(m; export_optimization_problem=false) == PSIN.RunStatus.FAILED
+    @test solve!(
+        m;
+        export_optimization_problem=false,
+        console_level=Logging.AboveMaxLevel,
+    ) == PSIN.RunStatus.FAILED
     conflict = get_infeasibility_conflict(container)
     @test !isempty(conflict)
 
@@ -410,11 +414,36 @@ end
 
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+
+        # Hydro is the only supply, so its daily budget of 0.5 × 24 hours of capacity must
+        # cover the daily demand of 2400 MWh (2030) and 2880 MWh (2035)
+        capacity = read_expression(
+            model,
+            PSIN.ExpressionKey(
+                CumulativeCapacity,
+                PSIP.SupplyTechnology{PSY.HydroDispatch},
+                "ContinuousInvestment",
+            ),
+        )
+        @test sort(capacity, :time_index).value ≈ [200.0, 240.0]
+        dispatch = read_variable(
+            model,
+            PSIN.VariableKey(
+                ActivePowerVariable,
+                PSIP.SupplyTechnology{PSY.HydroDispatch},
+                "BasicDispatchWithBudget",
+            ),
+        )
+        @test sum(dispatch[dispatch.time_index .<= 24, :value]) ≈ 2400.0
+        @test sum(dispatch[dispatch.time_index .> 24, :value]) ≈ 2880.0
     end
 end
 
 @testset "Hydro budget constraint satisfied with 0.05 factor" begin
     p_tight, op_days = test_constrained_hydro_portfolio()
+    # Free hydro is built to its 500 MW limit, so its energy is limited by the budget
+    hydro = PSIP.get_technology(PSIP.SupplyTechnology{PSY.HydroDispatch}, p_tight, "hydro")
+    PSIP.set_capital_costs!(hydro, PSIP.CapitalCost(LinearCurve(0.0), 0.0))
     weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
@@ -500,11 +529,13 @@ end
 
         dispatch_p1 = sum(filter(r -> r.time_index in 1:24, hydro_rows).value)
         cap_p1 = only(filter(r -> r.time_index == 1, cap_rows)).value
-        @test dispatch_p1 <= cap_p1 * budget_factor * hours_per_period + tol
+        @test cap_p1 ≈ 500.0
+        @test dispatch_p1 ≈ cap_p1 * budget_factor * hours_per_period atol = tol
 
         dispatch_p2 = sum(filter(r -> r.time_index in 25:48, hydro_rows).value)
         cap_p2 = only(filter(r -> r.time_index == 2, cap_rows)).value
-        @test dispatch_p2 <= cap_p2 * budget_factor * hours_per_period + tol
+        @test cap_p2 ≈ 500.0
+        @test dispatch_p2 ≈ cap_p2 * budget_factor * hours_per_period atol = tol
     end
 end
 
@@ -572,8 +603,9 @@ end
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
-        # Verify cap factor constraint is respected: P[t] <= 0.8 * capacity
-        cap_factor = 0.8
+        # Dispatch is limited to the 0.8 capacity factor times the 0.95 availability (5%
+        # forced outage) of the capacity
+        cap_factor = 0.8 * 0.95
         hydro_df = read_variable(
             model,
             PSIN.VariableKey(
@@ -596,25 +628,29 @@ end
 
         cap_p1 = only(filter(r -> r.time_index == 1, cap_rows)).value
         dispatch_p1_max = maximum(filter(r -> r.time_index in 1:24, hydro_rows).value)
-        @test dispatch_p1_max <= cap_factor * cap_p1 + tol
+        @test cap_p1 ≈ 100.0 / cap_factor
+        @test dispatch_p1_max ≈ cap_factor * cap_p1 atol = tol
 
         cap_p2 = only(filter(r -> r.time_index == 2, cap_rows)).value
         dispatch_p2_max = maximum(filter(r -> r.time_index in 25:48, hydro_rows).value)
-        @test dispatch_p2_max <= cap_factor * cap_p2 + tol
+        @test cap_p2 ≈ 120.0 / cap_factor
+        @test dispatch_p2_max ≈ cap_factor * cap_p2 atol = tol
     end
 end
 
 @testset "Build and solve 2 Zone Portfolio with EnergyShareRequirement" begin
     p_5bus, op_days = test_2_zone_portfolio()
 
-    # Attach an energy-share policy to the existing portfolio: wind must supply at
-    # least 30% of demand2 over the operational horizon. The requirement is attached
+    # Attach energy-share policies to the existing portfolio: wind must supply at
+    # least 150% (2030) and 160% (2035) of demand2. The requirement is attached
     # to the contributing technologies (wind on the generation side, demand2 on the
     # demand side) via each technology's `requirements` field (PSIP PR #94 model).
     wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
     demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand2")
 
-    fraction = 0.3
+    # Wind would supply about 130% of demand2 without the policies, so these targets bind
+    fraction = 1.5
+    fraction_2035 = 1.6
     esr = PSIP.EnergyShareRequirements(;
         name="wind_share",
         id=1,
@@ -629,7 +665,7 @@ end
         id=2,
         available=true,
         target_year=2035,
-        generation_fraction_requirement=0.1,
+        generation_fraction_requirement=fraction_2035,
     )
     PSIP.add_requirement!(p_5bus, esr)
     PSIP.add_requirement!(p_5bus, esr_2035)
@@ -776,8 +812,18 @@ end
     )
     total_demand_2030 = sum(TimeSeries.values(d_2030.data))
 
-    tol = 1e-4
-    @test total_wind_2030 >= fraction * total_demand_2030 - tol
+    @test total_wind_2030 ≈ fraction * total_demand_2030 rtol = 1e-6
+
+    # The 2035 policy applies to the second investment period (time steps 25:48)
+    total_wind_2035 = sum(filter(r -> r.time_index in 25:48, wind_rows).value)
+    d_2035 = IS.get_time_series(
+        IS.SingleTimeSeries,
+        demand2,
+        "ops_demand";
+        year="2035",
+        rep_day=2,
+    )
+    @test total_wind_2035 ≈ fraction_2035 * sum(TimeSeries.values(d_2035.data)) rtol = 1e-6
 
     # --- Weighted-energy expressions -------------------------------------------------
     # op_ix=1 (2030 representative day) carries the per-year weight 365.
