@@ -45,6 +45,7 @@ get_default_attributes(::Type{<:PSIP.Requirement}, ::Type{<:RequirementFormulati
     Dict{String, Any}()
 
 _supported_requirement_formulations(::Type{<:PSIP.Requirement}) = ()
+_supports_slacks(::Type{<:RequirementFormulation}) = true
 
 function _check_requirement_formulation(
     ::Type{D},
@@ -73,6 +74,9 @@ function RequirementModel(
     attributes=Dict{String, Any}(),
 ) where {D <: PSIP.Requirement, B <: RequirementFormulation}
     _check_requirement_formulation(D, B)
+    if use_slacks && !_supports_slacks(B)
+        throw(ArgumentError("$(nameof(B)) has no constraint to add slacks to."))
+    end
     attributes_ = get_default_attributes(D, B)
     for (k, v) in attributes
         attributes_[k] = v

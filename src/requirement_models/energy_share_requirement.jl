@@ -121,158 +121,10 @@ function _validate_energy_share_contributors!(
     return
 end
 
-# Technology model of a contributing technology
-function _contributor_model(
-    names_to_model_map::Dict{String, TechnologyModel},
-    req_name::String,
-    technology::PSIP.Technology,
-)
-    name = PSIP.get_name(technology)
-    if !haskey(names_to_model_map, name)
-        error(
-            "EnergyShareRequirement '$(req_name)' lists contributing technology '$(name)' " *
-            "which has no technology model in the template.",
-        )
-    end
-    return names_to_model_map[name]
-end
-
-# Weighted energy of a variable over the time steps of a representative period
-function _weighted_energy(
-    container::SingleOptimizationContainer,
-    variable::T,
-    ::Type{D},
-    meta::String,
-    name::String,
-    op_ix::Int,
-) where {T <: VariableType, D <: PSIP.Technology}
-    values = get_variable(container, variable, D, meta)
-    slices = get_consecutive_slices(get_time_mapping(container))[op_ix]
-    return get_time_step_weight(container, op_ix) * sum(values[name, t] for t in slices)
-end
-
-# Eligible generation of a contributing resource: the output of supply technologies and the
-# wind and solar output of co-located technologies. Storage only shifts energy.
-function _add_share_generation!(
-    expression::JuMP.AffExpr,
-    container::SingleOptimizationContainer,
-    ::Type{D},
-    technology::PSIP.SupplyTechnology,
-    meta::String,
-    op_ix::Int,
-) where {D <: PSIP.SupplyTechnology}
-    generation = get_expression(container, WeightedEnergyGeneration(), D, meta)
-    for name in get_variable_names(technology)
-        JuMP.add_to_expression!(expression, generation[name, op_ix])
-    end
-    return
-end
-
-function _add_share_generation!(
-    expression::JuMP.AffExpr,
-    container::SingleOptimizationContainer,
-    ::Type{D},
-    technology::PSIP.ColocatedSupplyStorageTechnology,
-    meta::String,
-    op_ix::Int,
-) where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    name = PSIP.get_name(technology)
-    for variable in (ActivePowerWindVariable(), ActivePowerSolarVariable())
-        JuMP.add_to_expression!(
-            expression,
-            _weighted_energy(container, variable, D, meta, name, op_ix),
-        )
-    end
-    return
-end
-
-_add_share_generation!(
-    ::JuMP.AffExpr,
-    ::SingleOptimizationContainer,
-    ::Type{<:PSIP.StorageTechnology},
-    ::PSIP.StorageTechnology,
-    ::String,
-    ::Int,
-) = nothing
-
-# Losses (charge minus discharge) of contributing storage, added to the demand
-_add_storage_losses!(
-    ::JuMP.AffExpr,
-    ::SingleOptimizationContainer,
-    ::Type{<:PSIP.SupplyTechnology},
-    ::PSIP.SupplyTechnology,
-    ::String,
-    ::Int,
-) = nothing
-
-function _add_storage_losses!(
-    expression::JuMP.AffExpr,
-    container::SingleOptimizationContainer,
-    ::Type{D},
-    technology::PSIP.StorageTechnology,
-    meta::String,
-    op_ix::Int,
-) where {D <: PSIP.StorageTechnology}
-    _add_storage_losses!(
-        expression,
-        container,
-        D,
-        PSIP.get_name(technology),
-        meta,
-        op_ix,
-        ActiveInPowerVariable(),
-        ActiveOutPowerVariable(),
-    )
-    return
-end
-
-function _add_storage_losses!(
-    expression::JuMP.AffExpr,
-    container::SingleOptimizationContainer,
-    ::Type{D},
-    technology::PSIP.ColocatedSupplyStorageTechnology,
-    meta::String,
-    op_ix::Int,
-) where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    _add_storage_losses!(
-        expression,
-        container,
-        D,
-        PSIP.get_name(technology),
-        meta,
-        op_ix,
-        ActivePowerChargeVariable(),
-        ActivePowerDischargeVariable(),
-    )
-    return
-end
-
-function _add_storage_losses!(
-    expression::JuMP.AffExpr,
-    container::SingleOptimizationContainer,
-    ::Type{D},
-    name::String,
-    meta::String,
-    op_ix::Int,
-    charge::VariableType,
-    discharge::VariableType,
-) where {D <: PSIP.Technology}
-    JuMP.add_to_expression!(
-        expression,
-        _weighted_energy(container, charge, D, meta, name, op_ix),
-    )
-    JuMP.add_to_expression!(
-        expression,
-        -1.0,
-        _weighted_energy(container, discharge, D, meta, name, op_ix),
-    )
-    return
-end
-
 """
 Build the `WeightedEnergyShareGeneration` expression: for each policy and each
 operational index, the weighted eligible generation of its contributing resources (see
-`_add_share_generation!`).
+`_add_eligible_generation!`).
 """
 function add_expression!(
     container::SingleOptimizationContainer,
@@ -292,20 +144,16 @@ function add_expression!(
     )
     for req in requirements
         req_name = PSIP.get_name(req)
-        resources = _contributing_resources(p, req)
         for op_ix in operational_indexes
             share_expr = JuMP.AffExpr(0.0)
-            for resource in resources
-                tech_model = _contributor_model(names_to_model_map, req_name, resource)
-                _add_share_generation!(
-                    share_expr,
-                    container,
-                    get_technology_type(tech_model),
-                    resource,
-                    string(get_operations_formulation(tech_model)),
-                    op_ix,
-                )
-            end
+            _add_eligible_generation!(
+                share_expr,
+                container,
+                p,
+                req,
+                names_to_model_map,
+                op_ix,
+            )
             expression[req_name, op_ix] = share_expr
         end
     end
@@ -325,11 +173,7 @@ function add_expression!(
     ::RequirementEnergyShare,
     names_to_model_map::Dict{String, TechnologyModel},
 ) where {T <: PSIP.EnergyShareRequirements}
-    time_mapping = get_time_mapping(container)
-    operational_indexes = get_operational_indexes(time_mapping)
-    consecutive_slices = get_consecutive_slices(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
-
+    operational_indexes = get_operational_indexes(get_time_mapping(container))
     expression = add_expression_container!(
         container,
         WeightedEnergyShareDemand(),
@@ -339,37 +183,16 @@ function add_expression!(
     )
     for req in requirements
         req_name = PSIP.get_name(req)
-        demands = _contributing_demands(p, req)
-        resources = _contributing_resources(p, req)
         for op_ix in operational_indexes
-            weight = get_time_step_weight(container, op_ix)
-            time_slices = consecutive_slices[op_ix]
             demand_expr = JuMP.AffExpr(0.0)
-            for d in demands
-                time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-                check_initial_timestamp(
-                    time_series,
-                    d,
-                    time_stamps[first(time_slices)],
-                    op_ix,
-                )
-                # Load data is in MW
-                JuMP.add_to_expression!(
-                    demand_expr,
-                    weight * sum(TimeSeries.values(time_series.data)),
-                )
-            end
-            for resource in resources
-                tech_model = _contributor_model(names_to_model_map, req_name, resource)
-                _add_storage_losses!(
-                    demand_expr,
-                    container,
-                    get_technology_type(tech_model),
-                    resource,
-                    string(get_operations_formulation(tech_model)),
-                    op_ix,
-                )
-            end
+            _add_demand_and_storage_losses!(
+                demand_expr,
+                container,
+                p,
+                req,
+                names_to_model_map,
+                op_ix,
+            )
             expression[req_name, op_ix] = demand_expr
         end
     end

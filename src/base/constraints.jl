@@ -82,6 +82,8 @@ struct CommittedCapacityTrackingConstraint <: OperationVariableLimitsConstraintT
 
 struct EnergyShareRequirementConstraint <: ISOPT.ConstraintType end
 
+struct CarbonCapConstraint <: ISOPT.ConstraintType end
+
 # Duals are stored as operation entries
 is_operation_entry(::Type{<:ISOPT.ConstraintType}) = true
 is_investment_entry(::Type{<:ISOPT.ConstraintType}) = false

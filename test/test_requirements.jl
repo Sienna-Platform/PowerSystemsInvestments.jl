@@ -139,7 +139,11 @@ const ESR_KEY =
     PSIN.ConstraintKey(EnergyShareRequirementConstraint, PSIP.EnergyShareRequirements)
 
 @testset "Requirement formulations must match the requirement type" begin
-    @test_throws r"RequirementEnergyShare is not a formulation of CarbonCaps. Supported requirement formulations: none." RequirementModel(
+    @test_throws r"RequirementEnergyShare is not a formulation of CapacityReserveMargin. Supported requirement formulations: none." RequirementModel(
+        PSIP.CapacityReserveMargin,
+        RequirementEnergyShare,
+    )
+    @test_throws r"Supported requirement formulations: RequirementCarbonCapMass, RequirementCarbonCapDemandRate, RequirementCarbonCapGenerationRate." RequirementModel(
         PSIP.CarbonCaps,
         RequirementEnergyShare,
     )
@@ -264,4 +268,253 @@ end
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     @test JuMP.value(generation["wind_share", 1]) >=
           1.5 * JuMP.value(demand["wind_share", 1]) - 1e-3
+end
+
+const CARBON_THERMAL_TYPE = PSIP.SupplyTechnology{PSY.ThermalStandard}
+# Heat rate (MMBtu/MWh) and carbon intensity (tCO2/MMBtu) of the thermal technologies
+const CARBON_HEAT_RATES = Dict("cheap_thermal" => 10.0, "expensive_thermal" => 8.0)
+const CARBON_INTENSITY = 0.1
+
+# Two zone model whose thermal technologies have fuel curves. `requirement` (built from the
+# portfolio, or nothing) is attached to the thermal technologies, wind and both demands.
+function _carbon_model(requirement, formulation; use_slacks=false, duals=Vector{DataType}())
+    p_5bus, op_days = test_2_zone_portfolio()
+    for (name, heat_rate) in CARBON_HEAT_RATES
+        thermal = PSIP.get_technology(CARBON_THERMAL_TYPE, p_5bus, name)
+        PSIP.set_operation_costs!(
+            thermal,
+            ThermalGenerationCost(;
+                variable=FuelCurve(; value_curve=LinearCurve(heat_rate), fuel_cost=3.0),
+                fixed=0.0,
+                start_up=0.0,
+                shut_down=0.0,
+            ),
+        )
+        PSIP.set_co2!(thermal, Dict(ThermalFuels.COAL => CARBON_INTENSITY))
+    end
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), ESR_PERIODS),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{DateTime}}()),
+        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1", "demand2"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["wind"],
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal"],
+        CARBON_THERMAL_TYPE,
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["test_branch"],
+        PSIP.AggregateTransportTechnology{PSY.ACBranch},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    if !isnothing(requirement)
+        PSIP.add_requirement!(p_5bus, requirement)
+        for (type, name) in (
+            (CARBON_THERMAL_TYPE, "cheap_thermal"),
+            (CARBON_THERMAL_TYPE, "expensive_thermal"),
+            (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind"),
+            (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1"),
+            (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2"),
+        )
+            PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [requirement])
+        end
+        set_requirement_model!(
+            template,
+            [PSIP.get_name(requirement)],
+            RequirementModel(
+                typeof(requirement),
+                formulation;
+                use_slacks=use_slacks,
+                duals=duals,
+            ),
+        )
+    end
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    return m
+end
+
+_carbon_cap(; max_mtons=1e8, max_tons_mwh=1e8) = PSIP.CarbonCaps(;
+    name="carbon_cap",
+    id=1,
+    available=true,
+    target_year=2030,
+    max_mtons=max_mtons,
+    max_tons_mwh=max_tons_mwh,
+)
+
+# Yearly 2030-2034 emissions, generation of the thermal technologies and wind, and demand,
+# computed from the solution
+function _carbon_totals(m)
+    container = PSIN.get_optimization_container(m)
+    dispatch(type) =
+        JuMP.value.(
+            PSIN.get_variable(container, PSIN.ActivePowerVariable(), type, "BasicDispatch"),
+        )
+    thermal = dispatch(CARBON_THERMAL_TYPE)
+    wind = dispatch(PSIP.SupplyTechnology{PSY.RenewableDispatch})
+    emissions =
+        365 * sum(
+            CARBON_INTENSITY * heat_rate * sum(thermal[name, t] for t in 1:24) for
+            (name, heat_rate) in CARBON_HEAT_RATES
+        )
+    generation = 365 * (sum(thermal[:, 1:24].data) + sum(wind["wind", t] for t in 1:24))
+    demand = sum(
+        _demand_2030(
+            PSIP.get_technology(
+                PSIP.DemandRequirement{PSY.PowerLoad},
+                PSIN.get_portfolio(m),
+                name,
+            ),
+        ) for name in ("demand1", "demand2")
+    )
+    return (emissions=emissions, generation=generation, demand=demand)
+end
+
+@testset "Carbon caps" begin
+    uncapped = _carbon_totals(_carbon_model(nothing, nothing))
+    @test uncapped.emissions > 0.0
+
+    # Each limit is set to half the uncapped emissions, so it binds
+    for (formulation, requirement, limit) in (
+        (
+            RequirementCarbonCapMass,
+            _carbon_cap(; max_mtons=0.5 * uncapped.emissions / 1e6),
+            totals -> 0.5 * uncapped.emissions,
+        ),
+        (
+            RequirementCarbonCapDemandRate,
+            _carbon_cap(; max_tons_mwh=0.5 * uncapped.emissions / uncapped.demand),
+            totals -> 0.5 * uncapped.emissions / uncapped.demand * totals.demand,
+        ),
+        (
+            RequirementCarbonCapGenerationRate,
+            _carbon_cap(; max_tons_mwh=0.5 * uncapped.emissions / uncapped.generation),
+            totals -> 0.5 * uncapped.emissions / uncapped.generation * totals.generation,
+        ),
+    )
+        m = _carbon_model(requirement, formulation; duals=[CarbonCapConstraint])
+        totals = _carbon_totals(m)
+        @test totals.emissions ≈ limit(totals) rtol = 1e-6
+        @test totals.emissions < 0.9 * uncapped.emissions
+
+        container = PSIN.get_optimization_container(m)
+        meta = string(formulation)
+        emissions =
+            PSIN.get_expression(container, WeightedCarbonEmissions(), PSIP.CarbonCaps, meta)
+        @test JuMP.value(emissions["carbon_cap", 1]) ≈ totals.emissions rtol = 1e-6
+        dispatch = PSIN.get_variable(
+            container,
+            PSIN.ActivePowerVariable(),
+            CARBON_THERMAL_TYPE,
+            "BasicDispatch",
+        )
+        # tCO2/MMBtu × MMBtu/MWh × 365 days
+        @test JuMP.coefficient(emissions["carbon_cap", 1], dispatch["cheap_thermal", 5]) ≈
+              CARBON_INTENSITY * 10.0 * 365
+        dual = read_dual(m, PSIN.ConstraintKey(CarbonCapConstraint, PSIP.CarbonCaps, meta))
+        @test only(dual.value) < 0.0
+    end
+
+    # With slacks, a cap of zero is met by paying for the shortfall
+    m = _carbon_model(
+        _carbon_cap(; max_mtons=0.0),
+        RequirementCarbonCapMass;
+        use_slacks=true,
+    )
+    slack = only(
+        read_variable(
+            m,
+            PSIN.VariableKey(
+                RequirementSlackVariable,
+                PSIP.CarbonCaps,
+                "RequirementCarbonCapMass",
+            ),
+        ).value,
+    )
+    @test slack ≈ _carbon_totals(m).emissions rtol = 1e-6
+    @test slack > 0.0
+end
+
+@testset "Carbon tax" begin
+    tax = 50.0
+    requirement = PSIP.CarbonTax(;
+        name="carbon_tax",
+        id=1,
+        available=true,
+        target_year=2030,
+        tax_dollars_per_ton=tax,
+    )
+    taxed = _carbon_model(requirement, RequirementCarbonTax)
+    untaxed = _carbon_model(nothing, nothing)
+    coefficient(m, t) = JuMP.coefficient(
+        JuMP.objective_function(PSIN.get_jump_model(PSIN.get_optimization_container(m))),
+        PSIN.get_variable(
+            PSIN.get_optimization_container(m),
+            PSIN.ActivePowerVariable(),
+            CARBON_THERMAL_TYPE,
+            "BasicDispatch",
+        )[
+            "cheap_thermal",
+            t,
+        ],
+    )
+    # The tax is paid on the 2030-2034 emissions, in each of those years, discounted to 2025
+    @test coefficient(taxed, 5) - coefficient(untaxed, 5) ≈
+          tax * CARBON_INTENSITY * 10.0 * 365 * sum(1.07^-k for k in 0:4) * 1.07^-5
+    @test coefficient(taxed, 30) ≈ coefficient(untaxed, 30)
+    @test _carbon_totals(taxed).emissions < _carbon_totals(untaxed).emissions
+
+    @test_throws r"RequirementCarbonTax has no constraint to add slacks to" RequirementModel(
+        PSIP.CarbonTax,
+        RequirementCarbonTax;
+        use_slacks=true,
+    )
+end
+
+@testset "Carbon requirements need technologies with fuel curves" begin
+    p_5bus, _ = test_2_zone_portfolio()
+    requirement = _carbon_cap()
+    PSIP.add_requirement!(p_5bus, requirement)
+    PSIP.set_requirements!(
+        PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind"),
+        [requirement],
+    )
+    @test_throws r"has no available contributing technology with a fuel curve" PSIN._validate_carbon_requirements(
+        p_5bus,
+        [requirement],
+        RequirementCarbonCapMass,
+    )
 end

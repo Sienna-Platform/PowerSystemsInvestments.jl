@@ -16,6 +16,10 @@ struct WeightedEnergyGeneration <: OperationsExpressionType end
 struct WeightedEnergyDemand <: OperationsExpressionType end
 struct WeightedEnergyShareGeneration <: OperationsExpressionType end
 struct WeightedEnergyShareDemand <: OperationsExpressionType end
+"""
+Yearly emissions (tCO2) of a carbon requirement's technologies in each representative period
+"""
+struct WeightedCarbonEmissions <: OperationsExpressionType end
 
 struct CumulativeCapacity <: CumulativeInvestmentExpressionType end
 
@@ -53,6 +57,7 @@ should_write_resulting_value(::Type{WeightedEnergyGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyDemand}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareDemand}) = true
+should_write_resulting_value(::Type{WeightedCarbonEmissions}) = true
 
 should_write_resulting_value(::Type{FuelConsumptionExpression}) = true
 should_write_resulting_value(::Type{FuelCost}) = true
