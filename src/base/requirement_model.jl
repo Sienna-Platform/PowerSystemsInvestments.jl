@@ -7,6 +7,11 @@ in this package.
 
   - `::Type{D}`: A `PSIP.Requirement` subtype (e.g. `PSIP.EnergyShareRequirements`)
   - `::Type{B}`: A `RequirementFormulation` subtype (e.g. `RequirementEnergyShare`)
+  - `use_slacks`: adds a `RequirementSlackVariable` to each requirement's constraint, priced
+    in the objective at the `"slack_penalty"` attribute per unit of shortfall (default
+    `REQUIREMENT_SLACK_PENALTY`)
+  - `duals`: constraint types whose duals are stored with the results, e.g.
+    `[EnergyShareRequirementConstraint]`
 
 # Example
 
@@ -39,6 +44,27 @@ Default (empty) attributes for a requirement model. Override per
 get_default_attributes(::Type{<:PSIP.Requirement}, ::Type{<:RequirementFormulation}) =
     Dict{String, Any}()
 
+_supported_requirement_formulations(::Type{<:PSIP.Requirement}) = ()
+
+function _check_requirement_formulation(
+    ::Type{D},
+    ::Type{B},
+) where {D <: PSIP.Requirement, B <: RequirementFormulation}
+    supported_formulations = _supported_requirement_formulations(D)
+    any(B <: formulation for formulation in supported_formulations) && return
+    supported_names = if isempty(supported_formulations)
+        "none"
+    else
+        join(nameof.(supported_formulations), ", ")
+    end
+    throw(
+        ArgumentError(
+            "$(nameof(B)) is not a formulation of $(nameof(D)). " *
+            "Supported requirement formulations: $supported_names.",
+        ),
+    )
+end
+
 function RequirementModel(
     ::Type{D},
     ::Type{B};
@@ -46,6 +72,7 @@ function RequirementModel(
     duals=Vector{DataType}(),
     attributes=Dict{String, Any}(),
 ) where {D <: PSIP.Requirement, B <: RequirementFormulation}
+    _check_requirement_formulation(D, B)
     attributes_ = get_default_attributes(D, B)
     for (k, v) in attributes
         attributes_[k] = v

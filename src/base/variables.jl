@@ -149,5 +149,11 @@ is_investment_entry(::Type{<:ISOPT.VariableType}) = error()
 is_investment_entry(::Type{<:OperationsVariableType}) = false
 is_investment_entry(::Type{<:InvestmentVariableType}) = true
 
+"""
+Shortfall of a requirement (MWh per year for energy requirements), priced in the objective
+when its `RequirementModel` uses slacks
+"""
+struct RequirementSlackVariable <: OperationsVariableType end
+
 is_operation_entry(::Type{<:Union{LineFlow, BranchFlow}}) = true
 is_investment_entry(::Type{<:Union{LineFlow, BranchFlow}}) = false

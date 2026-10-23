@@ -61,6 +61,7 @@ export IslandBalanceConstraint
 export FlowRateConstraint
 export NetworkFlowConstraint
 export EnergyShareRequirementConstraint
+export RequirementSlackVariable
 export HydroEnergyBudgetConstraint
 
 ### Variables ###
@@ -124,6 +125,7 @@ export serialize_results
 export read_variable
 export read_optimizer_stats
 export read_expression
+export read_dual
 export get_variable
 export get_constraint
 export get_expression
