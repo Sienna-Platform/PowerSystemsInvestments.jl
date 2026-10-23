@@ -40,6 +40,7 @@ export BinaryInvestment
 ### Operation Formulations ###
 export BasicDispatch
 export BasicDispatchWithBudget
+export BasicDispatchWithLosses
 export ContinuousThermalCommitment
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
@@ -78,6 +79,8 @@ export ActivePowerDischargeVariable
 export ActivePowerWindVariable
 export ActivePowerSolarVariable
 export FlowActivePowerVariable
+export FlowActivePowerFromToVariable
+export FlowActivePowerToFromVariable
 export BranchBuiltVariable
 export VirtualTransactionVariable
 export LineFlow

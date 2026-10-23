@@ -37,35 +37,7 @@ function add_capital_cost!(
     ::V,
     tech_model::String,
 ) where {
-    T <: PSIP.AggregateTransportTechnology,
-    U <: BuildCapacity,
-    V <: InvestmentTechnologyFormulation,
-}
-    for d in devices
-        capital_costs = PSIP.get_capital_costs(d)
-        value_curve = PSIP.get_capital_cost(capital_costs)
-        interconnection_cost = PSIP.get_interconnection_cost(capital_costs)
-        _add_cost_to_objective!(
-            container,
-            U(),
-            d,
-            value_curve,
-            V(),
-            tech_model;
-            interconnection_cost=interconnection_cost,
-        )
-    end
-    return
-end
-
-function add_capital_cost!(
-    container::SingleOptimizationContainer,
-    ::U,
-    devices::Vector{T},
-    ::V,
-    tech_model::String,
-) where {
-    T <: PSIP.NodalACTransportTechnology,
+    T <: PSIP.TransmissionTechnology,
     U <: BuildCapacity,
     V <: InvestmentTechnologyFormulation,
 }

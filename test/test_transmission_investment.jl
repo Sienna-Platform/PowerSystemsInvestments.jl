@@ -40,7 +40,7 @@ function _transmission_template(transport)
 end
 
 # Zonal line between the two zones of the test portfolio
-function _aggregate_line_model(formulation)
+function _aggregate_line_model(formulation; operation=BasicDispatch)
     template, p_5bus = _transmission_template(MultiRegionBalanceModel)
     line_type = PSIP.AggregateTransportTechnology{PSY.ACBranch}
     line = PSIP.get_technology(line_type, p_5bus, "test_branch")
@@ -50,7 +50,7 @@ function _aggregate_line_model(formulation)
         ["test_branch"],
         line_type,
         formulation,
-        BasicDispatch,
+        operation,
         BasicDispatchFeasibility,
     )
     return template, p_5bus, line_type, "test_branch"
@@ -152,6 +152,7 @@ end
                 ((BinaryInvestment, JuMP.is_binary), (IntegerInvestment, JuMP.is_integer))
                 m, _, _ = _build_line_model(make_model, formulation)
                 container = PSIN.get_optimization_container(m)
+                @test PSIN.is_milp(container)
                 meta = string(formulation)
                 build = PSIN.get_variable(container, PSIN.BuildCapacity(), line_type, meta)
                 capacity = PSIN.get_expression(
@@ -196,4 +197,43 @@ end
             end
         end
     end
+end
+
+@testset "Zonal line losses" begin
+    objectives = map((BasicDispatch, BasicDispatchWithLosses)) do operation
+        m, line_type, name = _build_line_model(
+            f -> _aggregate_line_model(f; operation=operation),
+            ContinuousInvestment,
+        )
+        @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        container = PSIN.get_optimization_container(m)
+        if operation == BasicDispatchWithLosses
+            meta = "BasicDispatchWithLosses"
+            from_to = PSIN.get_variable(
+                container,
+                FlowActivePowerFromToVariable(),
+                line_type,
+                meta,
+            )
+            to_from = PSIN.get_variable(
+                container,
+                FlowActivePowerToFromVariable(),
+                line_type,
+                meta,
+            )
+            line = PSIP.get_technology(line_type, PSIN.get_portfolio(m), name)
+            balance =
+                PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio)
+            for (region, sent, received) in (
+                (PSIP.get_start_region(line), from_to, to_from),
+                (PSIP.get_end_region(line), to_from, from_to),
+            )
+                expression = balance[PSIP.get_name(region), 1]
+                @test JuMP.coefficient(expression, sent[name, 1]) == -1.0
+                @test JuMP.coefficient(expression, received[name, 1]) ≈ 0.95
+            end
+        end
+        JuMP.objective_value(PSIN.get_jump_model(container))
+    end
+    @test objectives[2] > objectives[1]
 end

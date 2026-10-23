@@ -7,6 +7,16 @@ const PTDF_TECHNOLOGIES = (
 )
 
 const PTDF_LINE_TYPE = PSIP.NodalACTransportTechnology{PSY.Line}
+const HVDC_TYPE = PSIP.NodalHVDCTransportTechnology{PSY.TwoTerminalGenericHVDCLine}
+
+const TEST_FINANCIAL_DATA = PSIP.TechnologyFinancialData(;
+    capital_recovery_period=30,
+    technology_base_year=2025,
+    debt_fraction=0.6,
+    debt_rate=0.04,
+    return_on_equity=0.10,
+    tax_rate=0.21,
+)
 
 function _ptdf_line(
     name,
@@ -28,20 +38,14 @@ function _ptdf_line(
         available=true,
         power_systems_type="Line",
         id=1,
-        financial_data=PSIP.TechnologyFinancialData(;
-            capital_recovery_period=30,
-            technology_base_year=2025,
-            debt_fraction=0.6,
-            debt_rate=0.04,
-            return_on_equity=0.10,
-            tax_rate=0.21,
-        ),
+        financial_data=TEST_FINANCIAL_DATA,
     )
 end
 
 # 2-zone test portfolio on nodes. `lines` are (name, from, to, reactance, existing line of
 # the base system); lines without an existing line are candidates of up to 1000 MW.
-# `discrete_lines` are (name, from, to, reactance, formulation, unit size, capacity limit).
+# `discrete_lines` are (name, from, to, reactance, formulation, unit size, capacity limit),
+# and `hvdc_lines` are (name, from, to, operations formulation, line loss).
 function _nodal_test_model(
     transport;
     nodes,
@@ -52,6 +56,7 @@ function _nodal_test_model(
     candidate_cost=5000.0,
     candidate_costs=Dict{String, Float64}(),
     discrete_lines=[],
+    hvdc_lines=[],
     attributes=Dict{String, Any}(),
     algorithm=SingleInstanceSolve,
 )
@@ -162,6 +167,29 @@ function _nodal_test_model(
             PTDF_LINE_TYPE,
             formulation,
             BasicDispatch,
+            BasicDispatchFeasibility,
+        )
+    end
+    for (name, from, to, operation, line_loss) in hvdc_lines
+        hvdc = HVDC_TYPE(;
+            name=name,
+            start_node=regions[from],
+            end_node=regions[to],
+            capacity_limits=(min=0, max=1000),
+            capital_costs=PSIP.CapitalCost(LinearCurve(candidate_cost), 0.0),
+            line_loss=line_loss,
+            available=true,
+            power_systems_type="TwoTerminalGenericHVDCLine",
+            id=1,
+            financial_data=TEST_FINANCIAL_DATA,
+        )
+        PSIP.add_technology!(p_5bus, hvdc)
+        set_technology_model!(
+            template,
+            [name],
+            HVDC_TYPE,
+            ContinuousInvestment,
+            operation,
             BasicDispatchFeasibility,
         )
     end
@@ -375,6 +403,51 @@ end
     @test isapprox(_solved_objective(ptdf), _solved_objective(nodal); rtol=1e-6)
 end
 
+@testset "HVDC links" begin
+    loss = LinearCurve(0.02, 0.01)
+    objectives = Dict()
+    for operation in (BasicDispatch, BasicDispatchWithLosses),
+        transport in (NodalBalanceModel, NodalPTDFModel)
+
+        m = _two_node_model(
+            transport;
+            ratings=Dict("1" => 100.0),
+            hvdc_lines=[("hvdc", "Node_1", "Node_2", operation, loss)],
+        )
+        objectives[operation, transport] = _solved_objective(m)
+        operation == BasicDispatchWithLosses || continue
+        container = PSIN.get_optimization_container(m)
+        meta = "BasicDispatchWithLosses"
+        from_to =
+            PSIN.get_variable(container, FlowActivePowerFromToVariable(), HVDC_TYPE, meta)
+        to_from =
+            PSIN.get_variable(container, FlowActivePowerToFromVariable(), HVDC_TYPE, meta)
+        build = PSIN.get_variable(
+            container,
+            PSIN.BuildCapacity(),
+            HVDC_TYPE,
+            "ContinuousInvestment",
+        )
+        balance = PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio)
+        for (node, sent, received) in
+            (("Node_1", from_to, to_from), ("Node_2", to_from, from_to))
+            @test JuMP.coefficient(balance[node, 1], sent["hvdc", 1]) == -1.0
+            @test JuMP.coefficient(balance[node, 1], received["hvdc", 1]) ≈ 0.98
+            # Half of the constant loss per MW of capacity at each end
+            @test JuMP.coefficient(balance[node, 1], build["hvdc", 1]) ≈ -0.005
+        end
+    end
+    for operation in (BasicDispatch, BasicDispatchWithLosses)
+        @test isapprox(
+            objectives[operation, NodalPTDFModel],
+            objectives[operation, NodalBalanceModel];
+            rtol=1e-6,
+        )
+    end
+    @test objectives[BasicDispatchWithLosses, NodalBalanceModel] >
+          objectives[BasicDispatch, NodalBalanceModel]
+end
+
 # A triangle of existing lines with different reactances: the cheap generator at n1, the
 # expensive one at n2, and demand at n2 and n3. The n1-n2 line is limited to 100 MW.
 const TRIANGLE_LINES = [
@@ -482,6 +555,8 @@ function _ring_model(
     candidate_cost=5000.0,
     candidate_costs=Dict{String, Float64}(),
     discrete_lines=[],
+    attributes=Dict{String, Any}(),
+    algorithm=SingleInstanceSolve,
 )
     m = _nodal_test_model(
         NodalPTDFModel;
@@ -500,6 +575,8 @@ function _ring_model(
         candidate_cost=candidate_cost,
         candidate_costs=candidate_costs,
         discrete_lines=discrete_lines,
+        attributes=attributes,
+        algorithm=algorithm,
     )
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
@@ -821,6 +898,36 @@ end
         output_dir=mktempdir(; cleanup=true),
         console_level=Logging.Error,
     ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+end
+
+@testset "Iterative monitoring of a MIP" begin
+    lines = [RING_LINES; RING_CANDIDATES]
+    objective = _solved_objective(_ring_model(lines; candidate_cost=1.0))
+    for (attributes, first_stage) in (
+        (Dict{String, Any}(), "relaxed"),
+        (Dict{String, Any}("relaxed_screening" => false), "final"),
+        (Dict{String, Any}("screening_mip_gap" => 0.05), "relaxed"),
+        (
+            Dict{String, Any}("relaxed_screening" => false, "screening_mip_gap" => 0.05),
+            "screening gap",
+        ),
+        # The last solve is a final one even when the rounds run out while screening
+        (Dict{String, Any}("max_iterations" => 0), "relaxed"),
+    )
+        m = _ring_model(
+            lines;
+            candidate_cost=1.0,
+            attributes=attributes,
+            algorithm=IterativeMonitoring,
+        )
+        objective_m = _solved_objective(m)
+        log = get_monitoring_log(m)
+        @test last(log.stage) == "final"
+        @test first(log.stage) == first_stage
+        haskey(attributes, "max_iterations") ||
+            @test isapprox(objective_m, objective; rtol=1e-4)
+        @test PSIN.is_milp(PSIN.get_optimization_container(m))
+    end
 end
 
 @testset "Flow variables" begin

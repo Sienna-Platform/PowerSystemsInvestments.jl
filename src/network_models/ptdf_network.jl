@@ -47,11 +47,6 @@ const CorridorLines =
 _names(c::MergedCorridor) =
     [c.name; [l.name for l in c.expandable_lines]; [l.name for (l, _) in c.fixed_lines]]
 
-_arc(technology::PSIP.NodalACTransportTechnology) = (
-    PSIP.get_name(PSIP.get_start_node(technology)),
-    PSIP.get_name(PSIP.get_end_node(technology)),
-)
-
 _is_continuous(::Type{ContinuousInvestment}) = true
 _is_continuous(::Type{<:Union{IntegerInvestment, BinaryInvestment}}) = false
 

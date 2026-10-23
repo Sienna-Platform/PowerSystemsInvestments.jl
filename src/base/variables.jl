@@ -84,6 +84,16 @@ Struct to dispatch the creation of bidirectional Active Power Flow Variables
 struct FlowActivePowerVariable <: OperationsVariableType end
 
 """
+Flow from the start to the end of a transport technology
+"""
+struct FlowActivePowerFromToVariable <: OperationsVariableType end
+
+"""
+Flow from the end to the start of a transport technology
+"""
+struct FlowActivePowerToFromVariable <: OperationsVariableType end
+
+"""
 Amount of installed capacity that has been committed for dispatch at a timepoint
 """
 struct CommittedCapacityVariable <: OperationsVariableType end

@@ -19,7 +19,33 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
     max_iterations = get(attributes, "max_iterations", 20)
     tolerance = get(attributes, "overload_tolerance", 1e-4)
     threshold = get(attributes, "add_threshold", 1.0)
+    jump_model = get_jump_model(container)
+    milp = is_milp(container)
+    # A MIP is first screened with integrality relaxed, and then with a looser gap
+    undo_relax =
+        milp && get(attributes, "relaxed_screening", true) ?
+        JuMP.relax_integrality(jump_model) : nothing
+    screening_gap = get(attributes, "screening_mip_gap", nothing)
+    target_gap = nothing
+    if milp && !isnothing(screening_gap)
+        target_gap = JuMP.get_attribute(jump_model, MOI.RelativeGapTolerance())
+        JuMP.set_attribute(jump_model, MOI.RelativeGapTolerance(), screening_gap)
+    end
+    # Moves to the next stage, and returns false when already at the final one
+    function next_stage!()
+        if !isnothing(undo_relax)
+            undo_relax()
+            undo_relax = nothing
+        elseif !isnothing(target_gap)
+            JuMP.set_attribute(jump_model, MOI.RelativeGapTolerance(), target_gap)
+            target_gap = nothing
+        else
+            return false
+        end
+        return true
+    end
     log = DataFrames.DataFrame(;
+        stage=String[],
         iteration=Int[],
         monitored=Int[],
         added=Int[],
@@ -29,7 +55,12 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         overloaded=Int[],
     )
     loading = Dict{String, Tuple{Float64, Float64}}()
-    for iteration in 0:max_iterations
+    rounds = 0
+    capped = false
+    for iteration in Iterators.countfrom(0)
+        stage =
+            !isnothing(undo_relax) ? "relaxed" :
+            !isnothing(target_gap) ? "screening gap" : "final"
         status = solve_model!(container, portfolio)
         set_run_status!(model, status)
         status == RunStatus.SUCCESSFULLY_FINALIZED || _solve_failed(model)
@@ -38,7 +69,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         overloaded = [name for (name, (ratio, _)) in loading if ratio > 1 + tolerance]
         new_overloads = setdiff(overloaded, network.monitored)
         added =
-            isempty(new_overloads) ? String[] :
+            isempty(new_overloads) || capped ? String[] :
             sort!(
                 union(
                     new_overloads,
@@ -51,23 +82,39 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         push!(
             log,
             (
+                stage,
                 iteration,
                 length(network.monitored),
                 length(added),
-                JuMP.objective_value(get_jump_model(container)),
+                JuMP.objective_value(jump_model),
                 get_optimizer_stats(container).timed_solve_time,
                 maximum(first, values(loading); init=0.0),
                 length(overloaded),
             ),
         )
         @info "Monitoring iteration $iteration" last(log)
-        isempty(added) && break
-        if iteration == max_iterations
-            @warn "Stopped after $max_iterations iterations with corridors overloaded" corridors =
+        if capped
+            isempty(new_overloads) ||
+                @warn "Stopped after $max_iterations rounds with corridors overloaded" corridors =
+                    sort!(new_overloads)
+            break
+        end
+        if isempty(added)
+            next_stage!() || break
+            continue
+        end
+        if rounds == max_iterations
+            # The last solve is always a final one
+            capped = true
+            while next_stage!()
+            end
+            stage == "final" || continue
+            @warn "Stopped after $max_iterations rounds with corridors overloaded" corridors =
                 sort!(new_overloads)
             break
         end
         _add_corridors!(container, transport_model, portfolio, added)
+        rounds += 1
     end
     residual = [
         name for (name, (ratio, _)) in loading if
@@ -82,8 +129,8 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
     return
 end
 
-# Adding rows to a model loaded in HiGHS is slow, so the solver is detached while adding and
-# the previous basis is restored for an LP
+# Adding rows to a model loaded in the solver is slow, so the solver is detached while they
+# are added; for an LP the previous basis is then restored
 function _add_corridors!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel,
@@ -95,7 +142,16 @@ function _add_corridors!(
         add_monitored_corridors!(container, transport_model, portfolio, names)
         return
     end
-    basis = is_milp(container) ? nothing : _get_basis(jump_model)
+    if is_milp(container)
+        # The current solution is the start of the next MIP solve
+        variables = JuMP.all_variables(jump_model)
+        # Values are read before any is set, since setting one discards the solution
+        values = JuMP.value.(variables)
+        JuMP.set_start_value.(variables, values)
+        basis = nothing
+    else
+        basis = _get_basis(jump_model)
+    end
     MOI.Utilities.reset_optimizer(jump_model)
     add_monitored_corridors!(container, transport_model, portfolio, names)
     isnothing(basis) || _restore_basis!(jump_model, basis)
