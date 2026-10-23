@@ -1,4 +1,9 @@
 function build_impl!(model::InvestmentModel{SingleInstanceSolve})
+    build_single_instance!(model)
+    return
+end
+
+function build_single_instance!(model::InvestmentModel)
     build_pre_step!(model)
 
     build_model!(

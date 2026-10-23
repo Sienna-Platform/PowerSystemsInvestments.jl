@@ -10,6 +10,9 @@ export OptimizationProblemResults
 
 ### Algorithms ###
 export SingleInstanceSolve
+export IterativeMonitoring
+export get_monitoring_log
+export get_monitored_corridors
 
 ### Technology Models ###
 export TechnologyModel
@@ -37,6 +40,7 @@ export BinaryInvestment
 ### Operation Formulations ###
 export BasicDispatch
 export BasicDispatchWithBudget
+export BasicDispatchWithLosses
 export ContinuousThermalCommitment
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
@@ -51,7 +55,11 @@ export RequirementEnergyShare
 export SingleRegionBalanceModel
 export MultiRegionBalanceModel
 export NodalBalanceModel
+export NodalPTDFModel
 export NodalBalanceConstraint
+export IslandBalanceConstraint
+export FlowRateConstraint
+export NetworkFlowConstraint
 export EnergyShareRequirementConstraint
 export HydroEnergyBudgetConstraint
 
@@ -71,6 +79,12 @@ export ActivePowerDischargeVariable
 export ActivePowerWindVariable
 export ActivePowerSolarVariable
 export FlowActivePowerVariable
+export FlowActivePowerFromToVariable
+export FlowActivePowerToFromVariable
+export BranchBuiltVariable
+export VirtualTransactionVariable
+export LineFlow
+export BranchFlow
 
 ### Expressions ###
 export CumulativeCapacity
@@ -83,6 +97,7 @@ export StartUpCost
 export ShutDownCost
 export FuelConsumptionExpression
 export EnergyBalance
+export PTDFBranchFlow
 export CumulativePowerCapacity
 export CumulativeEnergyCapacity
 export CumulativeSolarCapacity
@@ -129,6 +144,8 @@ import Logging
 import TimerOutputs
 import Serialization
 import DataFrames
+import LinearAlgebra
+import SparseArrays
 
 const IS = InfrastructureSystems
 const ISOPT = InfrastructureSystems.Optimization
@@ -252,6 +269,7 @@ include("investment_model/investment_problem_results.jl")
 include("base/serialization.jl")
 # Solve Instance #
 include("model_build/SingleInstanceSolve.jl")
+include("model_build/IterativeMonitoring.jl")
 # Utils #
 @static if pkgversion(PrettyTables).major == 2
     include("utils/printing_pt_v2.jl")
@@ -271,9 +289,12 @@ include("technology_models/technologies/storage_tech.jl")
 include("technology_models/technologies/colocated_tech.jl")
 include("technology_models/technologies/branch_tech.jl")
 # Network #
+include("network_models/network_matrices.jl")
+include("network_models/ptdf_network.jl")
 include("network_models/singleregion_model.jl")
 include("network_models/multiregion_model.jl")
 include("network_models/nodal_model.jl")
+include("network_models/ptdf_model.jl")
 include("network_models/transport_constructor.jl")
 # Constructors #
 include("technology_models/technology_constructors/supply_constructor.jl")

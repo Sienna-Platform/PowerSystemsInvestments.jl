@@ -109,7 +109,7 @@ function add_to_expression!(
 ) where {
     T <: EnergyBalance,
     U <: Vector{D},
-    V <: NodalBalanceModel,
+    V <: AbstractNodalTransportAggregation,
 } where {D <: PSIP.DemandRequirement}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -120,7 +120,6 @@ function add_to_expression!(
     multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
-        # Only 1 region (node) supported
         region = PSIP.get_name(only(PSIP.get_region(d)))
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
@@ -219,7 +218,7 @@ function add_to_expression!(
 ) where {
     T <: WeightedEnergyDemand,
     U <: Vector{D},
-    V <: NodalBalanceModel,
+    V <: AbstractNodalTransportAggregation,
 } where {D <: PSIP.DemandRequirement}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
