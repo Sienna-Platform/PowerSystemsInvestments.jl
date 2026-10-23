@@ -54,6 +54,7 @@ export RequirementCarbonCapMass
 export RequirementCarbonCapDemandRate
 export RequirementCarbonCapGenerationRate
 export RequirementCarbonTax
+export RequirementCapacityReserveMargin
 
 ### Transport Formulations ###
 export SingleRegionBalanceModel
@@ -66,6 +67,7 @@ export FlowRateConstraint
 export NetworkFlowConstraint
 export EnergyShareRequirementConstraint
 export CarbonCapConstraint
+export CapacityReserveMarginConstraint
 export RequirementSlackVariable
 export HydroEnergyBudgetConstraint
 
@@ -316,6 +318,7 @@ include("requirement_models/requirement_constructor.jl")
 include("requirement_models/requirement_utils.jl")
 include("requirement_models/energy_share_requirement.jl")
 include("requirement_models/carbon_requirements.jl")
+include("requirement_models/capacity_reserve_margin.jl")
 # Objective Function #
 include("technology_models/technologies/common/objective_function/common_financial.jl")
 include("technology_models/technologies/common/objective_function/common_capital.jl")

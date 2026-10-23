@@ -139,8 +139,8 @@ const ESR_KEY =
     PSIN.ConstraintKey(EnergyShareRequirementConstraint, PSIP.EnergyShareRequirements)
 
 @testset "Requirement formulations must match the requirement type" begin
-    @test_throws r"RequirementEnergyShare is not a formulation of CapacityReserveMargin. Supported requirement formulations: none." RequirementModel(
-        PSIP.CapacityReserveMargin,
+    @test_throws r"RequirementEnergyShare is not a formulation of HourlyMatching. Supported requirement formulations: none." RequirementModel(
+        PSIP.HourlyMatching,
         RequirementEnergyShare,
     )
     @test_throws r"Supported requirement formulations: RequirementCarbonCapMass, RequirementCarbonCapDemandRate, RequirementCarbonCapGenerationRate." RequirementModel(
@@ -275,9 +275,20 @@ const CARBON_THERMAL_TYPE = PSIP.SupplyTechnology{PSY.ThermalStandard}
 const CARBON_HEAT_RATES = Dict("cheap_thermal" => 10.0, "expensive_thermal" => 8.0)
 const CARBON_INTENSITY = 0.1
 
-# Two zone model whose thermal technologies have fuel curves. `requirement` (built from the
-# portfolio, or nothing) is attached to the thermal technologies, wind and both demands.
-function _carbon_model(requirement, formulation; use_slacks=false, duals=Vector{DataType}())
+# Two zone model whose thermal technologies have fuel curves. `requirement` (or nothing) is
+# attached to the thermal technologies, wind and `demands`, with `storage` to the battery too,
+# and with `line` to the zonal line from Zone_1 to Zone_2, dispatched by `line_operation`.
+function _policy_model(
+    requirement,
+    formulation;
+    use_slacks=false,
+    duals=Vector{DataType}(),
+    storage=false,
+    attributes=Dict{String, Any}(),
+    demands=["demand1", "demand2"],
+    line=false,
+    line_operation=BasicDispatch,
+)
     p_5bus, op_days = test_2_zone_portfolio()
     for (name, heat_rate) in CARBON_HEAT_RATES
         thermal = PSIP.get_technology(CARBON_THERMAL_TYPE, p_5bus, name)
@@ -327,18 +338,29 @@ function _carbon_model(requirement, formulation; use_slacks=false, duals=Vector{
         ["test_branch"],
         PSIP.AggregateTransportTechnology{PSY.ACBranch},
         ContinuousInvestment,
-        BasicDispatch,
+        line_operation,
         BasicDispatchFeasibility,
     )
+    if storage
+        set_technology_model!(
+            template,
+            ["test_storage"],
+            ESR_STORAGE_TYPE,
+            ContinuousInvestment,
+            CyclicalStorageDispatch,
+            BasicDispatchFeasibility,
+        )
+    end
     if !isnothing(requirement)
         PSIP.add_requirement!(p_5bus, requirement)
-        for (type, name) in (
+        for (type, name) in [
             (CARBON_THERMAL_TYPE, "cheap_thermal"),
             (CARBON_THERMAL_TYPE, "expensive_thermal"),
             (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind"),
-            (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1"),
-            (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2"),
-        )
+            [(PSIP.DemandRequirement{PSY.PowerLoad}, name) for name in demands]...,
+            fill((ESR_STORAGE_TYPE, "test_storage"), storage)...,
+            fill((PSIP.AggregateTransportTechnology{PSY.ACBranch}, "test_branch"), line)...,
+        ]
             PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [requirement])
         end
         set_requirement_model!(
@@ -349,6 +371,7 @@ function _carbon_model(requirement, formulation; use_slacks=false, duals=Vector{
                 formulation;
                 use_slacks=use_slacks,
                 duals=duals,
+                attributes=attributes,
             ),
         )
     end
@@ -404,7 +427,7 @@ function _carbon_totals(m)
 end
 
 @testset "Carbon caps" begin
-    uncapped = _carbon_totals(_carbon_model(nothing, nothing))
+    uncapped = _carbon_totals(_policy_model(nothing, nothing))
     @test uncapped.emissions > 0.0
 
     # Each limit is set to half the uncapped emissions, so it binds
@@ -425,7 +448,7 @@ end
             totals -> 0.5 * uncapped.emissions / uncapped.generation * totals.generation,
         ),
     )
-        m = _carbon_model(requirement, formulation; duals=[CarbonCapConstraint])
+        m = _policy_model(requirement, formulation; duals=[CarbonCapConstraint])
         totals = _carbon_totals(m)
         @test totals.emissions ≈ limit(totals) rtol = 1e-6
         @test totals.emissions < 0.9 * uncapped.emissions
@@ -449,7 +472,7 @@ end
     end
 
     # With slacks, a cap of zero is met by paying for the shortfall
-    m = _carbon_model(
+    m = _policy_model(
         _carbon_cap(; max_mtons=0.0),
         RequirementCarbonCapMass;
         use_slacks=true,
@@ -477,8 +500,8 @@ end
         target_year=2030,
         tax_dollars_per_ton=tax,
     )
-    taxed = _carbon_model(requirement, RequirementCarbonTax)
-    untaxed = _carbon_model(nothing, nothing)
+    taxed = _policy_model(requirement, RequirementCarbonTax)
+    untaxed = _policy_model(nothing, nothing)
     coefficient(m, t) = JuMP.coefficient(
         JuMP.objective_function(PSIN.get_jump_model(PSIN.get_optimization_container(m))),
         PSIN.get_variable(
@@ -517,4 +540,213 @@ end
         [requirement],
         RequirementCarbonCapMass,
     )
+end
+
+_capacity_reserve_margin(fraction) = PSIP.CapacityReserveMargin(;
+    name="reserve_margin",
+    id=1,
+    available=true,
+    target_year=2030,
+    capacity_reserve_fraction=fraction,
+)
+
+# Reserve above the requirement in each 2030 time step, computed from the solution
+function _reserve_surplus(m, fraction)
+    container = PSIN.get_optimization_container(m)
+    p = PSIN.get_portfolio(m)
+    capacity(technology) =
+        JuMP.value.(
+            PSIN.get_expression(
+                container,
+                PSIN.CumulativeCapacity(),
+                technology,
+                "ContinuousInvestment",
+            ),
+        )
+    thermal = capacity(CARBON_THERMAL_TYPE)
+    wind_type = PSIP.SupplyTechnology{PSY.RenewableDispatch}
+    wind = capacity(wind_type)
+    series(technology, name) = TimeSeries.values(
+        IS.get_time_series(
+            IS.SingleTimeSeries,
+            technology,
+            name;
+            year="2030",
+            rep_day=1,
+        ).data,
+    )
+    capacity_factor =
+        series(PSIP.get_technology(wind_type, p, "wind"), "ops_variable_cap_factor")
+    demand = sum(
+        series(
+            PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, name),
+            "ops_demand",
+        ) for name in ("demand1", "demand2")
+    )
+    storage(variable_type) =
+        JuMP.value.(
+            PSIN.get_variable(
+                container,
+                variable_type,
+                ESR_STORAGE_TYPE,
+                "CyclicalStorageDispatch",
+            ),
+        )
+    discharge = storage(PSIN.ActiveOutPowerVariable())
+    charge = storage(PSIN.ActiveInPowerVariable())
+    return [
+        thermal["cheap_thermal", 1] +
+        thermal["expensive_thermal", 1] +
+        capacity_factor[t] * wind["wind", 1] +
+        discharge["test_storage", t] - charge["test_storage", t] -
+        (1 + fraction) * demand[t] for t in 1:24
+    ]
+end
+
+@testset "Capacity reserve margin" begin
+    unconstrained = _policy_model(nothing, nothing; storage=true)
+    @test minimum(_reserve_surplus(unconstrained, 0.3)) < -1.0
+
+    m = _policy_model(
+        _capacity_reserve_margin(0.3),
+        RequirementCapacityReserveMargin;
+        storage=true,
+        duals=[CapacityReserveMarginConstraint],
+    )
+    # The margin is met in every 2030 time step and binds in some
+    @test minimum(_reserve_surplus(m, 0.3)) ≈ 0.0 atol = 1e-4
+    @test _objective(m) > _objective(unconstrained)
+
+    constraints = PSIN.get_constraint(
+        PSIN.get_optimization_container(m),
+        CapacityReserveMarginConstraint(),
+        PSIP.CapacityReserveMargin,
+    )
+    @test all(isassigned(constraints.data, 1, t) for t in 1:24)
+    @test !any(isassigned(constraints.data, 1, t) for t in 25:48)
+    duals =
+        sort(
+            read_dual(
+                m,
+                PSIN.ConstraintKey(
+                    CapacityReserveMarginConstraint,
+                    PSIP.CapacityReserveMargin,
+                ),
+            ),
+            :time_index,
+        ).value
+    @test all(isnan, duals[25:48])
+    @test all(>=(-1e-6), duals[1:24])
+    @test maximum(duals[1:24]) > 0.0
+
+    # With slacks cheaper than capacity, the shortfall of each time step is a slack
+    m = _policy_model(
+        _capacity_reserve_margin(100.0),
+        RequirementCapacityReserveMargin;
+        storage=true,
+        use_slacks=true,
+        attributes=Dict{String, Any}("slack_penalty" => 1.0),
+    )
+    slack =
+        JuMP.value.(
+            PSIN.get_variable(
+                PSIN.get_optimization_container(m),
+                RequirementSlackVariable(),
+                PSIP.CapacityReserveMargin,
+            ),
+        )
+    @test slack["reserve_margin", 1:24].data ≈ -_reserve_surplus(m, 100.0) rtol = 1e-6
+    @test all(iszero, slack["reserve_margin", 25:48].data)
+end
+
+# Left side minus right side of a constraint at the solution
+_constraint_surplus(constraint) =
+    JuMP.value(JuMP.constraint_object(constraint).func) -
+    MOI.constant(JuMP.constraint_object(constraint).set)
+
+@testset "Capacity reserve margin with transmission" begin
+    line_type = PSIP.AggregateTransportTechnology{PSY.ACBranch}
+    for operation in (BasicDispatch, BasicDispatchWithLosses)
+        # The area is Zone_2, the region of demand2, which the line from Zone_1 enters
+        m = _policy_model(
+            _capacity_reserve_margin(0.3),
+            RequirementCapacityReserveMargin;
+            demands=["demand2"],
+            line=true,
+            line_operation=operation,
+        )
+        container = PSIN.get_optimization_container(m)
+        constraints = PSIN.get_constraint(
+            container,
+            CapacityReserveMarginConstraint(),
+            PSIP.CapacityReserveMargin,
+        )
+        meta = string(operation)
+        flow(variable_type) =
+            JuMP.value.(PSIN.get_variable(container, variable_type, line_type, meta))
+        inflow = if operation == BasicDispatch
+            [flow(FlowActivePowerVariable())["test_branch", t] for t in 1:24]
+        else
+            # Flows into Zone_2 arrive net of the 5% losses
+            [
+                0.95 * flow(FlowActivePowerFromToVariable())["test_branch", t] -
+                flow(FlowActivePowerToFromVariable())["test_branch", t] for t in 1:24
+            ]
+        end
+        p = PSIN.get_portfolio(m)
+        capacity(technology) =
+            JuMP.value.(
+                PSIN.get_expression(
+                    container,
+                    PSIN.CumulativeCapacity(),
+                    technology,
+                    "ContinuousInvestment",
+                ),
+            )
+        thermal = capacity(CARBON_THERMAL_TYPE)
+        wind_type = PSIP.SupplyTechnology{PSY.RenewableDispatch}
+        series(technology, name) = TimeSeries.values(
+            IS.get_time_series(
+                IS.SingleTimeSeries,
+                technology,
+                name;
+                year="2030",
+                rep_day=1,
+            ).data,
+        )
+        capacity_factor =
+            series(PSIP.get_technology(wind_type, p, "wind"), "ops_variable_cap_factor")
+        demand = series(
+            PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, "demand2"),
+            "ops_demand",
+        )
+        for t in 1:24
+            expected =
+                thermal["cheap_thermal", 1] +
+                thermal["expensive_thermal", 1] +
+                capacity_factor[t] * capacity(wind_type)["wind", 1] +
+                inflow[t] - 1.3 * demand[t]
+            @test _constraint_surplus(constraints["reserve_margin", t]) ≈ expected atol =
+                1e-4
+        end
+        @test any(!iszero, inflow)
+    end
+
+    # With both demands attached the area holds both ends of the line
+    p_5bus, _ = test_2_zone_portfolio()
+    requirement = _capacity_reserve_margin(0.3)
+    PSIP.add_requirement!(p_5bus, requirement)
+    for (type, name) in (
+        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1"),
+        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2"),
+        (line_type, "test_branch"),
+    )
+        PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [requirement])
+    end
+    @test_logs (:warn, r"test_branch is fully inside the area") PSIN._boundary_lines(
+        p_5bus,
+        requirement;
+        warn=true,
+    )
+    @test isempty(PSIN._boundary_lines(p_5bus, requirement))
 end

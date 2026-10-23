@@ -22,6 +22,12 @@ struct RequirementCarbonCapDemandRate <: CarbonCapFormulation end
 struct RequirementCarbonCapGenerationRate <: CarbonCapFormulation end
 
 """
+Capacity reserve margin as in GenX: in every time step of the policy's target period, the
+capacity its technologies can provide must cover its demand times `1 + capacity_reserve_fraction`.
+"""
+struct RequirementCapacityReserveMargin <: RequirementFormulation end
+
+"""
 Formulation of a carbon tax: the emissions of a policy's technologies with fuel curves cost
 `tax_dollars_per_ton` in every year of its target period.
 """

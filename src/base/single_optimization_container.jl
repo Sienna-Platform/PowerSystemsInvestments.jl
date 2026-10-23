@@ -719,9 +719,21 @@ function _calculate_dual_variables_continous_model!(
 )
     constraints = get_constraints(container)
     for key in collect(keys(get_duals(container)))
-        container.duals[key] = jump_value.(constraints[key])
+        container.duals[key] = _dual_values(constraints[key])
     end
     return RunStatus.SUCCESSFULLY_FINALIZED
+end
+
+# Entries of a container without a constraint (e.g. time steps outside a requirement's
+# target period) get NaN
+function _dual_values(constraints::DenseAxisArray)
+    values = DenseAxisArray(fill(NaN, size(constraints)), axes(constraints)...)
+    for i in eachindex(constraints.data)
+        if isassigned(constraints.data, i)
+            values.data[i] = JuMP.dual(constraints.data[i])
+        end
+    end
+    return values
 end
 
 # The duals of a MIP are those of the LP with its discrete variables fixed at their solution.
@@ -794,6 +806,8 @@ function build_model!(
         names_to_requirement_model_map(get_requirement_models(template))
     requirement_map =
         get_requirement_formulation_to_names_map(get_requirement_models(template), port)
+    # Requirements can have technologies and lines attached
+    requirement_technology_models = merge(names_to_model_map, br_names_to_model_map)
 
     # Only build the feasibility model if there are feasibility timesteps
     if is_feasibility_empty(get_time_mapping(container))
@@ -839,7 +853,7 @@ function build_model!(
         ArgumentConstructStage(),
         requirement_map,
         requirement_names_to_model_map,
-        names_to_model_map,
+        requirement_technology_models,
         transport_model,
     )
 
@@ -897,7 +911,7 @@ function build_model!(
         ModelConstructStage(),
         requirement_map,
         requirement_names_to_model_map,
-        names_to_model_map,
+        requirement_technology_models,
         transport_model,
     )
 

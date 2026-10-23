@@ -2,6 +2,8 @@ _is_resource(::PSIP.Technology) = false
 _is_resource(::PSIP.ResourceTechnology) = true
 _is_demand(::PSIP.Technology) = false
 _is_demand(::PSIP.DemandTechnology) = true
+_is_line(::PSIP.Technology) = false
+_is_line(::PSIP.TransmissionTechnology) = true
 
 """
 Return the available technologies attached to `requirement` that participate on
@@ -315,3 +317,14 @@ function _add_demand_and_storage_losses!(
     end
     return
 end
+
+_contributing_lines(p::PSIP.Portfolio, requirement::PSIP.Requirement) = [
+    t for t in PSIP.get_contributing_technologies(p, requirement) if
+    _is_line(t) && PSIP.get_available(t)
+]
+
+# Regions (zonal) or nodes (nodal) of the contributing demand technologies of a requirement
+_requirement_area(p::PSIP.Portfolio, requirement::PSIP.Requirement) = Set(
+    PSIP.get_name(region) for d in _contributing_demands(p, requirement) for
+    region in PSIP.get_region(d)
+)
