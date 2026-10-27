@@ -4,6 +4,8 @@ abstract type MaximumCumulativeInvestmentConstraint <: ISOPT.ConstraintType end
 
 struct MaximumCumulativeCapacity <: MaximumCumulativeInvestmentConstraint end
 
+struct SingleUnitInvestmentConstraint <: ISOPT.ConstraintType end
+
 struct MaximumCumulativePowerCapacity <: MaximumCumulativeInvestmentConstraint end
 
 struct MaximumCumulativeEnergyCapacity <: MaximumCumulativeInvestmentConstraint end
@@ -29,6 +31,12 @@ struct SingleRegionBalanceConstraint <: ISOPT.ConstraintType end
 struct MultiRegionBalanceConstraint <: ISOPT.ConstraintType end
 
 struct NodalBalanceConstraint <: ISOPT.ConstraintType end
+struct IslandBalanceConstraint <: ISOPT.ConstraintType end
+struct NetworkFlowConstraint <: ISOPT.ConstraintType end
+struct FlowRateConstraint <: ISOPT.ConstraintType end
+struct NewCorridorBuiltConstraint <: ISOPT.ConstraintType end
+struct VirtualTransactionLimitConstraint <: ISOPT.ConstraintType end
+struct UnitLineBuiltConstraint <: ISOPT.ConstraintType end
 
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end
 

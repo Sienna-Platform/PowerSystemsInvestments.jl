@@ -142,7 +142,7 @@
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
-    # The solution respects the commitment and ramp limits.
+    # The solution respects the commitment limits.
     values(variable_type) =
         sort!(
             filter(
@@ -153,18 +153,112 @@
         ).value
     dispatch_values = values(PSIN.ActivePowerVariable)
     committed_values = values(PSIN.CommittedCapacityVariable)
-    start_up_values = values(PSIN.StartUpCapacityVariable)
-    shut_down_values = values(PSIN.ShutDownCapacityVariable)
     tol = 1e-4
     @test all(dispatch_values .<= committed_values .+ tol)
     @test all(dispatch_values .>= 0.35 .* committed_values .- tol)
-    for t in 2:24
-        continuing = committed_values[t] - start_up_values[t]
-        @test dispatch_values[t] - dispatch_values[t - 1] <=
-              0.3 * continuing + 0.35 * start_up_values[t] - 0.35 * shut_down_values[t] +
-              tol
-        @test dispatch_values[t - 1] - dispatch_values[t] <=
-              0.4 * continuing + 0.4 * shut_down_values[t] - 0.35 * start_up_values[t] + tol
+end
+
+# Objective and solution of a single region model where both thermal technologies use the
+# commitment formulation with the given ramp limits and start-up cost ($/MW)
+function _ramp_test_solution(ramp_limits, start_up_cost)
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    p_5bus, op_days = test_2_zone_portfolio()
+    for name in ("cheap_thermal", "expensive_thermal")
+        thermal = PSIP.get_technology(thermal_type, p_5bus, name)
+        PSIP.set_ramp_limits!(thermal, ramp_limits)
+        PSIP.set_min_generation_fraction!(thermal, 0.35)
+        cost = PSIP.get_operation_costs(thermal)
+        PSIP.set_operation_costs!(
+            thermal,
+            ThermalGenerationCost(;
+                variable=PSY.get_variable(cost),
+                fixed=PSY.get_fixed(cost),
+                start_up=start_up_cost,
+                shut_down=0.0,
+            ),
+        )
+    end
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{DateTime}}()),
+        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal"],
+        thermal_type,
+        ContinuousInvestment,
+        ContinuousThermalCommitment,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    container = PSIN.get_optimization_container(m)
+    meta = string(ContinuousThermalCommitment)
+    values(variable_type) =
+        JuMP.value.(PSIN.get_variable(container, variable_type, thermal_type, meta).data)
+    return (
+        objective=JuMP.objective_value(PSIN.get_jump_model(container)),
+        time_mapping=PSIN.get_time_mapping(container),
+        dispatch=values(PSIN.ActivePowerVariable()),
+        committed=values(PSIN.CommittedCapacityVariable()),
+        start_up=values(PSIN.StartUpCapacityVariable()),
+        shut_down=values(PSIN.ShutDownCapacityVariable()),
+    )
+end
+
+@testset "Thermal ramp limits bind" begin
+    # Ramping is free with limits of 1.0, so limits of 0.05 must raise the cost
+    for (ramp_limits, loose_limits) in (
+        ((up=0.05, down=1.0), (up=1.0, down=1.0)),
+        ((up=1.0, down=0.05), (up=1.0, down=1.0)),
+    )
+        solution = _ramp_test_solution(ramp_limits, 1000.0)
+        @test solution.objective > _ramp_test_solution(loose_limits, 1000.0).objective
+        # The ramps of every time step, including from the last time step of each
+        # representative day to its first, are within the limits
+        largest_excess = -Inf
+        for (op_ix, steps) in ((1, 1:24), (2, 25:48)), t in steps
+            previous = PSIN.get_previous_time_step(solution.time_mapping, op_ix, t)
+            for row in axes(solution.dispatch, 1)
+                P(τ) = solution.dispatch[row, τ]
+                u, v, w = solution.committed[row, t],
+                solution.start_up[row, t],
+                solution.shut_down[row, t]
+                up_excess =
+                    P(t) - P(previous) -
+                    (ramp_limits.up * (u - v) + max(0.35, ramp_limits.up) * v - 0.35 * w)
+                down_excess =
+                    P(previous) - P(t) - (
+                        ramp_limits.down * (u - v) + max(0.35, ramp_limits.down) * w -
+                        0.35 * v
+                    )
+                largest_excess = max(largest_excess, up_excess, down_excess)
+            end
+        end
+        # The tight limit binds somewhere and is never exceeded
+        @test largest_excess ≈ 0.0 atol = 1e-4
     end
 end
 
@@ -354,6 +448,9 @@ end
             shut_down=0.0,
         ),
     )
-    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+    @test build!(
+        m;
+        output_dir=mktempdir(; cleanup=true),
+        console_level=Logging.AboveMaxLevel,
+    ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end

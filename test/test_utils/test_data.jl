@@ -87,11 +87,11 @@ function test_2_zone_portfolio()
 
     ts_th_cheap_inv_capex = SingleTimeSeries(
         "inv_capex",
-        TimeArray(tstamp_inv, [1.0, coal_igcc_capex / coal_igcc_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, coal_igcc_capex_2035 / coal_igcc_capex]),
     )
     ts_th_exp_inv_capex = SingleTimeSeries(
         "inv_capex",
-        TimeArray(tstamp_inv, [1.0, coal_new_capex / coal_new_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, coal_new_capex_2035 / coal_new_capex]),
     )
 
     t_th = SupplyTechnology{ThermalStandard}(;
@@ -202,7 +202,7 @@ function test_2_zone_portfolio()
 
     ts_wind_inv_capex = SingleTimeSeries(
         "inv_capex",
-        TimeArray(tstamp_inv, [1.0, wind_capex / wind_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, wind_capex_2035 / wind_capex]),
     )
 
     t_re = SupplyTechnology{RenewableDispatch}(;
@@ -334,7 +334,7 @@ function test_2_zone_portfolio()
 
     ts_col_wind_inv_capex = SingleTimeSeries(
         "inv_wind_capex",
-        TimeArray(tstamp_inv, [1.0, wind_capex / wind_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, wind_capex_2035 / wind_capex]),
     )
 
     ts_col_solar_2030 = SingleTimeSeries(;
@@ -348,7 +348,7 @@ function test_2_zone_portfolio()
 
     ts_col_solar_inv_capex = SingleTimeSeries(
         "inv_solar_capex",
-        TimeArray(tstamp_inv, [1.0, pv_capex / pv_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, pv_capex_2035 / pv_capex]),
     )
 
     inverter_capex = 1e4 # No data for now. Cheap to install inverter.

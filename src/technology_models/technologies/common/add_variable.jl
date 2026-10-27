@@ -200,3 +200,38 @@ function add_variable!(
 
     return
 end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+) where {
+    T <: SingleUnitInvestmentConstraint,
+    V <: InvestmentVariableType,
+    S <: BinaryInvestment,
+    U <: Vector{D},
+} where {D <: PSIP.Technology}
+    time_steps = get_investment_time_steps(get_time_mapping(container))
+    tech_model = string(S)
+    variable = get_variable(container, V(), D, tech_model)
+    names = get_variable_names(devices)
+    constraint = add_constraints_container!(container, T(), D, names, meta=tech_model)
+    for name in names
+        constraint[name] = JuMP.@constraint(
+            get_jump_model(container),
+            sum(variable[name, t] for t in time_steps) <= 1
+        )
+    end
+    return
+end
+
+# Only binary investments are limited to one unit
+add_constraints!(
+    ::SingleOptimizationContainer,
+    ::SingleUnitInvestmentConstraint,
+    ::InvestmentVariableType,
+    ::Vector{<:PSIP.Technology},
+    ::InvestmentTechnologyFormulation,
+) = nothing
