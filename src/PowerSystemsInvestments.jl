@@ -118,6 +118,11 @@ export list_expression_names
 export list_aux_variable_names
 export list_parameter_names
 export list_dual_names
+export get_timestamps
+export get_model_base_power
+export get_objective_value
+export get_optimizer_stats
+export export_results
 export read_variable
 export read_optimizer_stats
 export read_expression

@@ -116,7 +116,10 @@
     res = OptimizationProblemResults(m)
     @test length(IS.Optimization.list_variable_names(res)) == 23
     @test length(IS.Optimization.list_dual_names(res)) == 0
-    @test length(PSIN.get_timestamps(res)) == 48
+    @test length(get_timestamps(res)) == 48
+    @test get_model_base_power(res) == 1.0
+    @test isapprox(get_objective_value(res), JuMP.objective_value(PSIN.get_jump_model(m)))
+    @test size(get_optimizer_stats(res), 1) == 1
 
     # Result dictionaries and listings
     for (values_getter, keys_getter, names_getter) in (
@@ -133,6 +136,13 @@
     @test isempty(get_parameter_values(res))
     @test isempty(list_parameter_keys(res))
     @test isempty(list_parameter_names(res))
+
+    # Result export
+    export_results(res)
+    output_dir = PSIN.get_output_dir(m)
+    variable_name = first(list_variable_names(res))
+    @test isfile(joinpath(output_dir, "variables", variable_name * ".csv"))
+    @test isfile(joinpath(output_dir, "optimizer_stats.csv"))
 
     # Portfolio access
     @test get_portfolio(m) === p_5bus
