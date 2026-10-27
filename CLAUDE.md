@@ -49,7 +49,7 @@ Portfolio (PSIP)
                   C = FeasibilityTechnologyFormulation (e.g. BasicDispatchFeasibility)
 
 InvestmentModel{SingleInstanceSolve}(template, alg, portfolio; optimizer=...)
-    └─ build!(model; output_dir=...)   → SingleOptimizationContainer (wraps JuMP.Model)
+    └─ build!(model; output_dir=...)   → OptimizationContainer (wraps JuMP.Model)
     └─ solve!(model; ...)              → OptimizationProblemResults
 ```
 

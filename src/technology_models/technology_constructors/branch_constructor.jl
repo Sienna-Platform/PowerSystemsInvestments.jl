@@ -1,5 +1,5 @@
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -24,7 +24,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -44,7 +44,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -65,7 +65,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,
@@ -82,7 +82,7 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Capital Component of objective function
-    objective_function!(container, devices, B())
+    objective_function!(container, p, devices, B())
     # Add objective function from container to JuMP model
     update_objective_function!(container)
 
@@ -99,7 +99,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,
@@ -124,7 +124,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,
@@ -149,7 +149,7 @@ end
 # ============================================================================
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -174,7 +174,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -194,7 +194,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,
@@ -211,7 +211,7 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Capital Component of objective function
-    objective_function!(container, devices, B())
+    objective_function!(container, p, devices, B())
     # Add objective function from container to JuMP model
     update_objective_function!(container)
 
@@ -228,7 +228,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,

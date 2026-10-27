@@ -1,13 +1,3 @@
-abstract type SparseVariableType <: ISOPT.VariableType end
-
-abstract type InvestmentVariableType <: ISOPT.VariableType end
-abstract type OperationsVariableType <: ISOPT.VariableType end
-abstract type FeasibilityVariableType <: ISOPT.VariableType end
-
-### Investment Variables ###
-
-abstract type BuildInvestmentVariableType <: InvestmentVariableType end
-
 """
 Total installed capacity for a technology
 """
@@ -24,13 +14,9 @@ Total installed capacity for a technology
 struct BuildEnergyCapacity <: BuildInvestmentVariableType end
 
 """
-TODO
+Capacity of the supply technology of a co-located technology
 """
-struct BuildWindCapacity <: BuildInvestmentVariableType end
-"""
-TODO
-"""
-struct BuildSolarCapacity <: BuildInvestmentVariableType end
+struct BuildSupplyCapacity <: BuildInvestmentVariableType end
 """
 TODO
 """
@@ -69,24 +55,11 @@ Dispatch of a technology at a timepoint
 struct ActivePowerDischargeVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Dispatch of the supply technology of a co-located technology at a timepoint
 """
-struct ActivePowerWindVariable <: OperationsVariableType end
-
-"""
-Dispatch of a technology at a timepoint
-"""
-struct ActivePowerSolarVariable <: OperationsVariableType end
+struct ActivePowerSupplyVariable <: OperationsVariableType end
 
 """
 Struct to dispatch the creation of bidirectional Active Power Flow Variables
 """
 struct FlowActivePowerVariable <: OperationsVariableType end
-
-is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
-is_operation_entry(::Type{<:OperationsVariableType}) = true
-is_operation_entry(::Type{<:InvestmentVariableType}) = false
-
-is_investment_entry(::Type{<:ISOPT.VariableType}) = error()
-is_investment_entry(::Type{<:OperationsVariableType}) = false
-is_investment_entry(::Type{<:InvestmentVariableType}) = true

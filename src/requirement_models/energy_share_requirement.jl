@@ -9,7 +9,7 @@ get_default_attributes(
 # (from the eligible loads' demand time series). Both are exported so users can
 # inspect them directly in the results.
 function construct_requirement!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -33,7 +33,7 @@ function construct_requirement!(
 end
 
 function construct_requirement!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,
@@ -52,7 +52,10 @@ Return the operational representative-slice indices (`op_ix`) that belong to the
 investment period containing `target_year`. Raises an error if `target_year`
 falls outside every investment period.
 """
-function _energy_share_operational_indexes(time_mapping::TimeMapping, target_year::Int)
+function _energy_share_operational_indexes(
+    time_mapping::InvestmentTimeMapping,
+    target_year::Int,
+)
     investment_stamps = get_investment_time_stamps(time_mapping)
     map_to_op = get_investment_map_to_operational_slices(time_mapping)
     target_ivx = findfirst(
@@ -109,14 +112,14 @@ visibility; the energy-share constraint later consumes only the target period's
 subset.
 """
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::WeightedEnergyShareGeneration,
     p::PSIP.Portfolio,
     requirements::Vector{T},
     ::RequirementEnergyShare,
     names_to_model_map::Dict{String, TechnologyModel},
 ) where {T <: PSIP.EnergyShareRequirements}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
 
     requirement_names = [PSIP.get_name(r) for r in requirements]
@@ -146,7 +149,7 @@ function add_expression!(
                 ops_meta = string(get_operations_formulation(tech_model))
                 weighted_gen =
                     get_expression(container, WeightedEnergyGeneration(), D, ops_meta)
-                _add_to_jump_expression!(
+                add_proportional_to_jump_expression!(
                     share_expr,
                     weighted_gen[resource_name, op_ix],
                     1.0,
@@ -165,17 +168,17 @@ technology, read from its `"ops_demand"` time series. A constant `AffExpr`. Buil
 over all operational indexes for full results visibility.
 """
 function add_expression!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::WeightedEnergyShareDemand,
     p::PSIP.Portfolio,
     requirements::Vector{T},
     ::RequirementEnergyShare,
 ) where {T <: PSIP.EnergyShareRequirements}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     requirement_names = [PSIP.get_name(r) for r in requirements]
     expression = add_expression_container!(
@@ -204,7 +207,7 @@ function add_expression!(
                         "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(PSIP.get_name(d)) does not match with the expected representative day $op_ix"
                     )
                 end
-                _add_to_jump_expression!(demand_expr, weight * sum(ts_data))
+                add_proportional_to_jump_expression!(demand_expr, sum(ts_data), weight)
             end
             expression[req_name, op_ix] = demand_expr
         end
@@ -225,13 +228,13 @@ the per-policy weighted-energy expressions built in the argument stage, so the
 share is a true (weighted) energy ratio.
 """
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::EnergyShareRequirementConstraint,
     p::PSIP.Portfolio,
     requirements::Vector{T},
     ::RequirementEnergyShare,
 ) where {T <: PSIP.EnergyShareRequirements}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     share_gen = get_expression(container, WeightedEnergyShareGeneration(), T)
     share_demand = get_expression(container, WeightedEnergyShareDemand(), T)
 

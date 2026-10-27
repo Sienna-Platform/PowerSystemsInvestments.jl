@@ -1,5 +1,5 @@
 mutable struct TechnologyModel{
-    D <: PSIP.Technology,
+    D <: IS.InfrastructureSystemsComponent,
     A <: InvestmentTechnologyFormulation,
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,
@@ -14,7 +14,7 @@ function _set_model!(
     names::Vector{String},
     model::TechnologyModel{D, A, B, C},
 ) where {
-    D <: PSIP.Technology,
+    D <: IS.InfrastructureSystemsComponent,
     A <: InvestmentTechnologyFormulation,
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,
@@ -31,7 +31,7 @@ end
 get_technology_type(
     ::TechnologyModel{D, A, B, C},
 ) where {
-    D <: PSIP.Technology,
+    D <: IS.InfrastructureSystemsComponent,
     A <: InvestmentTechnologyFormulation,
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,
@@ -40,7 +40,7 @@ get_technology_type(
 get_investment_formulation(
     ::TechnologyModel{D, A, B, C},
 ) where {
-    D <: PSIP.Technology,
+    D <: IS.InfrastructureSystemsComponent,
     A <: InvestmentTechnologyFormulation,
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,
@@ -49,7 +49,7 @@ get_investment_formulation(
 get_operations_formulation(
     ::TechnologyModel{D, A, B, C},
 ) where {
-    D <: PSIP.Technology,
+    D <: IS.InfrastructureSystemsComponent,
     A <: InvestmentTechnologyFormulation,
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,
@@ -58,11 +58,22 @@ get_operations_formulation(
 get_feasibility_formulation(
     ::TechnologyModel{D, A, B, C},
 ) where {
-    D <: PSIP.Technology,
+    D <: IS.InfrastructureSystemsComponent,
     A <: InvestmentTechnologyFormulation,
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,
 } = C
+
+"""
+Default (empty) attributes for a technology model. Override per
+`(technology_type, investment, operations, feasibility)` formulation tuple where needed.
+"""
+get_default_attributes(
+    ::Type{<:IS.InfrastructureSystemsComponent},
+    ::Type{<:InvestmentTechnologyFormulation},
+    ::Type{<:OperationsTechnologyFormulation},
+    ::Type{<:FeasibilityTechnologyFormulation},
+) = Dict{String, Any}()
 
 function TechnologyModel(
     ::Type{D},
@@ -73,7 +84,7 @@ function TechnologyModel(
     duals=Vector{DataType}(),
     attributes=Dict{String, Any}(),
 ) where {
-    D <: PSIP.Technology,
+    D <: IS.InfrastructureSystemsComponent,
     A <: InvestmentTechnologyFormulation,
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,

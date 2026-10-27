@@ -1,5 +1,5 @@
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::S,
@@ -9,7 +9,7 @@ function add_variable!(
     U <: Vector{D},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(S)
     names = [PSIP.get_name(d) for d in devices]
@@ -39,7 +39,7 @@ function add_variable!(
 end
 
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::V,
@@ -49,7 +49,7 @@ function add_variable!(
     V <: IntegerInvestment,
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -82,7 +82,7 @@ function add_variable!(
 end
 
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::V,
@@ -92,7 +92,7 @@ function add_variable!(
     V <: BinaryInvestment,
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_investment_time_steps(time_mapping)
     tech_model = string(V)
 
@@ -138,7 +138,7 @@ function add_variable!(
 end
 
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::S,
@@ -148,7 +148,7 @@ function add_variable!(
     U <: Vector{D},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -180,7 +180,7 @@ function add_variable!(
 end
 
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::S,
@@ -190,7 +190,7 @@ function add_variable!(
     U <: Vector{D},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
 
@@ -221,7 +221,7 @@ function add_variable!(
 end
 
 function add_variable!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     variable_type::T,
     devices::U,
     formulation::S,
@@ -231,7 +231,7 @@ function add_variable!(
     U <: Vector{D},
 } where {D <: PSIP.Technology}
     @assert !isempty(devices)
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_feasibility_time_steps(time_mapping)
     tech_model = string(S)
     names = [PSIP.get_name(d) for d in devices]
