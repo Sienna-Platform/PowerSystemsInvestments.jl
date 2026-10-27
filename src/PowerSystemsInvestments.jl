@@ -324,27 +324,16 @@ import InfrastructureOptimizationModels:
     is_operation_entry,
     is_investment_entry
 
-# ---- Technology / requirement / transport models ----
+# ---- Technology / requirement formulations ----
 import InfrastructureOptimizationModels:
-    TechnologyModel,
-    RequirementModel,
     AbstractTechnologyFormulation,
     InvestmentTechnologyFormulation,
     OperationsTechnologyFormulation,
     FeasibilityTechnologyFormulation,
     RequirementFormulation,
-    AbstractTransportAggregation,
-    TransportModel,
-    get_technology_type,
-    get_investment_formulation,
-    get_operations_formulation,
-    get_feasibility_formulation,
-    get_requirement_type,
-    get_requirement_formulation,
     get_use_slacks,
     get_default_attributes,
-    get_default_time_series_names,
-    _set_model!
+    get_default_time_series_names
 
 # ---- Container construction / JuMP helpers ----
 import InfrastructureOptimizationModels:
@@ -402,6 +391,8 @@ include("capital/capital_models.jl")
 include("operation/technology_operation_formulations.jl")
 include("operation/feasibility_model.jl")
 include("operation/operation_model.jl")
+include("base/technology_model.jl")
+include("base/requirement_model.jl")
 include("base/transport_model.jl")
 include("base/constraints.jl")
 include("base/variables.jl")
