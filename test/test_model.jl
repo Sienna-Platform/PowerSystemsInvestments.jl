@@ -118,6 +118,22 @@
     @test length(IS.Optimization.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 
+    # Result dictionaries and listings
+    for (values_getter, keys_getter, names_getter) in (
+        (get_variable_values, list_variable_keys, list_variable_names),
+        (get_expression_values, list_expression_keys, list_expression_names),
+        (get_aux_variable_values, list_aux_variable_keys, list_aux_variable_names),
+        (get_dual_values, list_dual_keys, list_dual_names),
+    )
+        expected_keys = Set(keys_getter(m))
+        @test Set(keys_getter(res)) == expected_keys
+        @test Set(keys(values_getter(res))) == expected_keys
+        @test Set(names_getter(res)) == Set(names_getter(m))
+    end
+    @test isempty(get_parameter_values(res))
+    @test isempty(list_parameter_keys(res))
+    @test isempty(list_parameter_names(res))
+
     # Portfolio access
     @test get_portfolio(m) === p_5bus
     @test get_portfolio(res) === p_5bus
