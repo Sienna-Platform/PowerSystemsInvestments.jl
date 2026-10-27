@@ -50,6 +50,14 @@ export CyclicalColocatedDispatch
 
 ### Requirement Formulations ###
 export RequirementEnergyShare
+export RequirementCarbonCapMass
+export RequirementCarbonCapDemandRate
+export RequirementCarbonCapGenerationRate
+export RequirementCarbonTax
+export RequirementCapacityReserveMargin
+export RequirementMinimumCapacity
+export RequirementMaximumCapacity
+export RequirementHourlyMatching
 
 ### Transport Formulations ###
 export SingleRegionBalanceModel
@@ -61,6 +69,11 @@ export IslandBalanceConstraint
 export FlowRateConstraint
 export NetworkFlowConstraint
 export EnergyShareRequirementConstraint
+export CarbonCapConstraint
+export CapacityReserveMarginConstraint
+export CapacityRequirementConstraint
+export HourlyMatchingConstraint
+export RequirementSlackVariable
 export HydroEnergyBudgetConstraint
 
 ### Variables ###
@@ -107,6 +120,7 @@ export WeightedEnergyGeneration
 export WeightedEnergyDemand
 export WeightedEnergyShareGeneration
 export WeightedEnergyShareDemand
+export WeightedCarbonEmissions
 
 ### Functions ###
 # methods
@@ -124,6 +138,7 @@ export serialize_results
 export read_variable
 export read_optimizer_stats
 export read_expression
+export read_dual
 export get_variable
 export get_constraint
 export get_expression
@@ -307,6 +322,10 @@ include("technology_models/technology_constructors/constructor_validations.jl")
 include("requirement_models/requirement_constructor.jl")
 include("requirement_models/requirement_utils.jl")
 include("requirement_models/energy_share_requirement.jl")
+include("requirement_models/carbon_requirements.jl")
+include("requirement_models/capacity_reserve_margin.jl")
+include("requirement_models/capacity_requirements.jl")
+include("requirement_models/hourly_matching.jl")
 # Objective Function #
 include("technology_models/technologies/common/objective_function/common_financial.jl")
 include("technology_models/technologies/common/objective_function/common_capital.jl")
