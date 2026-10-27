@@ -5,45 +5,83 @@ _is_demand(::PSIP.DemandTechnology) = true
 _is_line(::PSIP.Technology) = false
 _is_line(::PSIP.TransmissionTechnology) = true
 
-"""
-Return the available technologies attached to `requirement` that participate on
-the generation side — `PSIP.ResourceTechnology` subtypes (`SupplyTechnology`,
-`StorageTechnology`, `ColocatedSupplyStorageTechnology`). Generic over any
-`PSIP.Requirement` so it is shared by all requirement models.
-"""
-function _contributing_resources(p::PSIP.Portfolio, requirement::PSIP.Requirement)
-    return [
-        t for t in PSIP.get_contributing_technologies(p, requirement) if
-        _is_resource(t) && PSIP.get_available(t)
-    ]
-end
+# Available technologies attached to a requirement, of the kind selected by `is_kind`
+_contributing(p::PSIP.Portfolio, requirement::PSIP.Requirement, is_kind) = [
+    t for t in PSIP.get_contributing_technologies(p, requirement) if
+    is_kind(t) && PSIP.get_available(t)
+]
+_contributing_resources(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
+    _contributing(p, requirement, _is_resource)
+_contributing_demands(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
+    _contributing(p, requirement, _is_demand)
+_contributing_lines(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
+    _contributing(p, requirement, _is_line)
 
-"""
-Return the available technologies attached to `requirement` that participate on
-the demand side — `PSIP.DemandTechnology` subtypes (`DemandRequirement`,
-`DemandSideTechnology`). Generic over any `PSIP.Requirement`.
-"""
-function _contributing_demands(p::PSIP.Portfolio, requirement::PSIP.Requirement)
-    return [
-        t for t in PSIP.get_contributing_technologies(p, requirement) if
-        _is_demand(t) && PSIP.get_available(t)
-    ]
-end
-
-# Present value at the base year of one unit paid in every year of a requirement's target
-# period
-function _target_period_cost_factor(
-    container::SingleOptimizationContainer,
-    requirement::PSIP.Requirement,
+function _check_contributors(
+    p::PSIP.Portfolio,
+    requirement::PSIP.Requirement;
+    demands::Bool,
 )
-    time_mapping = get_time_mapping(container)
-    inv_tuple = get_investment_time_stamps(time_mapping)[_target_investment_period(
-        time_mapping,
-        requirement,
-    )]
+    missing_kinds = String[]
+    isempty(_contributing_resources(p, requirement)) && push!(missing_kinds, "resources")
+    if demands && isempty(_contributing_demands(p, requirement))
+        push!(missing_kinds, "demand technologies")
+    end
+    if !isempty(missing_kinds)
+        error(
+            "Requirement '$(PSIP.get_name(requirement))' has no available contributing " *
+            "$(join(missing_kinds, " or ")).",
+        )
+    end
+    return
+end
+
+# Regions (zonal) or nodes (nodal) of the contributing demand technologies of a requirement
+_requirement_area(p::PSIP.Portfolio, requirement::PSIP.Requirement) = Set(
+    PSIP.get_name(region) for d in _contributing_demands(p, requirement) for
+    region in PSIP.get_region(d)
+)
+
+function _target_investment_period(time_mapping::TimeMapping, requirement::PSIP.Requirement)
+    target_year = PSIP.get_target_year(requirement)
+    period = findfirst(
+        iv -> Dates.year(iv[1]) <= target_year <= Dates.year(iv[2]),
+        get_investment_time_stamps(time_mapping),
+    )
+    if isnothing(period)
+        error(
+            "Requirement $(PSIP.get_name(requirement)) has target year $target_year, which " *
+            "is not within any investment period of the capital model.",
+        )
+    end
+    return period
+end
+
+# Present value at the base year of one unit paid in every year of an investment period
+function _period_cost_factor(container::SingleOptimizationContainer, period::Int)
+    inv_tuple = get_investment_time_stamps(get_time_mapping(container))[period]
     discount_rate = get_discount_rate(container)
     return investment_period_annuity_factor(discount_rate, inv_tuple) *
            (1.0 + discount_rate)^(get_base_year(container) - Dates.year(first(inv_tuple)))
+end
+
+_target_period_cost_factor(
+    container::SingleOptimizationContainer,
+    requirement::PSIP.Requirement,
+) = _period_cost_factor(
+    container,
+    _target_investment_period(get_time_mapping(container), requirement),
+)
+
+# Warns that attached technologies of a kind do not contribute to a requirement
+function _warn_ignored_contributors(
+    technologies::Vector,
+    requirement::PSIP.Requirement,
+    kind::String,
+)
+    isempty(technologies) && return
+    @warn "$(kind) $(join(PSIP.get_name.(technologies), ", ")) attached to requirement '$(PSIP.get_name(requirement))' do not contribute to it."
+    return
 end
 
 # Shortfall variables of the requirements whose model uses slacks. A unit of shortfall in a
@@ -93,17 +131,17 @@ function _add_requirement_duals!(
 ) where {T <: PSIP.Requirement, B <: RequirementFormulation}
     constraints = get_constraints(container)
     for model in requirement_model_vector, constraint_type in get_duals(model)
-        keys = filter(
+        found = filter(
             k -> haskey(constraints, k),
             [
                 ConstraintKey(constraint_type, T),
                 ConstraintKey(constraint_type, T, string(B)),
             ],
         )
-        if isempty(keys)
+        if isempty(found)
             error("$(nameof(T)) has no $(nameof(constraint_type)) to take the duals of.")
         end
-        container.duals[only(keys)] = constraints[only(keys)]
+        container.duals[only(found)] = constraints[only(found)]
     end
     return
 end
@@ -139,7 +177,8 @@ function _weighted_energy(
 end
 
 # Eligible generation of a contributing resource: the output of supply technologies and the
-# wind and solar output of co-located technologies. Storage only shifts energy.
+# wind and solar output that co-located technologies deliver through their inverter. Storage
+# only shifts energy.
 function _add_eligible_generation!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -164,9 +203,11 @@ function _add_eligible_generation!(
     op_ix::Int,
 ) where {D <: PSIP.ColocatedSupplyStorageTechnology}
     name = PSIP.get_name(technology)
+    efficiency = get_inverter_efficiency(technology)
     for variable in (ActivePowerWindVariable(), ActivePowerSolarVariable())
         JuMP.add_to_expression!(
             expression,
+            efficiency,
             _weighted_energy(container, variable, D, meta, name, op_ix),
         )
     end
@@ -182,7 +223,7 @@ _add_eligible_generation!(
     ::Int,
 ) = nothing
 
-# Losses (charge minus discharge) of contributing storage, added to the demand
+# Losses of contributing storage, added to the demand
 _add_storage_losses!(
     ::JuMP.AffExpr,
     ::SingleOptimizationContainer,
@@ -192,6 +233,7 @@ _add_storage_losses!(
     ::Int,
 ) = nothing
 
+# Energy storage draws from the grid minus the energy it returns
 function _add_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -200,19 +242,19 @@ function _add_storage_losses!(
     meta::String,
     op_ix::Int,
 ) where {D <: PSIP.StorageTechnology}
-    _add_storage_losses!(
-        expression,
-        container,
-        D,
-        PSIP.get_name(technology),
-        meta,
-        op_ix,
-        ActiveInPowerVariable(),
-        ActiveOutPowerVariable(),
-    )
+    name = PSIP.get_name(technology)
+    for (variable, sign) in
+        ((ActiveInPowerVariable(), 1.0), (ActiveOutPowerVariable(), -1.0))
+        JuMP.add_to_expression!(
+            expression,
+            sign,
+            _weighted_energy(container, variable, D, meta, name, op_ix),
+        )
+    end
     return
 end
 
+# Co-located storage charges and discharges through the inverter
 function _add_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -221,38 +263,18 @@ function _add_storage_losses!(
     meta::String,
     op_ix::Int,
 ) where {D <: PSIP.ColocatedSupplyStorageTechnology}
-    _add_storage_losses!(
-        expression,
-        container,
-        D,
-        PSIP.get_name(technology),
-        meta,
-        op_ix,
-        ActivePowerChargeVariable(),
-        ActivePowerDischargeVariable(),
+    name = PSIP.get_name(technology)
+    efficiency = get_inverter_efficiency(technology)
+    for (variable, coefficient) in (
+        (ActivePowerChargeVariable(), 1.0 / efficiency),
+        (ActivePowerDischargeVariable(), -efficiency),
     )
-    return
-end
-
-function _add_storage_losses!(
-    expression::JuMP.AffExpr,
-    container::SingleOptimizationContainer,
-    ::Type{D},
-    name::String,
-    meta::String,
-    op_ix::Int,
-    charge::VariableType,
-    discharge::VariableType,
-) where {D <: PSIP.Technology}
-    JuMP.add_to_expression!(
-        expression,
-        _weighted_energy(container, charge, D, meta, name, op_ix),
-    )
-    JuMP.add_to_expression!(
-        expression,
-        -1.0,
-        _weighted_energy(container, discharge, D, meta, name, op_ix),
-    )
+        JuMP.add_to_expression!(
+            expression,
+            coefficient,
+            _weighted_energy(container, variable, D, meta, name, op_ix),
+        )
+    end
     return
 end
 
@@ -317,14 +339,3 @@ function _add_demand_and_storage_losses!(
     end
     return
 end
-
-_contributing_lines(p::PSIP.Portfolio, requirement::PSIP.Requirement) = [
-    t for t in PSIP.get_contributing_technologies(p, requirement) if
-    _is_line(t) && PSIP.get_available(t)
-]
-
-# Regions (zonal) or nodes (nodal) of the contributing demand technologies of a requirement
-_requirement_area(p::PSIP.Portfolio, requirement::PSIP.Requirement) = Set(
-    PSIP.get_name(region) for d in _contributing_demands(p, requirement) for
-    region in PSIP.get_region(d)
-)

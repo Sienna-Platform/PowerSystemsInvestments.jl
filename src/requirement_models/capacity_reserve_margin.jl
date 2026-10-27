@@ -7,7 +7,7 @@ get_default_attributes(
 ) = Dict{String, Any}("slack_penalty" => REQUIREMENT_SLACK_PENALTY)
 
 # Capacity a technology provides to a capacity reserve margin in each time step of a
-# representative period. Supply technologies provide their installed capacity.
+# representative period: supply technologies their installed capacity
 function _add_reserve_contribution!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
@@ -115,8 +115,9 @@ function _monitor_boundary_corridors!(
     lines::Vector,
 )
     network = get_network_data(transport_model)
-    for (line, _) in lines, branch in _line_branches(network, line)
-        branch in network.merged_corridors && push!(network.monitored, branch.name)
+    line_names = Set(PSIP.get_name(line) for (line, _) in lines)
+    for corridor in network.merged_corridors
+        isdisjoint(line_names, _names(corridor)) || push!(network.monitored, corridor.name)
     end
     return
 end
@@ -251,22 +252,6 @@ function _add_line_inflows!(
     return
 end
 
-function _validate_capacity_reserve_margins(
-    p::PSIP.Portfolio,
-    requirements::Vector{<:PSIP.CapacityReserveMargin},
-)
-    for req in requirements
-        if isempty(_contributing_resources(p, req)) ||
-           isempty(_contributing_demands(p, req))
-            error(
-                "CapacityReserveMargin '$(PSIP.get_name(req))' needs available contributing " *
-                "resources and demand technologies.",
-            )
-        end
-    end
-    return
-end
-
 function construct_requirement!(
     ::SingleOptimizationContainer,
     p::PSIP.Portfolio,
@@ -282,9 +267,9 @@ function construct_requirement!(
     B <: RequirementCapacityReserveMargin,
     X <: RequirementModel,
 }
-    requirements = [PSIP.get_requirement(T, p, n) for n in names]
-    _validate_capacity_reserve_margins(p, requirements)
-    for req in requirements
+    for name in names
+        req = PSIP.get_requirement(T, p, name)
+        _check_contributors(p, req; demands=true)
         _monitor_boundary_corridors!(transport_model, _boundary_lines(p, req; warn=true))
     end
     return
@@ -319,20 +304,9 @@ function construct_requirement!(
     return
 end
 
-"""
-For each capacity reserve margin and each time step t of the investment period containing its
-`target_year`:
-
-    sum of the reserve contributions of its resources at t + slack[policy, t]
-        >= (1 + capacity_reserve_fraction) * demand of its demand technologies at t
-
-Supply technologies contribute their capacity, or their capacity factor times their capacity
-when dispatched against one, and storage and co-located technologies their net injection.
-The area of the policy is the regions (or nodes) of its demand technologies, and its lines
-that cross the area's boundary contribute their net flow into it.
-Slacks (MW) are priced at the `"slack_penalty"` per MWh in every year of the target period.
-Entries for other time steps have no constraint, and their slacks are fixed at 0.
-"""
+# In each time step of the target period: contributions + slack >=
+# (1 + capacity_reserve_fraction) * demand. Other time steps have no constraint, and their
+# slacks are fixed at 0.
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::CapacityReserveMarginConstraint,
@@ -415,8 +389,8 @@ function add_constraints!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             time_slices = consecutive_slices[op_ix]
             check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
-            for (ix, t) in enumerate(time_slices)
-                demand[t] += TimeSeries.values(time_series.data)[ix]
+            for (t, value) in zip(time_slices, TimeSeries.values(time_series.data))
+                demand[t] += value
             end
         end
 

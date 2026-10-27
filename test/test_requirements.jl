@@ -15,6 +15,7 @@ function _energy_share_model(
     attributes=Dict{String, Any}(),
     thermal_investment=ContinuousInvestment,
     storage=false,
+    inverter_efficiency=1.0,
 )
     p_5bus, op_days = test_2_zone_portfolio()
     wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
@@ -29,6 +30,10 @@ function _energy_share_model(
     PSIP.add_requirement!(p_5bus, esr)
     PSIP.set_requirements!(wind, [esr])
     PSIP.set_requirements!(demand2, [esr])
+    PSIP.set_inverter_efficiency!(
+        PSIP.get_technology(ESR_COLOCATED_TYPE, p_5bus, "colocated_test"),
+        inverter_efficiency,
+    )
     if storage
         PSIP.set_requirements!(
             PSIP.get_technology(ESR_STORAGE_TYPE, p_5bus, "test_storage"),
@@ -139,7 +144,7 @@ const ESR_KEY =
     PSIN.ConstraintKey(EnergyShareRequirementConstraint, PSIP.EnergyShareRequirements)
 
 @testset "Requirement formulations must match the requirement type" begin
-    @test_throws r"RequirementEnergyShare is not a formulation of HourlyMatching. Supported requirement formulations: none." RequirementModel(
+    @test_throws r"RequirementEnergyShare is not a formulation of HourlyMatching. Supported requirement formulations: RequirementHourlyMatching." RequirementModel(
         PSIP.HourlyMatching,
         RequirementEnergyShare,
     )
@@ -217,7 +222,9 @@ end
 end
 
 @testset "Energy share storage losses" begin
-    m, demand2 = _energy_share_model(1.5; storage=true)
+    # The co-located technology exchanges energy with the grid through a 90% inverter
+    η = 0.9
+    m, demand2 = _energy_share_model(1.5; storage=true, inverter_efficiency=η)
     container = PSIN.get_optimization_container(m)
     generation = PSIN.get_expression(
         container,
@@ -238,21 +245,22 @@ end
     colocated(variable_type) =
         variable(variable_type, ESR_COLOCATED_TYPE, "CyclicalColocatedDispatch")
     for t in (1, 24)
-        # Storage is not eligible generation: its losses are added to the demand, so they
-        # are scaled by the required share like the rest of the demand
+        # Storage is not eligible generation: its losses, including those of the inverter,
+        # are added to the demand, so they are scaled by the required share like the rest of
+        # the demand
         for (var, coefficient) in (
             (storage_in["test_storage", t], 365.0),
             (storage_out["test_storage", t], -365.0),
-            (colocated(ActivePowerChargeVariable())["colocated_test", t], 365.0),
-            (colocated(ActivePowerDischargeVariable())["colocated_test", t], -365.0),
+            (colocated(ActivePowerChargeVariable())["colocated_test", t], 365.0 / η),
+            (colocated(ActivePowerDischargeVariable())["colocated_test", t], -365.0 * η),
         )
             @test JuMP.coefficient(demand["wind_share", 1], var) ≈ coefficient
             @test JuMP.coefficient(generation["wind_share", 1], var) == 0.0
         end
-        # The wind and solar output of the co-located technology is eligible generation
+        # The wind and solar output the co-located technology delivers is eligible generation
         for variable_type in (ActivePowerWindVariable(), ActivePowerSolarVariable())
             var = colocated(variable_type)["colocated_test", t]
-            @test JuMP.coefficient(generation["wind_share", 1], var) ≈ 365.0
+            @test JuMP.coefficient(generation["wind_share", 1], var) ≈ 365.0 * η
             @test JuMP.coefficient(demand["wind_share", 1], var) == 0.0
         end
         for var in (
@@ -264,6 +272,30 @@ end
         end
     end
     @test JuMP.constant(demand["wind_share", 1]) ≈ _demand_2030(demand2)
+
+    # Grid output is the inverter efficiency times the discharge, wind and solar output, and
+    # charging takes the inverter efficiency times the grid input
+    balance(meta) = PSIN.get_constraint(
+        container,
+        PSIN.ColocatedInternalBalanceConstraint(),
+        ESR_COLOCATED_TYPE,
+        "CyclicalColocatedDispatch_$meta",
+    )[
+        "colocated_test",
+        5,
+    ]
+    coefficient(con, variable_type) =
+        JuMP.normalized_coefficient(con, colocated(variable_type)["colocated_test", 5])
+    @test coefficient(balance("out"), ActiveOutPowerVariable()) ≈ 1.0
+    for variable_type in (
+        ActivePowerDischargeVariable(),
+        ActivePowerWindVariable(),
+        ActivePowerSolarVariable(),
+    )
+        @test coefficient(balance("out"), variable_type) ≈ -η
+    end
+    @test coefficient(balance("in"), ActivePowerChargeVariable()) ≈ 1.0
+    @test coefficient(balance("in"), ActiveInPowerVariable()) ≈ -η
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     @test JuMP.value(generation["wind_share", 1]) >=
@@ -288,6 +320,8 @@ function _policy_model(
     demands=["demand1", "demand2"],
     line=false,
     line_operation=BasicDispatch,
+    supply=["cheap_thermal", "expensive_thermal", "wind"],
+    colocated=false,
 )
     p_5bus, op_days = test_2_zone_portfolio()
     for (name, heat_rate) in CARBON_HEAT_RATES
@@ -351,14 +385,26 @@ function _policy_model(
             BasicDispatchFeasibility,
         )
     end
+    if colocated
+        set_technology_model!(
+            template,
+            ["colocated_test"],
+            ESR_COLOCATED_TYPE,
+            ContinuousInvestment,
+            CyclicalColocatedDispatch,
+            BasicDispatchFeasibility,
+        )
+    end
     if !isnothing(requirement)
         PSIP.add_requirement!(p_5bus, requirement)
+        supply_type(name) =
+            name == "wind" ? PSIP.SupplyTechnology{PSY.RenewableDispatch} :
+            CARBON_THERMAL_TYPE
         for (type, name) in [
-            (CARBON_THERMAL_TYPE, "cheap_thermal"),
-            (CARBON_THERMAL_TYPE, "expensive_thermal"),
-            (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind"),
+            [(supply_type(name), name) for name in supply]...,
             [(PSIP.DemandRequirement{PSY.PowerLoad}, name) for name in demands]...,
             fill((ESR_STORAGE_TYPE, "test_storage"), storage)...,
+            fill((ESR_COLOCATED_TYPE, "colocated_test"), colocated)...,
             fill((PSIP.AggregateTransportTechnology{PSY.ACBranch}, "test_branch"), line)...,
         ]
             PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [requirement])
@@ -535,10 +581,9 @@ end
         PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind"),
         [requirement],
     )
-    @test_throws r"has no available contributing technology with a fuel curve" PSIN._validate_carbon_requirements(
+    @test_throws r"has no available contributing technology with a fuel curve" PSIN._check_emitters(
         p_5bus,
-        [requirement],
-        RequirementCarbonCapMass,
+        requirement,
     )
 end
 
@@ -749,4 +794,211 @@ _constraint_surplus(constraint) =
         warn=true,
     )
     @test isempty(PSIN._boundary_lines(p_5bus, requirement))
+end
+
+_capacity_requirement(type, limit) = type(;
+    name="capacity_requirement",
+    id=1,
+    available=true,
+    target_year=2030,
+    (type == PSIP.MinimumCapacityRequirements ? :min_capacity_mw : :max_capacity_mw) =>
+        limit,
+)
+
+# 2030 capacity of the resources a capacity requirement counts, from the solution
+function _counted_capacity(m)
+    container = PSIN.get_optimization_container(m)
+    value(expression_type, technology, name) = JuMP.value(
+        PSIN.get_expression(container, expression_type, technology, "ContinuousInvestment")[
+            name,
+            1,
+        ],
+    )
+    return value(PSIN.CumulativeCapacity(), CARBON_THERMAL_TYPE, "cheap_thermal") +
+           value(PSIN.CumulativeCapacity(), CARBON_THERMAL_TYPE, "expensive_thermal") +
+           value(
+               PSIN.CumulativeCapacity(),
+               PSIP.SupplyTechnology{PSY.RenewableDispatch},
+               "wind",
+           ) +
+           value(PSIN.CumulativePowerCapacity(), ESR_STORAGE_TYPE, "test_storage") +
+           value(PSIN.CumulativeWindCapacity(), ESR_COLOCATED_TYPE, "colocated_test") +
+           value(PSIN.CumulativeSolarCapacity(), ESR_COLOCATED_TYPE, "colocated_test")
+end
+
+@testset "Minimum and maximum capacity requirements" begin
+    unconstrained =
+        _counted_capacity(_policy_model(nothing, nothing; storage=true, colocated=true))
+    for (type, formulation, limit) in (
+        (
+            PSIP.MinimumCapacityRequirements,
+            RequirementMinimumCapacity,
+            unconstrained + 500.0,
+        ),
+        (PSIP.MaximumCapacityRequirements, RequirementMaximumCapacity, 0.8 * unconstrained),
+    )
+        m = _policy_model(
+            _capacity_requirement(type, limit),
+            formulation;
+            storage=true,
+            colocated=true,
+            duals=[CapacityRequirementConstraint],
+        )
+        # Supply capacity, storage power and co-located wind and solar capacity count
+        @test _counted_capacity(m) ≈ limit rtol = 1e-6
+        dual = only(
+            read_dual(m, PSIN.ConstraintKey(CapacityRequirementConstraint, type)).value,
+        )
+        @test abs(dual) > 0.0
+    end
+
+    # With slacks, a maximum of zero is exceeded by the capacity built
+    m = _policy_model(
+        _capacity_requirement(PSIP.MaximumCapacityRequirements, 0.0),
+        RequirementMaximumCapacity;
+        storage=true,
+        colocated=true,
+        use_slacks=true,
+    )
+    slack = only(
+        read_variable(
+            m,
+            PSIN.VariableKey(RequirementSlackVariable, PSIP.MaximumCapacityRequirements),
+        ).value,
+    )
+    @test slack ≈ _counted_capacity(m) rtol = 1e-6
+    @test slack > 0.0
+
+    p_5bus, _ = test_2_zone_portfolio()
+    requirement = _capacity_requirement(PSIP.MinimumCapacityRequirements, 100.0)
+    demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand1")
+    @test_logs (
+        :warn,
+        r"Demand technologies demand1 attached to requirement 'capacity_requirement' do not contribute",
+    ) PSIN._warn_ignored_contributors([demand], requirement, "Demand technologies")
+end
+
+@testset "Hourly matching" begin
+    hourly_matching() = PSIP.HourlyMatching(; name="hourly_matching", id=1, available=true)
+    # Wind and the battery must cover demand2 in every hour of both periods
+    matched(; kwargs...) = _policy_model(
+        hourly_matching(),
+        RequirementHourlyMatching;
+        supply=["wind"],
+        demands=["demand2"],
+        storage=true,
+        kwargs...,
+    )
+    function shortfall(m)
+        container = PSIN.get_optimization_container(m)
+        p = PSIN.get_portfolio(m)
+        wind =
+            JuMP.value.(
+                PSIN.get_variable(
+                    container,
+                    PSIN.ActivePowerVariable(),
+                    PSIP.SupplyTechnology{PSY.RenewableDispatch},
+                    "BasicDispatch",
+                ),
+            )
+        storage(variable_type) =
+            JuMP.value.(
+                PSIN.get_variable(
+                    container,
+                    variable_type,
+                    ESR_STORAGE_TYPE,
+                    "CyclicalStorageDispatch",
+                ),
+            )
+        discharge = storage(PSIN.ActiveOutPowerVariable())
+        charge = storage(PSIN.ActiveInPowerVariable())
+        demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, "demand2")
+        demand = vcat(
+            [
+                TimeSeries.values(
+                    IS.get_time_series(
+                        IS.SingleTimeSeries,
+                        demand2,
+                        "ops_demand";
+                        year=year,
+                        rep_day=day,
+                    ).data,
+                ) for (year, day) in (("2030", 1), ("2035", 2))
+            ]...,
+        )
+        return [
+            demand[t] - wind["wind", t] - discharge["test_storage", t] +
+            charge["test_storage", t] for t in 1:48
+        ]
+    end
+    unconstrained = _policy_model(nothing, nothing; storage=true)
+    @test maximum(shortfall(unconstrained)) > 1.0
+
+    m = matched(; duals=[HourlyMatchingConstraint])
+    @test maximum(shortfall(m)) ≈ 0.0 atol = 1e-4
+    @test _objective(m) > _objective(unconstrained)
+    duals =
+        read_dual(
+            m,
+            PSIN.ConstraintKey(HourlyMatchingConstraint, PSIP.HourlyMatching),
+        ).value
+    @test length(duals) == 48
+    @test all(>=(-1e-6), duals)
+    @test maximum(duals) > 0.0
+
+    # With cheap slacks the shortfall of each hour is a slack
+    m = matched(; use_slacks=true, attributes=Dict{String, Any}("slack_penalty" => 1.0))
+    slack =
+        JuMP.value.(
+            PSIN.get_variable(
+                PSIN.get_optimization_container(m),
+                RequirementSlackVariable(),
+                PSIP.HourlyMatching,
+            ),
+        )
+    @test slack["hourly_matching", :].data ≈ max.(shortfall(m), 0.0) atol = 1e-4
+    @test any(>(1.0), slack.data)
+
+    p_5bus, _ = test_2_zone_portfolio()
+    line = PSIP.get_technology(
+        PSIP.AggregateTransportTechnology{PSY.ACBranch},
+        p_5bus,
+        "test_branch",
+    )
+    @test_logs (
+        :warn,
+        r"Lines test_branch attached to requirement 'hourly_matching' do not contribute",
+    ) PSIN._warn_ignored_contributors([line], hourly_matching(), "Lines")
+end
+
+@testset "Requirements need contributing technologies" begin
+    p_5bus, _ = test_2_zone_portfolio()
+    requirement = _capacity_reserve_margin(0.1)
+    PSIP.add_requirement!(p_5bus, requirement)
+    @test_throws r"Requirement 'reserve_margin' has no available contributing resources or demand technologies." PSIN._check_contributors(
+        p_5bus,
+        requirement;
+        demands=true,
+    )
+    PSIP.set_requirements!(
+        PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind"),
+        [requirement],
+    )
+    @test_throws r"has no available contributing demand technologies." PSIN._check_contributors(
+        p_5bus,
+        requirement;
+        demands=true,
+    )
+    @test isnothing(PSIN._check_contributors(p_5bus, requirement; demands=false))
+end
+
+@testset "Inverter efficiency must be in (0, 1]" begin
+    p_5bus, _ = test_2_zone_portfolio()
+    colocated = PSIP.get_technology(ESR_COLOCATED_TYPE, p_5bus, "colocated_test")
+    PSIP.set_inverter_efficiency!(colocated, 0.0)
+    @test_throws r"colocated_test has inverter efficiency 0.0, which must be in \(0, 1\]" PSIN.get_inverter_efficiency(
+        colocated,
+    )
+    PSIP.set_inverter_efficiency!(colocated, 0.95)
+    @test PSIN.get_inverter_efficiency(colocated) == 0.95
 end

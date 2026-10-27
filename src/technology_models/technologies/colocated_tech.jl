@@ -40,6 +40,17 @@ get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerW
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerSolarVariable) = PSIP.get_operation_costs_solar(d)
 #! format: on
 
+function get_inverter_efficiency(d::PSIP.ColocatedSupplyStorageTechnology)
+    efficiency = PSIP.get_inverter_efficiency(d)
+    if !(0.0 < efficiency <= 1.0)
+        error(
+            "Technology $(PSIP.get_name(d)) has inverter efficiency $efficiency, which must " *
+            "be in (0, 1].",
+        )
+    end
+    return efficiency
+end
+
 function get_default_time_series_names(
     ::Type{U},
     ::ActivePowerWindVariable,
@@ -318,19 +329,23 @@ function add_constraints!(
     active_power_wind = get_variable(container, ActivePowerWindVariable(), D, tech_model)
     active_power_solar = get_variable(container, ActivePowerSolarVariable(), D, tech_model)
 
+    # Everything the plant exchanges with the grid passes through its inverter
     for d in devices
         name = PSIP.get_name(d)
+        efficiency = get_inverter_efficiency(d)
         for t in time_steps
             con_out[name, t] = JuMP.@constraint(
                 get_jump_model(container),
                 active_power_out[name, t] ==
-                active_power_discharge[name, t] +
-                active_power_wind[name, t] +
-                active_power_solar[name, t]
+                efficiency * (
+                    active_power_discharge[name, t] +
+                    active_power_wind[name, t] +
+                    active_power_solar[name, t]
+                )
             )
             con_in[name, t] = JuMP.@constraint(
                 get_jump_model(container),
-                active_power_in[name, t] == active_power_charge[name, t]
+                active_power_charge[name, t] == efficiency * active_power_in[name, t]
             )
         end
     end

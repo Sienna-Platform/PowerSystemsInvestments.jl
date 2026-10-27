@@ -9,7 +9,8 @@ in this package.
   - `::Type{B}`: A `RequirementFormulation` subtype (e.g. `RequirementEnergyShare`)
   - `use_slacks`: adds a `RequirementSlackVariable` to each requirement's constraint, priced
     in the objective at the `"slack_penalty"` attribute per unit of shortfall (default
-    `REQUIREMENT_SLACK_PENALTY`)
+    `REQUIREMENT_SLACK_PENALTY`, or `CAPACITY_REQUIREMENT_SLACK_PENALTY` per MW-year for
+    capacity requirements)
   - `duals`: constraint types whose duals are stored with the results, e.g.
     `[EnergyShareRequirementConstraint]`
 

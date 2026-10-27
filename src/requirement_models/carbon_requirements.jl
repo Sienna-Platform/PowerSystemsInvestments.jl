@@ -31,42 +31,19 @@ function _carbon_intensity(technology::PSIP.SupplyTechnology)
     return get(co2, only(fuels), 0.0)
 end
 
-function _validate_carbon_requirements(
-    p::PSIP.Portfolio,
-    requirements::Vector{<:PSIP.Requirement},
-    ::Type{B},
-) where {B <: RequirementFormulation}
-    for req in requirements
-        if isempty(_emitters(p, req))
-            error(
-                "Requirement '$(PSIP.get_name(req))' has no available contributing " *
-                "technology with a fuel curve, so it has no emissions.",
-            )
-        end
-        _validate_carbon_limit(p, req, B)
-    end
-    return
-end
-
-_validate_carbon_limit(
-    ::PSIP.Portfolio,
-    ::PSIP.Requirement,
-    ::Type{<:RequirementFormulation},
-) = nothing
-
-function _validate_carbon_limit(
-    p::PSIP.Portfolio,
-    requirement::PSIP.Requirement,
-    ::Type{RequirementCarbonCapDemandRate},
-)
-    if isempty(_contributing_demands(p, requirement))
+function _check_emitters(p::PSIP.Portfolio, requirement::PSIP.Requirement)
+    if isempty(_emitters(p, requirement))
         error(
             "Requirement '$(PSIP.get_name(requirement))' has no available contributing " *
-            "demand technology to set its emission rate limit.",
+            "technology with a fuel curve, so it has no emissions.",
         )
     end
     return
 end
+
+# The demand rate cap is set by the policy's demand
+_uses_demands(::Type{<:RequirementFormulation}) = false
+_uses_demands(::Type{RequirementCarbonCapDemandRate}) = true
 
 function construct_requirement!(
     container::SingleOptimizationContainer,
@@ -84,7 +61,10 @@ function construct_requirement!(
     X <: RequirementModel,
 }
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
-    _validate_carbon_requirements(p, requirements, B)
+    for req in requirements
+        _check_emitters(p, req)
+        _check_contributors(p, req; demands=_uses_demands(B))
+    end
     add_expression!(
         container,
         WeightedCarbonEmissions(),
@@ -147,11 +127,8 @@ function construct_requirement!(
     return
 end
 
-"""
-Build the `WeightedCarbonEmissions` expression: for each policy and each operational index,
-the yearly emissions (tCO2) of its contributing technologies with fuel curves, their carbon
-intensity times their `FuelConsumptionExpression`.
-"""
+# Yearly emissions of each policy in each representative period: carbon intensity times
+# fuel consumption of its technologies with fuel curves
 function add_expression!(
     container::SingleOptimizationContainer,
     ::WeightedCarbonEmissions,
@@ -263,11 +240,7 @@ function _add_carbon_limit!(
     return
 end
 
-"""
-For each carbon cap, the yearly emissions of the investment period containing its
-`target_year` are at most its limit (see `CarbonCapFormulation`), plus a slack when its
-`RequirementModel` uses slacks.
-"""
+# Over the target period: emissions <= limit (see `CarbonCapFormulation`) + slack
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::CarbonCapConstraint,

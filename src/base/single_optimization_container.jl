@@ -726,8 +726,9 @@ end
 
 # Entries of a container without a constraint (e.g. time steps outside a requirement's
 # target period) get NaN
-function _dual_values(constraints::DenseAxisArray)
+function _dual_values(constraints::DenseAxisArray; available=true)
     values = DenseAxisArray(fill(NaN, size(constraints)), axes(constraints)...)
+    available || return values
     for i in eachindex(constraints.data)
         if isassigned(constraints.data, i)
             values.data[i] = JuMP.dual(constraints.data[i])
@@ -737,19 +738,32 @@ function _dual_values(constraints::DenseAxisArray)
 end
 
 # The duals of a MIP are those of the LP with its discrete variables fixed at their solution.
-# The model stays fixed, so the solution can still be read, until the next solve.
+# The model stays fixed, so the solution can still be read, until the next solve. If that LP
+# fails, the MIP is solved again from its solution and the duals are NaN.
 function _calculate_dual_variables_discrete_model!(
     container::SingleOptimizationContainer,
     port::PSIP.Portfolio,
 )
     jump_model = get_jump_model(container)
+    variables = JuMP.all_variables(jump_model)
+    values = JuMP.value.(variables)
     container.unfix_discrete_variables = JuMP.fix_discrete_variables(jump_model)
     JuMP.optimize!(jump_model)
-    if JuMP.dual_status(jump_model) != MOI.FEASIBLE_POINT
-        @error "Duals could not be computed: the LP with fixed discrete variables returned $(JuMP.dual_status(jump_model))"
+    if JuMP.dual_status(jump_model) == MOI.FEASIBLE_POINT
+        return _calculate_dual_variables_continous_model!(container, port)
+    end
+    @warn "Duals not computed: the LP with fixed discrete variables returned $(JuMP.termination_status(jump_model))"
+    unfix_discrete_variables!(container)
+    JuMP.set_start_value.(variables, values)
+    JuMP.optimize!(jump_model)
+    constraints = get_constraints(container)
+    for key in collect(keys(get_duals(container)))
+        container.duals[key] = _dual_values(constraints[key]; available=false)
+    end
+    if JuMP.primal_status(jump_model) != MOI.FEASIBLE_POINT
         return RunStatus.FAILED
     end
-    return _calculate_dual_variables_continous_model!(container, port)
+    return RunStatus.SUCCESSFULLY_FINALIZED
 end
 
 function unfix_discrete_variables!(container::SingleOptimizationContainer)
