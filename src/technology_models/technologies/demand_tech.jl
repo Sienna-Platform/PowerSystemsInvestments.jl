@@ -39,7 +39,7 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     for d in devices
         for op_ix in operational_indexes
@@ -55,7 +55,11 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                add_proportional_to_jump_expression!(expression[SINGLE_REGION, t], ts_data[ix], -1.0)
+                add_proportional_to_jump_expression!(
+                    expression[SINGLE_REGION, t],
+                    ts_data[ix],
+                    -1.0,
+                )
             end
         end
     end
@@ -79,7 +83,7 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     for d in devices
         # Only 1 region supported
@@ -97,7 +101,11 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                add_proportional_to_jump_expression!(expression[region, t], ts_data[ix], -1.0)
+                add_proportional_to_jump_expression!(
+                    expression[region, t],
+                    ts_data[ix],
+                    -1.0,
+                )
             end
         end
     end
@@ -120,7 +128,7 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     for d in devices
         # Only 1 region (node) supported
@@ -138,7 +146,11 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                add_proportional_to_jump_expression!(expression[region, t], ts_data[ix], -1.0)
+                add_proportional_to_jump_expression!(
+                    expression[region, t],
+                    ts_data[ix],
+                    -1.0,
+                )
             end
         end
     end
@@ -166,7 +178,7 @@ function add_to_expression!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     operational_weights = get_operational_weights(container)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     for d in devices
         for op_ix in operational_indexes
@@ -210,7 +222,7 @@ function add_to_expression!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     operational_weights = get_operational_weights(container)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     for d in devices
         # Only 1 region supported
@@ -228,7 +240,11 @@ function add_to_expression!(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
                 )
             end
-            add_proportional_to_jump_expression!(expression[region, op_ix], sum(ts_data), weight)
+            add_proportional_to_jump_expression!(
+                expression[region, op_ix],
+                sum(ts_data),
+                weight,
+            )
         end
     end
     return
@@ -251,7 +267,7 @@ function add_to_expression!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     operational_weights = get_operational_weights(container)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     for d in devices
         # Only 1 region (node) supported
@@ -269,7 +285,11 @@ function add_to_expression!(
                     "Initial timestamp of timeseries $(IS.get_name(time_series)) of technology $(d.name) does not match with the expected representative day $op_ix"
                 )
             end
-            add_proportional_to_jump_expression!(expression[region, op_ix], sum(ts_data), weight)
+            add_proportional_to_jump_expression!(
+                expression[region, op_ix],
+                sum(ts_data),
+                weight,
+            )
         end
     end
     return
@@ -291,7 +311,7 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     for d in devices
         for op_ix in operational_indexes
@@ -307,7 +327,11 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                add_proportional_to_jump_expression!(expression[SINGLE_REGION, t], ts_data[ix], -1.0)
+                add_proportional_to_jump_expression!(
+                    expression[SINGLE_REGION, t],
+                    ts_data[ix],
+                    -1.0,
+                )
             end
         end
     end
@@ -331,7 +355,7 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     for d in devices
         # Only one region supported
@@ -349,7 +373,11 @@ function add_to_expression!(
                 )
             end
             for (ix, t) in enumerate(time_slices)
-                add_proportional_to_jump_expression!(expression[region, t], ts_data[ix], -1.0)
+                add_proportional_to_jump_expression!(
+                    expression[region, t],
+                    ts_data[ix],
+                    -1.0,
+                )
             end
         end
     end

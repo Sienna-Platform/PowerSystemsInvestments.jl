@@ -147,21 +147,6 @@ function add_to_expression!(
 end
 
 function add_to_expression!(
-    ::OptimizationContainer,
-    ::T,
-    ::U,
-    ::BasicDispatch,
-    ::TransportModel{V},
-) where {
-    T <: EnergyBalance,
-    U <: Vector{D},
-    V <: SingleRegionBalanceModel,
-} where {D <: PSIP.NodalACTransportTechnology}
-    # Do nothing for Nodal Transport Paths in SingleRegion models
-    return
-end
-
-function add_to_expression!(
     container::OptimizationContainer,
     ::T,
     devices::U,

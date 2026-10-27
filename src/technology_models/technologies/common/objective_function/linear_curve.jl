@@ -305,7 +305,7 @@ function _add_linearcurve_cost!(
 
     discount_factor = 1.0 / (1.0 + discount_rate)
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
-    years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
+    years = Dates.value.(Dates.Year.(get_timestamps(time_mapping)))
 
     for op_ix in get_operational_indexes(time_mapping)
         weight = operational_weights[op_ix]

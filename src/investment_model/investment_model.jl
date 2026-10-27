@@ -3,7 +3,10 @@ function build_impl!(::InvestmentModel{T}) where {T}
     return
 end
 
-function build_if_not_already_built!(model::InvestmentModel{<:AbstractInvestmentProblem}; kwargs...)
+function build_if_not_already_built!(
+    model::InvestmentModel{<:AbstractInvestmentProblem};
+    kwargs...,
+)
     status = get_status(model)
     if status == ModelBuildStatus.EMPTY
         if !haskey(kwargs, :output_dir)
@@ -68,11 +71,13 @@ function build_pre_step!(model::InvestmentModel)
         # Initial time are set here because the information is specified in the
         # Simulation Sequence object and not at the problem creation.
         @info "Initializing Optimization Container For an InvestmentModel"
+        container = get_optimization_container(model)
         IOM.init_optimization_container!(
-            get_optimization_container(model),
+            container,
             get_template(model),
             get_portfolio(model),
         )
+        set_time_mapping!(container, InvestmentTimeMapping(get_template(model)))
         @info "Initializing ModelStoreParams"
         init_model_store_params!(model)
         set_status!(model, ModelBuildStatus.IN_PROGRESS)
@@ -135,12 +140,7 @@ function reset!(model::InvestmentModel{<:AbstractInvestmentProblem})
     port = IOM.get_portfolio(model)
     IOM.set_container!(
         get_internal(model),
-        OptimizationContainer(
-            port,
-            get_settings(model),
-            nothing,
-            IS.SingleTimeSeries
-        ),
+        OptimizationContainer(port, get_settings(model), nothing, IS.SingleTimeSeries),
     )
     get_optimization_container(model).built_for_recurrent_solves =
         was_built_for_recurrent_solves
@@ -284,17 +284,13 @@ end
 
 read_optimizer_stats(model::InvestmentModel) = read_optimizer_stats(get_store(model))
 
-list_aux_variable_keys(x::InvestmentModel) =
-    list_keys(get_store(x), AuxVariableType)
+list_aux_variable_keys(x::InvestmentModel) = list_keys(get_store(x), AuxVariableType)
 list_aux_variable_names(x::InvestmentModel) = _list_names(x, AuxVariableType)
-list_variable_keys(x::InvestmentModel) =
-    list_keys(get_store(x), VariableType)
+list_variable_keys(x::InvestmentModel) = list_keys(get_store(x), VariableType)
 list_variable_names(x::InvestmentModel) = _list_names(x, VariableType)
-list_dual_keys(x::InvestmentModel) =
-    list_keys(get_store(x), ConstraintType)
+list_dual_keys(x::InvestmentModel) = list_keys(get_store(x), ConstraintType)
 list_dual_names(x::InvestmentModel) = _list_names(x, ConstraintType)
-list_expression_keys(x::InvestmentModel) =
-    list_keys(get_store(x), ExpressionType)
+list_expression_keys(x::InvestmentModel) = list_keys(get_store(x), ExpressionType)
 list_expression_names(x::InvestmentModel) = _list_names(x, ExpressionType)
 
 function list_all_keys(x::InvestmentModel)
@@ -303,10 +299,11 @@ function list_all_keys(x::InvestmentModel)
     )
 end
 
-function _list_names(model::InvestmentModel, container_type::Type{T}) where {T <: OptimizationKeyType}
-    return encode_keys_as_strings(
-        list_keys(get_store(model), container_type),
-    )
+function _list_names(
+    model::InvestmentModel,
+    container_type::Type{T},
+) where {T <: OptimizationKeyType}
+    return encode_keys_as_strings(list_keys(get_store(model), container_type))
 end
 
 function register_recorders!(model::InvestmentModel, file_mode)

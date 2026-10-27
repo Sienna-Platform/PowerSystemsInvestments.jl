@@ -106,16 +106,6 @@ function get_variable_keys(container::OptimizationContainer)
     return collect(keys(container.variables))
 end
 
-function get_variable(container::OptimizationContainer, key::VariableKey)
-    var = get(container.variables, key, nothing)
-    if var === nothing
-        name = IOM.encode_key(key)
-        keys = IOM.encode_key.(get_variable_keys(container))
-        throw(IS.InvalidValue("variable $name is not stored. $keys"))
-    end
-    return var
-end
-
 function get_variable(
     container::OptimizationContainer,
     ::T,
@@ -337,7 +327,7 @@ function _make_system_expressions!(
 )
     time_mapping = IOM.get_time_mapping(container)
     time_steps = IOM.get_time_steps(time_mapping)
-    operational_indexes = IOM.get_operational_indexes(time_mapping)
+    operational_indexes = get_operational_indexes(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array([SINGLE_REGION], time_steps),
@@ -357,7 +347,7 @@ function _make_system_expressions!(
     regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
     time_mapping = IOM.get_time_mapping(container)
     time_steps = IOM.get_time_steps(time_mapping)
-    operational_indexes = IOM.get_operational_indexes(time_mapping)
+    operational_indexes = get_operational_indexes(time_mapping)
     container.expressions = OrderedDict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
@@ -377,24 +367,7 @@ function _make_system_expressions!(
     nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
     time_mapping = IOM.get_time_mapping(container)
     time_steps = IOM.get_time_steps(time_mapping)
-    container.expressions = Dict(
-        ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
-            _make_container_array(nodes, time_steps),
-        ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
-            _make_container_array(nodes, time_steps),
-    )
-    return
-end
-
-function _make_system_expressions!(
-    container::OptimizationContainer,
-    ::Type{NodalBalanceModel},
-    port::PSIP.Portfolio,
-)
-    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
-    time_mapping = IOM.get_time_mapping(container)
-    time_steps = IOM.get_time_steps(time_mapping)
-    operational_indexes = IOM.get_operational_indexes(time_mapping)
+    operational_indexes = get_operational_indexes(time_mapping)
     container.expressions = Dict(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
@@ -675,11 +648,6 @@ function solve_model!(container::OptimizationContainer, port::PSIP.Portfolio)
     status = RunStatus.SUCCESSFULLY_FINALIZED
 
     return status
-end
-
-function write_optimizer_stats!(container::OptimizationContainer)
-    write_optimizer_stats!(get_optimizer_stats(container), get_jump_model(container))
-    return
 end
 
 function compute_conflict!(container::OptimizationContainer)

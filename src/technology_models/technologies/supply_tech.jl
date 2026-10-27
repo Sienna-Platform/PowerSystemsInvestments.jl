@@ -417,7 +417,7 @@ function add_constraints!(
     operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
+    time_stamps = get_timestamps(time_mapping)
 
     for (ix, d) in enumerate(devices)
         name = PSIP.get_name(d)

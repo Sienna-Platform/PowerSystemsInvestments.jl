@@ -21,22 +21,36 @@ make_portfolio_filename(port_uuid::Union{Base.UUID, AbstractString}) =
 IOM.get_base_power(::PSIP.Portfolio) = 1.0
 IS.stores_time_series_in_memory(p::PSIP.Portfolio) = IS.stores_time_series_in_memory(p.data)
 
-function retrieve_ops_time_series(d::PSIP.Technology, op_ix::Int, time_mapping::TimeMapping)
+function retrieve_ops_time_series(
+    d::PSIP.Technology,
+    op_ix::Int,
+    time_mapping::InvestmentTimeMapping,
+)
     ts_name = get_default_time_series_names(typeof(d))
     first_t = first(get_consecutive_slices(time_mapping)[op_ix])
-    year = string(Dates.Year(get_time_stamps(time_mapping)[first_t]).value)
-    return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; features=Dict("year"=>year, "rep_day"=>op_ix))
+    year = string(Dates.Year(get_timestamps(time_mapping)[first_t]).value)
+    return IS.get_time_series(
+        IS.SingleTimeSeries,
+        d,
+        ts_name;
+        features=Dict("year" => year, "rep_day" => op_ix),
+    )
 end
 
 function retrieve_ops_time_series(
     d::PSIP.Technology,
     op_ix::Int,
-    time_mapping::TimeMapping,
+    time_mapping::InvestmentTimeMapping,
     ts_name::String,
 )
     first_t = first(get_consecutive_slices(time_mapping)[op_ix])
-    year = string(Dates.Year(get_time_stamps(time_mapping)[first_t]).value)
-    return IS.get_time_series(IS.SingleTimeSeries, d, ts_name; features=Dict("year"=>year, "rep_day"=>op_ix))
+    year = string(Dates.Year(get_timestamps(time_mapping)[first_t]).value)
+    return IS.get_time_series(
+        IS.SingleTimeSeries,
+        d,
+        ts_name;
+        features=Dict("year" => year, "rep_day" => op_ix),
+    )
 end
 
 # Defaults for a system-less model (a `nothing` "system"): let the generic `Settings` and

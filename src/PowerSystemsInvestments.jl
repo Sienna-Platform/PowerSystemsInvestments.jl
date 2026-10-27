@@ -307,29 +307,11 @@ import InfrastructureOptimizationModels:
 
 # ---- Time mapping ----
 import InfrastructureOptimizationModels:
-    TimeMapping,
-    OperationalPeriods,
-    InvestmentIntervals,
     get_time_mapping,
-    get_consecutive_slices,
-    get_operational_indexes,
-    get_feasibility_indexes,
-    get_all_indexes,
-    get_time_stamps,
-    get_investment_time_stamps,
-    get_inverse_invest_mapping,
-    get_base_date,
-    get_operational_weights,
-    get_total_period_count,
-    get_total_operation_period_count,
-    get_total_feasibility_period_count,
-    get_total_investment_period_count,
+    set_time_mapping!,
     get_time_steps,
-    get_operational_time_steps,
-    get_feasibility_time_steps,
-    get_investment_time_steps,
-    is_feasibility_empty,
-    get_investment_map_to_operational_slices
+    get_base_date,
+    get_total_operation_period_count
 
 # ---- Variable / expression types ----
 import InfrastructureOptimizationModels:
@@ -430,6 +412,7 @@ include("base/expressions.jl")
 include("base/solution_algorithms.jl")
 include("requirement_models/requirement_formulations.jl")
 include("base/investment_model_template.jl")
+include("base/time_mapping.jl")
 include("base/objective_function.jl")
 include("base/optimization_container.jl")
 # Investment Model #

@@ -1,7 +1,6 @@
 @testset "Objective Function" begin
-    
     m = JuMP.Model()
-    container = PSIN.OptimizationContainer(IOM.Settings(), m)
+    container = PSIN.OptimizationContainer(IOM.Settings(nothing), m)
     test_obj = PSIN.get_objective_expression(container)
     @test PSIN.get_capital_terms(test_obj) == zero(AffExpr)
     @test PSIN.get_operation_terms(test_obj) == zero(AffExpr)
@@ -50,6 +49,7 @@ end
     container = PSIN.OptimizationContainer(settings, model)
 
     IOM.init_optimization_container!(container, template, p_5bus)
+    IOM.set_time_mapping!(container, PSIN.InvestmentTimeMapping(template))
 
     transport_model = PSIN.get_transport_model(template)
     PSIN.initialize_system_expressions!(container, transport_model, p_5bus)
