@@ -118,6 +118,23 @@
     @test length(IS.Optimization.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 
+    # Portfolio access
+    @test get_portfolio(m) === p_5bus
+    @test get_portfolio(res) === p_5bus
+
+    # Portfolio reattachment after reload
+    result_dir = mktempdir(; cleanup=true)
+    serialize_results(res, result_dir)
+    reloaded = OptimizationProblemResults(result_dir)
+    @test isnothing(get_portfolio(reloaded))
+
+    @test isnothing(set_portfolio!(reloaded, p_5bus))
+    @test get_portfolio(reloaded) === p_5bus
+
+    other_portfolio = PSIP.Portfolio()
+    @test_throws IS.InvalidValue set_portfolio!(reloaded, other_portfolio)
+    @test get_portfolio(reloaded) === p_5bus
+
     template = InvestmentModelTemplate(
         capital,
         operations,

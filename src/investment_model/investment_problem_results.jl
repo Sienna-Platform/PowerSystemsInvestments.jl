@@ -37,3 +37,17 @@ function OptimizationProblemResults(model::InvestmentModel)
         get_output_dir(model),
     )
 end
+
+"""
+Return the portfolio attached to the results or `nothing` when no source is attached.
+"""
+get_portfolio(results::OptimizationProblemResults) = ISOPT.get_source_data(results)
+
+"""
+Attach a portfolio with the same UUID as the source used to solve the model.
+
+Throws `IS.InvalidValue` on a UUID mismatch without changing the attached source.
+Returns `nothing`.
+"""
+set_portfolio!(results::OptimizationProblemResults, portfolio::PSIP.Portfolio) =
+    ISOPT.set_source_data!(results, portfolio)

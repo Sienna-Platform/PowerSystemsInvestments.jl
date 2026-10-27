@@ -101,6 +101,8 @@ export get_infeasibility_conflict
 export serialize_problem
 export serialize_results
 #Results interfaces
+export get_portfolio
+export set_portfolio!
 export read_variable
 export read_optimizer_stats
 export read_expression
