@@ -210,7 +210,6 @@ import InfrastructureSystems.Optimization:
     encode_keys_as_strings,
     should_write_resulting_value,
     convert_result_to_natural_units,
-    to_matrix,
     get_store_container_type
 import InfrastructureSystems.Optimization:
     OptimizationProblemResults, OptimizationProblemResultsExport, OptimizerStats
