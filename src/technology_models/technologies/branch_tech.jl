@@ -168,8 +168,8 @@ function add_to_expression!(
     # Assuming that energy travels from start to end, so if dispatch of Branch is positive, it is subtracted from start_region
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        start_region = PSIP.get_name(PSIP.get_start_region(d))
-        end_region = PSIP.get_name(PSIP.get_end_region(d))
+        start_region = PSY.get_name(PSIP.get_start_region(d))
+        end_region = PSY.get_name(PSIP.get_end_region(d))
         losses = PSIP.get_line_loss(d)
         add_proportional_to_jump_expression!(
             expression[start_region, t],
@@ -381,8 +381,8 @@ function add_to_expression!(
 
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
-        start_node = PSIP.get_name(PSIP.get_start_node(d))
-        end_node = PSIP.get_name(PSIP.get_end_node(d))
+        start_node = PSY.get_name(PSIP.get_start_node(d))
+        end_node = PSY.get_name(PSIP.get_end_node(d))
         # Flow leaves start node, enters end node (no losses assumed)
         add_proportional_to_jump_expression!(
             expression[start_node, t],

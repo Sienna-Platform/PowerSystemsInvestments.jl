@@ -59,16 +59,14 @@ export BuildCapacity
 export ActivePowerVariable
 export BuildEnergyCapacity
 export BuildPowerCapacity
-export BuildWindCapacity
-export BuildSolarCapacity
+export BuildSupplyCapacity
 export BuildInverterCapacity
 export ActiveInPowerVariable
 export ActiveOutPowerVariable
 export StateOfChargeVariable
 export ActivePowerChargeVariable
 export ActivePowerDischargeVariable
-export ActivePowerWindVariable
-export ActivePowerSolarVariable
+export ActivePowerSupplyVariable
 export FlowActivePowerVariable
 
 ### Expressions ###
@@ -80,8 +78,7 @@ export VariableOMCost
 export EnergyBalance
 export CumulativePowerCapacity
 export CumulativeEnergyCapacity
-export CumulativeSolarCapacity
-export CumulativeWindCapacity
+export CumulativeSupplyCapacity
 export CumulativeInverterCapacity
 export WeightedEnergyGeneration
 export WeightedEnergyDemand

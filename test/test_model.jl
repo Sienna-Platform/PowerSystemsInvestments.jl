@@ -85,13 +85,12 @@
         store_variable_names=true,
     )
 
-    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IOM.ModelBuildStatus.BUILT
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) == IOM.ModelBuildStatus.BUILT
     # @show m.internal.container.expressions
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemOutputs(m)
-    @test length(IOM.list_variable_names(res)) == 23
+    @test length(IOM.list_variable_names(res)) == 21
     @test length(IOM.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 
@@ -164,12 +163,11 @@
         store_variable_names=true,
     )
 
-    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IOM.ModelBuildStatus.BUILT
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) == IOM.ModelBuildStatus.BUILT
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemOutputs(m)
-    @test length(IOM.list_variable_names(res)) == 23
+    @test length(IOM.list_variable_names(res)) == 21
     @test length(IOM.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 
@@ -289,8 +287,7 @@ end
         store_variable_names=true,
     )
 
-    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IOM.ModelBuildStatus.BUILT
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) == IOM.ModelBuildStatus.BUILT
 
     # Force infeasibility by setting the RHS of a registered balance constraint to an
     # impossibly large demand value, so the constraint is captured in the IIS conflict dict.
@@ -654,8 +651,7 @@ end
         store_variable_names=true,
     )
 
-    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IOM.ModelBuildStatus.BUILT
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) == IOM.ModelBuildStatus.BUILT
     # @show m.internal.container.expressions
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
@@ -689,8 +685,7 @@ end
         IS.SingleTimeSeries,
         demand2,
         "ops_demand";
-        features = Dict("year"=>"2030",
-                        "rep_day"=>1),
+        features=Dict("year" => "2030", "rep_day" => 1),
     )
     total_demand_2030 = sum(TimeSeries.values(d_2030.data))
 

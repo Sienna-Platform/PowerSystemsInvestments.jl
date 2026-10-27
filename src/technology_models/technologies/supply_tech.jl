@@ -248,7 +248,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         add_proportional_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -283,7 +283,7 @@ function add_to_expression!(
         name = PSIP.get_name(d)
         # Get each node the technology is assigned to
         for node in PSIP.get_region(d)
-            node_name = PSIP.get_name(node)
+            node_name = PSY.get_name(node)
             add_proportional_to_jump_expression!(
                 expression[node_name, t],
                 variable[name, t],
@@ -362,7 +362,7 @@ function add_to_expression!(
     for d in devices
         name = PSIP.get_name(d)
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         for op_ix in feasibility_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
