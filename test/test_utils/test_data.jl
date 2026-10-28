@@ -239,7 +239,7 @@ function test_2_zone_portfolio()
         capacity_limits_discharge=(min=0.0, max=300.0),
         capacity_limits_energy=(min=0.0, max=1000.0),
         power_systems_type="EnergyReservoirStorage",
-        prime_mover_type=PrimeMovers.BT,
+        prime_mover_type=PrimeMovers.BA,
         available=true,
         capital_costs_storage=PSIP.StorageCapitalCost(
             charge_capital_cost=LinearCurve(0.0),
