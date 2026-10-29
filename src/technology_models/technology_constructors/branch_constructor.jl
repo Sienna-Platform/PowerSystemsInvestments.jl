@@ -120,7 +120,7 @@ function construct_technologies!(
     # Capacity constraint
     add_constraints!(
         container,
-        MaximumCumulativeCapacity(),
+        CumulativeCapacityLimit(),
         CumulativeCapacity(),
         devices,
         B(),
