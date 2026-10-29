@@ -96,7 +96,7 @@ end
         capital,
         OperationalRepresentativeDays(op_days, weights),
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
     _set_multi_region_supply_models!(template)
     set_technology_model!(
@@ -180,7 +180,7 @@ end
         capital,
         OperationalRepresentativeDays(op_days, weights),
         feasibility,
-        TransportModel(NodalBalanceModel, use_slacks=false),
+        TransportModel(NodalBalanceModel),
     )
     _set_multi_region_supply_models!(template)
     set_technology_model!(

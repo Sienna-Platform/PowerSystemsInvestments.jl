@@ -92,12 +92,12 @@ function add_constraints!(
 ) where {T <: PSIP.HourlyMatching, X <: RequirementModel}
     time_mapping = get_time_mapping(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
     time_steps = [t for op_ix in operational_indexes for t in consecutive_slices[op_ix]]
     jump_model = get_jump_model(container)
     store_names = get_store_variable_names(get_settings(container))
+    demand_expression = get_expression(container, DemandExpression(), PSIP.Portfolio)
 
     names = PSIP.get_name.(requirements)
     con = add_constraints_container!(
@@ -134,15 +134,20 @@ function add_constraints!(
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             demand = zeros(length(time_slices))
+            # Unserved demand does not need to be matched
+            unserved = Dict(t => JuMP.AffExpr(0.0) for t in time_slices)
             for d in demands
-                time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-                check_initial_timestamp(
-                    time_series,
+                for (ix, t) in enumerate(time_slices)
+                    demand[ix] += JuMP.constant(demand_expression[PSIP.get_name(d), t])
+                end
+                _add_unserved_demand!(
+                    t -> unserved[t],
+                    container,
                     d,
-                    time_stamps[first(time_slices)],
-                    op_ix,
+                    _demand_formulation(names_to_model_map, d),
+                    time_slices,
+                    1.0,
                 )
-                demand .+= TimeSeries.values(time_series.data)
             end
             slack_cost = if req_name in slack_names
                 get_attributes(model)["slack_penalty"] *
@@ -177,6 +182,7 @@ function add_constraints!(
                         slack_cost * slacks[req_name, t],
                     )
                 end
+                JuMP.add_to_expression!(output, unserved[t])
                 con[req_name, t] = JuMP.@constraint(jump_model, output >= demand[ix])
             end
         end

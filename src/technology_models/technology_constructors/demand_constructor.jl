@@ -40,6 +40,38 @@ function construct_technologies!(
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
+    model::OperationCostModel,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
+    transport_model::TransportModel{<:AbstractTransportAggregation},
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.DemandRequirement, C <: UnservedDemandDispatch, X <: TechnologyModel}
+    devices = [PSIP.get_technology(T, p, n) for n in names]
+
+    add_variable!(container, UnservedDemandVariable(), devices, C())
+
+    # EnergyBalance
+    add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
+    add_to_expression!(
+        container,
+        EnergyBalance(),
+        UnservedDemandVariable(),
+        devices,
+        C(),
+        transport_model,
+    )
+
+    # WeightedEnergyDemand
+    add_to_expression!(container, WeightedEnergyDemand(), devices, C(), transport_model)
+
+    return
+end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    names::Vector{String},
+    ::ArgumentConstructStage,
     model::FeasibilityModel,
     tech_type::Type{T},
     tech_formulation::Type{D},
@@ -81,6 +113,36 @@ function construct_technologies!(
     tech_model_vector::Vector{X},
 ) where {T <: PSIP.DemandRequirement, C <: BasicDispatch, X <: TechnologyModel}
     # Do nothing for loads
+    return
+end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    names::Vector{String},
+    ::ModelConstructStage,
+    model::OperationCostModel,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
+    transport_model::TransportModel{<:AbstractTransportAggregation},
+    tech_model_vector::Vector{X},
+) where {T <: PSIP.DemandRequirement, C <: UnservedDemandDispatch, X <: TechnologyModel}
+    devices = [PSIP.get_technology(T, p, n) for n in names]
+    objective_function!(container, devices, C())
+    # A quadratic unserved demand cost makes the model a QP, which some solvers (e.g. HiGHS)
+    # do not solve with discrete variables
+    quadratic = [
+        PSIP.get_name(d) for
+        d in devices if _quadratic_term(PSIP.get_unserved_demand_cost(d)) != 0.0
+    ]
+    if !isempty(quadratic) && any(
+        v -> JuMP.is_integer(v) || JuMP.is_binary(v),
+        JuMP.all_variables(get_jump_model(container)),
+    )
+        @warn "Demands $(join(quadratic, ", ")) have a quadratic unserved demand cost and " *
+              "the model has discrete variables, so it is a mixed-integer QP. HiGHS does " *
+              "not solve those."
+    end
     return
 end
 

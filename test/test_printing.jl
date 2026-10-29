@@ -19,7 +19,7 @@
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(

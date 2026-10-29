@@ -41,6 +41,7 @@ export BinaryInvestment
 export BasicDispatch
 export BasicDispatchWithBudget
 export BasicDispatchWithLosses
+export UnservedDemandDispatch
 export ContinuousThermalCommitment
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
@@ -79,6 +80,7 @@ export HydroEnergyBudgetConstraint
 ### Variables ###
 export BuildCapacity
 export ActivePowerVariable
+export UnservedDemandVariable
 export BuildEnergyCapacity
 export BuildPowerCapacity
 export BuildWindCapacity
@@ -110,6 +112,7 @@ export StartUpCost
 export ShutDownCost
 export FuelConsumptionExpression
 export EnergyBalance
+export DemandExpression
 export PTDFBranchFlow
 export CumulativePowerCapacity
 export CumulativeEnergyCapacity
@@ -294,6 +297,7 @@ end
 include("utils/logging.jl")
 include("utils/psip_utils.jl")
 include("utils/technology_region_utils.jl")
+include("utils/demand_utils.jl")
 # Technology Models #
 include("technology_models/technologies/common/add_variable.jl")
 include("technology_models/technologies/common/add_to_expression.jl")

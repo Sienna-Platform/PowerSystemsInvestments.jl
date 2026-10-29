@@ -10,7 +10,7 @@ function _transmission_template(transport)
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(transport, use_slacks=false),
+        TransportModel(transport),
     )
     set_technology_model!(
         template,

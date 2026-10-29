@@ -1,7 +1,7 @@
 _is_resource(::PSIP.Technology) = false
 _is_resource(::PSIP.ResourceTechnology) = true
 _is_demand(::PSIP.Technology) = false
-_is_demand(::PSIP.DemandTechnology) = true
+_is_demand(::PSIP.DemandRequirement) = true
 _is_line(::PSIP.Technology) = false
 _is_line(::PSIP.TransmissionTechnology) = true
 
@@ -162,6 +162,19 @@ function _contributor_model(
     return names_to_model_map[name]
 end
 
+# Operations formulation of a demand attached to a requirement. A demand without a model in
+# the template has a fixed demand.
+function _demand_formulation(
+    names_to_model_map::Dict{String, TechnologyModel},
+    d::PSIP.DemandRequirement,
+)
+    name = PSIP.get_name(d)
+    if haskey(names_to_model_map, name)
+        return get_operations_formulation(names_to_model_map[name])()
+    end
+    return BasicDispatch()
+end
+
 # Weighted energy of a variable over the time steps of a representative period
 function _weighted_energy(
     container::SingleOptimizationContainer,
@@ -302,28 +315,34 @@ function _add_eligible_generation!(
     return
 end
 
-# Weighted demand of the contributing demand technologies of a requirement, read from their
-# "ops_demand" time series, plus the losses of its contributing storage
+# Weighted demand of the contributing demand technologies of a requirement, plus the losses
+# of its contributing storage. The demand is gross, or with `served` net of unserved demand.
 function _add_demand_and_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
     p::PSIP.Portfolio,
     requirement::PSIP.Requirement,
     names_to_model_map::Dict{String, TechnologyModel},
-    op_ix::Int,
+    op_ix::Int;
+    served::Bool=false,
 )
-    time_mapping = get_time_mapping(container)
-    first_time_stamp =
-        get_time_stamps(time_mapping)[first(get_consecutive_slices(time_mapping)[op_ix])]
+    time_slices = get_consecutive_slices(get_time_mapping(container))[op_ix]
     weight = get_time_step_weight(container, op_ix)
+    demand = get_expression(container, DemandExpression(), PSIP.Portfolio)
     for d in _contributing_demands(p, requirement)
-        time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-        check_initial_timestamp(time_series, d, first_time_stamp, op_ix)
-        # Load data is in MW
-        JuMP.add_to_expression!(
-            expression,
-            weight * sum(TimeSeries.values(time_series.data)),
-        )
+        for t in time_slices
+            JuMP.add_to_expression!(expression, weight, demand[PSIP.get_name(d), t])
+        end
+        if served
+            _add_unserved_demand!(
+                _ -> expression,
+                container,
+                d,
+                _demand_formulation(names_to_model_map, d),
+                time_slices,
+                -weight,
+            )
+        end
     end
     req_name = PSIP.get_name(requirement)
     for resource in _contributing_resources(p, requirement)

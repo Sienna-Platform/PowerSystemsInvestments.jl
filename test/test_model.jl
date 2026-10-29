@@ -20,7 +20,7 @@
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
@@ -122,7 +122,7 @@
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
@@ -277,7 +277,7 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
     set_technology_model!(
         template,
@@ -357,7 +357,7 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     set_technology_model!(
@@ -457,7 +457,7 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     set_technology_model!(
@@ -554,7 +554,7 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     set_technology_model!(
@@ -685,7 +685,7 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
@@ -810,7 +810,9 @@ end
         year="2030",
         rep_day=1,
     )
-    total_demand_2030 = sum(TimeSeries.values(d_2030.data))
+    # The demand series is normalized to the peak demand
+    total_demand_2030 =
+        sum(TimeSeries.values(d_2030.data)) * PSIP.get_peak_demand_mw(demand2)
 
     @test total_wind_2030 ≈ fraction * total_demand_2030 rtol = 1e-6
 
@@ -823,7 +825,10 @@ end
         year="2035",
         rep_day=2,
     )
-    @test total_wind_2035 ≈ fraction_2035 * sum(TimeSeries.values(d_2035.data)) rtol = 1e-6
+    @test total_wind_2035 ≈
+          fraction_2035 *
+          sum(TimeSeries.values(d_2035.data)) *
+          PSIP.get_peak_demand_mw(demand2) rtol = 1e-6
 
     # --- Weighted-energy expressions -------------------------------------------------
     # op_ix=1 (2030 representative day) carries the per-year weight 365.
@@ -875,7 +880,7 @@ function _build_thermal_investment_model(investment_formulation)
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
     set_technology_model!(
         template,
@@ -984,7 +989,7 @@ end
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
     set_technology_model!(
         template,

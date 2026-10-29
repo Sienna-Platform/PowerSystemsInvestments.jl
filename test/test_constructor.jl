@@ -96,7 +96,7 @@ end
         capital,
         operations,
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     settings = PSIN.Settings(p_5bus)
@@ -107,6 +107,7 @@ end
 
     transport_model = PSIN.get_transport_model(template)
     PSIN.initialize_system_expressions!(container, transport_model, p_5bus)
+    PSIN.initialize_demands!(container, p_5bus)
 
     #Define technology models
     demand_model = PSIN.TechnologyModel(
@@ -163,9 +164,10 @@ end
         [demand_model],
     )
 
-    # System expressions: EnergyBalance, FeasibilitySurplus, WeightedEnergyDemand.
+    # System expressions: EnergyBalance, FeasibilitySurplus, WeightedEnergyDemand, and
+    # DemandExpression from initialize_demands!.
     # The demand argument stage only populates these existing containers.
-    @test length(container.expressions) == 3
+    @test length(container.expressions) == 4
     @test length(container.variables) == 0
 
     #SupplyTechnology{RenewableDispatch}
@@ -193,7 +195,7 @@ end
     )
 
     # + CumulativeCapacity and WeightedEnergyGeneration for the wind supply tech.
-    @test length(container.expressions) == 5
+    @test length(container.expressions) == 6
     @test length(container.variables) == 2
 
     v = PSIN.get_variable(
@@ -246,7 +248,7 @@ end
     )
 
     # + CumulativeCapacity and WeightedEnergyGeneration for the thermal supply tech.
-    @test length(container.expressions) == 7
+    @test length(container.expressions) == 8
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(
