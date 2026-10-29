@@ -197,20 +197,108 @@
         PSIP.SupplyTechnology{ThermalStandard},
         string(BasicDispatch),
     )
-    @test read_variable(investment_results, dispatch_key) ==
-          read_variable(res, dispatch_key)
-    @test read_variable(investment_results, PSIN.encode_key_as_string(dispatch_key)) ==
-          read_variable(res, dispatch_key)
-    @test IS.Optimization.read_variables(investment_results, [dispatch_key]) ==
-          IS.Optimization.read_variables(res, [dispatch_key])
-    @test IS.Optimization.read_variables(investment_results) ==
-          IS.Optimization.read_variables(res)
-    expression_key = first(list_expression_keys(res))
-    @test read_expression(investment_results, expression_key) ==
-          read_expression(res, expression_key)
-    @test IS.Optimization.read_expressions(
-        investment_results; table_format=IS.TableFormat.WIDE,
-    ) == IS.Optimization.read_expressions(res; table_format=IS.TableFormat.WIDE)
+    thermal_type = PSIP.SupplyTechnology{ThermalStandard}
+    build_key = PSIN.VariableKey(BuildCapacity, thermal_type, string(ContinuousInvestment))
+    @testset "Test investment result readers" begin
+        @test read_variable(investment_results, dispatch_key) ==
+              read_variable(res, dispatch_key)
+        @test read_variable(investment_results, PSIN.encode_key_as_string(dispatch_key)) ==
+              read_variable(res, dispatch_key)
+        @test IS.Optimization.read_variables(investment_results, [dispatch_key]) ==
+              IS.Optimization.read_variables(res, [dispatch_key])
+        dispatch_name = PSIN.encode_key_as_string(dispatch_key)
+        @test IS.Optimization.read_variables(investment_results)[dispatch_name] ==
+              read_variable(res, dispatch_key)
+
+        capacity_key = PSIN.ExpressionKey(
+            CumulativeCapacity,
+            thermal_type,
+            string(ContinuousInvestment),
+        )
+        for (reader, bulk_reader, key) in (
+            (read_variable, IS.Optimization.read_variables, build_key),
+            (read_expression, IS.Optimization.read_expressions, capacity_key),
+        )
+            full = reader(investment_results, key; table_format=IS.TableFormat.WIDE)
+            raw = IS.Optimization.get_result_values(res, key)[key]
+            @test full.DateTime == DateTime.(first.(periods))
+            @test full.expensive_thermal == raw[raw.name .== "expensive_thermal", :value]
+            @test reader(investment_results, key; len=2) == reader(investment_results, key)
+            @test reader(
+                investment_results,
+                key;
+                start_time=DateTime(2035, 1, 1),
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            ) == full[2:2, :]
+            name = PSIN.encode_key_as_string(key)
+            entry = IS.Optimization.get_entry_type(key)
+            @test reader(
+                investment_results,
+                name;
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            ) == full[1:1, :]
+            @test reader(
+                investment_results,
+                entry,
+                thermal_type,
+                key.meta;
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            ) == full[1:1, :]
+            for entries in ([key], [name], [(entry, thermal_type, key.meta)])
+                @test bulk_reader(
+                    investment_results,
+                    entries;
+                    len=1,
+                    table_format=IS.TableFormat.WIDE,
+                )[name] == full[1:1, :]
+            end
+            @test bulk_reader(
+                investment_results;
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            )[name] == full[1:1, :]
+        end
+        mixed = PSIN.read_results_with_keys(
+            investment_results,
+            PSIN.OptimizationContainerKey[build_key, dispatch_key, capacity_key];
+            len=2,
+            table_format=IS.TableFormat.WIDE,
+        )
+        @test mixed[build_key].DateTime ==
+              mixed[capacity_key].DateTime ==
+              DateTime.(first.(periods))
+        @test mixed[dispatch_key].DateTime == get_timestamps(res)[1:2]
+        weighted_key = PSIN.ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio)
+        weighted = read_expression(
+            investment_results,
+            weighted_key;
+            len=2,
+            table_format=IS.TableFormat.WIDE,
+        )
+        @test weighted.DateTime == first.(op_days)
+        @test read_expression(
+            investment_results,
+            weighted_key;
+            start_time=DateTime(2035, 1, 1),
+            len=1,
+            table_format=IS.TableFormat.WIDE,
+        ) == weighted[2:2, :]
+        @test_throws ArgumentError read_variable(investment_results, build_key; len=0)
+        @test_throws ArgumentError read_variable(investment_results, build_key; len=3)
+        @test_throws ArgumentError read_variable(
+            investment_results,
+            build_key;
+            start_time=DateTime(2030, 1, 1, 1),
+        )
+        malformed = InvestmentProblemResults(m)
+        malformed_builds = get_variable_values(malformed)[build_key]
+        rows = findall(==("expensive_thermal"), malformed_builds.name)
+        malformed_builds[rows[2], :time_index] = 1
+        @test_throws ArgumentError read_variable(malformed, build_key; len=1)
+    end
 
     # Investment results after reload
     saved_results = InvestmentProblemResults(output_dir)
@@ -218,6 +306,19 @@
     @test get_investment_time_stamps(saved_results) == periods
     @test get_variable_values(saved_results) == get_variable_values(res)
     @test get_expression_values(saved_results) == get_expression_values(res)
+    @test read_variable(
+        saved_results,
+        build_key;
+        start_time=DateTime(2035, 1, 1),
+        len=1,
+        table_format=IS.TableFormat.WIDE,
+    ) == read_variable(
+        investment_results,
+        build_key;
+        start_time=DateTime(2035, 1, 1),
+        len=1,
+        table_format=IS.TableFormat.WIDE,
+    )
     @test isnothing(set_portfolio!(saved_results, p_5bus))
     @test get_portfolio(saved_results) === p_5bus
     empty!(get_investment_time_stamps(saved_results))

@@ -88,11 +88,10 @@ function InvestmentProblemResults(directory::AbstractString)
         )
     end
     metadata = Serialization.deserialize(filename)
-    if metadata.results_hash != IS.compute_sha256(joinpath(directory, "problem_results.bin"))
+    if metadata.results_hash !=
+       IS.compute_sha256(joinpath(directory, "problem_results.bin"))
         throw(
-            ArgumentError(
-                "The investment time mapping does not match the saved results.",
-            ),
+            ArgumentError("The investment time mapping does not match the saved results."),
         )
     end
     results = OptimizationProblemResults(directory)
@@ -125,6 +124,34 @@ IS.get_timestamp(results::InvestmentProblemResults) = get_timestamps(results)
 IS.get_base_power(results::InvestmentProblemResults) = get_model_base_power(results)
 IS.get_total_cost(results::InvestmentProblemResults) = get_objective_value(results)
 get_timestamps(results::InvestmentProblemResults) = get_timestamps(results.results)
+
+"""
+Return timestamps for a result key.
+Investment entries use period starts and weighted-energy expressions use operational slice starts.
+Other operational entries use the model's operational timestamps.
+"""
+function get_timestamps(
+    results::InvestmentProblemResults,
+    key::Union{VariableKey, ExpressionKey},
+)
+    entry_type = get_entry_type(key)
+    if is_investment_entry(entry_type)
+        return Dates.DateTime.(first.(get_investment_time_stamps(results)))
+    elseif entry_type <: Union{
+        WeightedEnergyGeneration,
+        WeightedEnergyDemand,
+        WeightedEnergyShareGeneration,
+        WeightedEnergyShareDemand,
+    }
+        mapping = get_time_mapping(results)
+        slices = get_consecutive_slices(mapping)[get_operational_indexes(mapping)]
+        return get_timestamps(results)[first.(slices)]
+    elseif is_operation_entry(entry_type)
+        return get_timestamps(results)
+    end
+    throw(ArgumentError("No result time axis is defined for $entry_type."))
+end
+
 get_model_base_power(results::InvestmentProblemResults) =
     get_model_base_power(results.results)
 get_objective_value(results::InvestmentProblemResults, execution=1) =
@@ -164,16 +191,72 @@ get_dual_values(results::InvestmentProblemResults) = get_dual_values(results.res
 list_dual_keys(results::InvestmentProblemResults) = list_dual_keys(results.results)
 list_dual_names(results::InvestmentProblemResults) = list_dual_names(results.results)
 
-ISOPT.read_variable(results::InvestmentProblemResults, args...; kwargs...) =
-    ISOPT.read_variable(results.results, args...; kwargs...)
+function ISOPT.read_variable(results::InvestmentProblemResults, args...; kwargs...)
+    key = ISOPT._deserialize_key(VariableKey, results.results, args...)
+    return read_variable(results, key; kwargs...)
+end
+
+ISOPT.read_variable(results::InvestmentProblemResults, key::VariableKey; kwargs...) =
+    read_results_with_keys(results, [key]; kwargs...)[key]
+
 ISOPT.read_variables(results::InvestmentProblemResults, entries; kwargs...) =
-    ISOPT.read_variables(results.results, entries; kwargs...)
-ISOPT.read_expression(results::InvestmentProblemResults, args...; kwargs...) =
-    ISOPT.read_expression(results.results, args...; kwargs...)
+    ISOPT.read_variables(results, [VariableKey(x...) for x in entries]; kwargs...)
+
+function ISOPT.read_variables(
+    results::InvestmentProblemResults,
+    entries::Vector{<:AbstractString};
+    kwargs...,
+)
+    return ISOPT.read_variables(
+        results,
+        [ISOPT._deserialize_key(VariableKey, results.results, name) for name in entries];
+        kwargs...,
+    )
+end
+
+function ISOPT.read_variables(
+    results::InvestmentProblemResults,
+    entries::Vector{<:OptimizationContainerKey};
+    kwargs...,
+)
+    tables = read_results_with_keys(results, entries; kwargs...)
+    return Dict(encode_key_as_string(key) => table for (key, table) in tables)
+end
+
+function ISOPT.read_expression(results::InvestmentProblemResults, args...; kwargs...)
+    key = ISOPT._deserialize_key(ExpressionKey, results.results, args...)
+    return read_expression(results, key; kwargs...)
+end
+
+ISOPT.read_expression(results::InvestmentProblemResults, key::ExpressionKey; kwargs...) =
+    read_results_with_keys(results, [key]; kwargs...)[key]
+
 ISOPT.read_expressions(results::InvestmentProblemResults; kwargs...) =
-    ISOPT.read_expressions(results.results; kwargs...)
+    ISOPT.read_expressions(results, list_expression_keys(results); kwargs...)
 ISOPT.read_expressions(results::InvestmentProblemResults, entries; kwargs...) =
-    ISOPT.read_expressions(results.results, entries; kwargs...)
+    ISOPT.read_expressions(results, [ExpressionKey(x...) for x in entries]; kwargs...)
+
+function ISOPT.read_expressions(
+    results::InvestmentProblemResults,
+    entries::Vector{<:AbstractString};
+    kwargs...,
+)
+    return ISOPT.read_expressions(
+        results,
+        [ISOPT._deserialize_key(ExpressionKey, results.results, name) for name in entries];
+        kwargs...,
+    )
+end
+
+function ISOPT.read_expressions(
+    results::InvestmentProblemResults,
+    entries::Vector{<:OptimizationContainerKey};
+    kwargs...,
+)
+    tables = read_results_with_keys(results, entries; kwargs...)
+    return Dict(encode_key_as_string(key) => table for (key, table) in tables)
+end
+
 ISOPT.read_aux_variable(results::InvestmentProblemResults, args...; kwargs...) =
     ISOPT.read_aux_variable(results.results, args...; kwargs...)
 ISOPT.read_aux_variables(results::InvestmentProblemResults, entries; kwargs...) =
@@ -189,11 +272,86 @@ ISOPT.read_duals(results::InvestmentProblemResults, entries; kwargs...) =
 
 ISOPT.get_result_values(results::InvestmentProblemResults, key::OptimizationContainerKey) =
     ISOPT.get_result_values(results.results, key)
-read_results_with_keys(
+
+function ISOPT._process_timestamps(
+    results::InvestmentProblemResults,
+    key::Union{VariableKey, ExpressionKey},
+    start_time::Union{Nothing, Dates.DateTime},
+    len::Union{Nothing, Int},
+)
+    timestamps = get_timestamps(results, key)
+    start = isnothing(start_time) ? 1 : findfirst(==(start_time), timestamps)
+    isnothing(start) && throw(ArgumentError("start_time is not in the result timestamps."))
+    count = isnothing(len) ? length(timestamps) - start + 1 : len
+    count > 0 || throw(ArgumentError("len must be positive."))
+    stop = start + count - 1
+    stop <= length(timestamps) || throw(
+        ArgumentError("The requested window exceeds the available result timestamps."),
+    )
+    indices = start:stop
+    return indices, timestamps[indices]
+end
+
+"""
+Read result tables using each key's time axis.
+`start_time` must be on that axis and `len` counts its entries.
+In a mixed request, the same window arguments are applied independently to each key.
+"""
+function read_results_with_keys(
     results::InvestmentProblemResults,
     keys::Vector{<:OptimizationContainerKey};
-    kwargs...,
-) = read_results_with_keys(results.results, keys; kwargs...)
+    start_time::Union{Nothing, Dates.DateTime}=nothing,
+    len::Union{Nothing, Int}=nothing,
+    table_format::IS.TableFormat=IS.TableFormat.LONG,
+)
+    tables = Dict{OptimizationContainerKey, DataFrames.DataFrame}()
+    for key in keys
+        if !(key isa Union{VariableKey, ExpressionKey})
+            merge!(
+                tables,
+                read_results_with_keys(
+                    results.results,
+                    [key];
+                    start_time=start_time,
+                    len=len,
+                    table_format=table_format,
+                ),
+            )
+            continue
+        end
+        values = ISOPT.get_result_values(results, key)
+        ISOPT._validate_keys(Base.keys(values), [key])
+        table = values[key]
+        timestamps = get_timestamps(results, key)
+        component_column = ISOPT.get_first_dimension_result_column_name(key)
+        for component in DataFrames.groupby(table, component_column)
+            if sort(component.time_index) != eachindex(timestamps)
+                throw(
+                    ArgumentError(
+                        "$(encode_key_as_string(key)) must contain one value per time index " *
+                        "for each component.",
+                    ),
+                )
+            end
+        end
+        indices, selected_timestamps =
+            ISOPT._process_timestamps(results, key, start_time, len)
+        merge!(
+            tables,
+            ISOPT._read_results(
+                Dict(key => table),
+                [key],
+                selected_timestamps,
+                indices,
+                get_model_base_power(results),
+                timestamps,
+                table_format,
+            ),
+        )
+    end
+    return tables
+end
+
 export_results(results::InvestmentProblemResults; kwargs...) =
     export_results(results.results; kwargs...)
 export_results(
