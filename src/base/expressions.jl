@@ -37,6 +37,8 @@ struct FixedOperationModelCost <: InvestmentExpressionType end
 struct TotalCapitalCost <: ISOPT.ExpressionType end
 
 struct VariableOMCost <: OperationsExpressionType end
+# Value of the product of an end-use technology, a negative operating cost
+struct ProductRevenue <: OperationsExpressionType end
 
 struct FuelConsumptionExpression <: OperationsExpressionType end
 

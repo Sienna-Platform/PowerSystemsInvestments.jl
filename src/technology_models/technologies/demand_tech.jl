@@ -19,11 +19,15 @@ function get_default_attributes(
     return Dict{String, Any}()
 end
 
-# Region of the energy balance a demand is in
-_balance_region(::TransportModel{SingleRegionBalanceModel}, ::PSIP.ProjectedDemand) =
-    SINGLE_REGION
-_balance_region(::TransportModel, d::PSIP.ProjectedDemand) =
-    PSIP.get_name(only(PSIP.get_region(d)))
+# Region of the energy balance a demand or end-use technology is in
+_balance_region(
+    ::TransportModel{SingleRegionBalanceModel},
+    ::Union{PSIP.ProjectedDemand, PSIP.DemandSideTechnology},
+) = SINGLE_REGION
+_balance_region(
+    ::TransportModel,
+    d::Union{PSIP.ProjectedDemand, PSIP.DemandSideTechnology},
+) = PSIP.get_name(only(PSIP.get_region(d)))
 
 ################### Unserved demand ####################
 

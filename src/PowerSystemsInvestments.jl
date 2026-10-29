@@ -43,6 +43,7 @@ export BasicDispatchWithBudget
 export BasicDispatchWithLosses
 export UnservedDemandDispatch
 export FlexibleDemandDispatch
+export EndUseDispatch
 export ContinuousThermalCommitment
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
@@ -115,6 +116,7 @@ export CapitalCost
 export TotalCapitalCost
 export FixedOperationModelCost
 export VariableOMCost
+export ProductRevenue
 export FuelCost
 export StartUpCost
 export ShutDownCost
@@ -312,6 +314,7 @@ include("technology_models/technologies/common/add_to_expression.jl")
 include("technology_models/technologies/common/fuel_curve.jl")
 include("technology_models/technologies/supply_tech.jl")
 include("technology_models/technologies/demand_tech.jl")
+include("technology_models/technologies/demand_side_tech.jl")
 include("technology_models/technologies/storage_tech.jl")
 include("technology_models/technologies/colocated_tech.jl")
 include("technology_models/technologies/branch_tech.jl")
@@ -326,6 +329,7 @@ include("network_models/transport_constructor.jl")
 # Constructors #
 include("technology_models/technology_constructors/supply_constructor.jl")
 include("technology_models/technology_constructors/demand_constructor.jl")
+include("technology_models/technology_constructors/demand_side_constructor.jl")
 include("technology_models/technology_constructors/storage_constructor.jl")
 include("technology_models/technology_constructors/colocated_constructor.jl")
 include("technology_models/technology_constructors/branch_constructor.jl")

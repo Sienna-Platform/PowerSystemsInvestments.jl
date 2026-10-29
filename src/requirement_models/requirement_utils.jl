@@ -4,6 +4,8 @@ _is_demand(::PSIP.Technology) = false
 _is_demand(::PSIP.ProjectedDemand) = true
 _is_line(::PSIP.Technology) = false
 _is_line(::PSIP.TransmissionTechnology) = true
+_is_end_use(::PSIP.Technology) = false
+_is_end_use(::PSIP.DemandSideTechnology) = true
 
 # Available technologies attached to a requirement, of the kind selected by `is_kind`
 _contributing(p::PSIP.Portfolio, requirement::PSIP.Requirement, is_kind) = [
@@ -16,15 +18,27 @@ _contributing_demands(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
     _contributing(p, requirement, _is_demand)
 _contributing_lines(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
     _contributing(p, requirement, _is_line)
+_contributing_end_uses(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
+    _contributing(p, requirement, _is_end_use)
 
+# With `end_use_demand`, end-use technologies count as demand, and with `end_use_capacity` as
+# resources (their capacity)
 function _check_contributors(
     p::PSIP.Portfolio,
     requirement::PSIP.Requirement;
     demands::Bool,
+    end_use_demand::Bool=false,
+    end_use_capacity::Bool=false,
 )
+    has_end_uses = !isempty(_contributing_end_uses(p, requirement))
     missing_kinds = String[]
-    isempty(_contributing_resources(p, requirement)) && push!(missing_kinds, "resources")
-    if demands && isempty(_contributing_demands(p, requirement))
+    if isempty(_contributing_resources(p, requirement)) &&
+       !(end_use_capacity && has_end_uses)
+        push!(missing_kinds, "resources")
+    end
+    if demands &&
+       isempty(_contributing_demands(p, requirement)) &&
+       !(end_use_demand && has_end_uses)
         push!(missing_kinds, "demand technologies")
     end
     if !isempty(missing_kinds)
@@ -315,9 +329,10 @@ function _add_eligible_generation!(
     return
 end
 
-# Weighted demand of the contributing demand technologies of a requirement, plus the losses
-# of its contributing storage. The demand is gross, or with `served` net of unserved demand;
-# demand shifted in time is counted where it is served, so shifting losses count.
+# Weighted demand of the contributing demand technologies of a requirement, plus the
+# consumption of its end-use technologies and the losses of its contributing storage. The
+# demand is gross, or with `served` net of unserved demand; demand shifted in time is counted
+# where it is served, so shifting losses count.
 function _add_demand_and_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -348,6 +363,17 @@ function _add_demand_and_storage_losses!(
         end
     end
     req_name = PSIP.get_name(requirement)
+    for d in _contributing_end_uses(p, requirement)
+        model = _contributor_model(names_to_model_map, req_name, d)
+        _add_end_use_consumption!(
+            _ -> expression,
+            container,
+            d,
+            get_operations_formulation(model)(),
+            time_slices,
+            weight,
+        )
+    end
     for resource in _contributing_resources(p, requirement)
         tech_model = _contributor_model(names_to_model_map, req_name, resource)
         _add_storage_losses!(

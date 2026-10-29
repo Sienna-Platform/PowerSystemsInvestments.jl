@@ -50,7 +50,7 @@ function construct_requirement!(
 ) where {T <: PSIP.HourlyMatching, B <: RequirementHourlyMatching, X <: RequirementModel}
     for name in names
         req = PSIP.get_requirement(T, p, name)
-        _check_contributors(p, req; demands=true)
+        _check_contributors(p, req; demands=true, end_use_demand=true)
         _warn_ignored_contributors(_contributing_lines(p, req), req, "Lines")
     end
     return
@@ -127,6 +127,12 @@ function add_constraints!(
         req_name = PSIP.get_name(req)
         resources = _contributing_resources(p, req)
         demands = _contributing_demands(p, req)
+        end_uses = _contributing_end_uses(p, req)
+        end_use_formulations = [
+            get_operations_formulation(
+                _contributor_model(names_to_model_map, req_name, d),
+            )() for d in end_uses
+        ]
         resource_models = [
             _contributor_model(names_to_model_map, req_name, resource) for
             resource in resources
@@ -151,6 +157,17 @@ function add_constraints!(
                     1.0,
                 )
                 _add_demand_shift!(
+                    t -> adjustment[t],
+                    container,
+                    d,
+                    formulation,
+                    time_slices,
+                    -1.0,
+                )
+            end
+            # The consumption of end-use technologies must be matched too
+            for (d, formulation) in zip(end_uses, end_use_formulations)
+                _add_end_use_consumption!(
                     t -> adjustment[t],
                     container,
                     d,

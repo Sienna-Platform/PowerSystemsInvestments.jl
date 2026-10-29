@@ -270,6 +270,11 @@ function construct_requirement!(
     for name in names
         req = PSIP.get_requirement(T, p, name)
         _check_contributors(p, req; demands=true)
+        _warn_ignored_contributors(
+            _contributing_end_uses(p, req),
+            req,
+            "Demand side technologies",
+        )
         _monitor_boundary_corridors!(transport_model, _boundary_lines(p, req; warn=true))
     end
     return

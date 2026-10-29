@@ -63,7 +63,7 @@ function construct_requirement!(
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
     for req in requirements
         _check_emitters(p, req)
-        _check_contributors(p, req; demands=_uses_demands(B))
+        _check_contributors(p, req; demands=_uses_demands(B), end_use_demand=true)
     end
     add_expression!(
         container,

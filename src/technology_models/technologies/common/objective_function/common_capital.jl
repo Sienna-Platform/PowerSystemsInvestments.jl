@@ -9,35 +9,8 @@ function add_capital_cost!(
     ::V,
     tech_model::String,
 ) where {
-    T <: PSIP.SupplyTechnology,
-    U <: BuildCapacity,
-    V <: InvestmentTechnologyFormulation,
-}
-    for d in devices
-        capital_costs = PSIP.get_capital_costs(d)
-        value_curve = PSIP.get_capital_cost(capital_costs)
-        interconnection_cost = PSIP.get_interconnection_cost(capital_costs)
-        _add_cost_to_objective!(
-            container,
-            U(),
-            d,
-            value_curve,
-            V(),
-            tech_model;
-            interconnection_cost=interconnection_cost,
-        )
-    end
-    return
-end
-
-function add_capital_cost!(
-    container::SingleOptimizationContainer,
-    ::U,
-    devices::Vector{T},
-    ::V,
-    tech_model::String,
-) where {
-    T <: PSIP.TransmissionTechnology,
+    T <:
+    Union{PSIP.SupplyTechnology, PSIP.TransmissionTechnology, PSIP.DemandSideTechnology},
     U <: BuildCapacity,
     V <: InvestmentTechnologyFormulation,
 }
@@ -86,7 +59,7 @@ function add_fixed_om_cost!(
     ::V,
     tech_model::String,
 ) where {
-    T <: PSIP.SupplyTechnology,
+    T <: Union{PSIP.SupplyTechnology, PSIP.DemandSideTechnology},
     U <: CumulativeCapacity,
     V <: InvestmentTechnologyFormulation,
 }
