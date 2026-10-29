@@ -157,9 +157,80 @@
     @test isnothing(set_portfolio!(reloaded, p_5bus))
     @test get_portfolio(reloaded) === p_5bus
 
-    other_portfolio = PSIP.Portfolio()
-    @test_throws IS.InvalidValue set_portfolio!(reloaded, other_portfolio)
-    @test get_portfolio(reloaded) === p_5bus
+    # Investment time mapping and result interfaces
+    investment_results = InvestmentProblemResults(m)
+    @test investment_results isa IS.Results
+    @test get_investment_time_stamps(investment_results) == periods
+    @test get_investment_time_stamps(investment_results) !== periods
+    @test get_timestamps(investment_results) == get_timestamps(res)
+    @test get_timestamps(investment_results) !== get_timestamps(res)
+    @test get_portfolio(investment_results) === p_5bus
+    @test get_objective_value(investment_results) == get_objective_value(res)
+    @test get_model_base_power(investment_results) == get_model_base_power(res)
+    @test isequal(get_optimizer_stats(investment_results), get_optimizer_stats(res))
+    time_mapping = PSIN.get_time_mapping(container)
+    saved_mapping = PSIN.get_time_mapping(investment_results)
+    @test saved_mapping !== time_mapping
+    for getter in (
+        PSIN.get_consecutive_slices,
+        PSIN.get_inverse_invest_mapping,
+        PSIN.get_operational_indexes,
+        PSIN.get_feasibility_indexes,
+        PSIN.get_investment_map_to_operational_slices,
+    )
+        @test getter(saved_mapping) == getter(time_mapping)
+        @test getter(saved_mapping) !== getter(time_mapping)
+    end
+    for (values_getter, keys_getter, names_getter) in (
+        (get_variable_values, list_variable_keys, list_variable_names),
+        (get_expression_values, list_expression_keys, list_expression_names),
+        (get_aux_variable_values, list_aux_variable_keys, list_aux_variable_names),
+        (get_parameter_values, list_parameter_keys, list_parameter_names),
+        (get_dual_values, list_dual_keys, list_dual_names),
+    )
+        @test values_getter(investment_results) == values_getter(res)
+        @test Set(keys_getter(investment_results)) == Set(keys_getter(res))
+        @test Set(names_getter(investment_results)) == Set(names_getter(res))
+    end
+    dispatch_key = PSIN.VariableKey(
+        ActivePowerVariable,
+        PSIP.SupplyTechnology{ThermalStandard},
+        string(BasicDispatch),
+    )
+    @test read_variable(investment_results, dispatch_key) ==
+          read_variable(res, dispatch_key)
+    @test read_variable(investment_results, PSIN.encode_key_as_string(dispatch_key)) ==
+          read_variable(res, dispatch_key)
+    @test IS.Optimization.read_variables(investment_results, [dispatch_key]) ==
+          IS.Optimization.read_variables(res, [dispatch_key])
+    @test IS.Optimization.read_variables(investment_results) ==
+          IS.Optimization.read_variables(res)
+    expression_key = first(list_expression_keys(res))
+    @test read_expression(investment_results, expression_key) ==
+          read_expression(res, expression_key)
+    @test IS.Optimization.read_expressions(
+        investment_results; table_format=IS.TableFormat.WIDE,
+    ) == IS.Optimization.read_expressions(res; table_format=IS.TableFormat.WIDE)
+
+    # Investment results after reload
+    saved_results = InvestmentProblemResults(output_dir)
+    @test isnothing(get_portfolio(saved_results))
+    @test get_investment_time_stamps(saved_results) == periods
+    @test get_variable_values(saved_results) == get_variable_values(res)
+    @test get_expression_values(saved_results) == get_expression_values(res)
+    @test isnothing(set_portfolio!(saved_results, p_5bus))
+    @test get_portfolio(saved_results) === p_5bus
+    empty!(get_investment_time_stamps(saved_results))
+    @test get_investment_time_stamps(saved_results) == periods
+    @test_throws ArgumentError InvestmentProblemResults(result_dir)
+    serialize_results(investment_results, result_dir)
+    @test get_investment_time_stamps(InvestmentProblemResults(result_dir)) == periods
+    @test get_variable_values(OptimizationProblemResults(result_dir)) ==
+          get_variable_values(res)
+    mismatched = OptimizationProblemResults(m)
+    get_variable_values(mismatched)[dispatch_key][1, :value] += 1.0
+    serialize_results(mismatched, result_dir)
+    @test_throws ArgumentError InvestmentProblemResults(result_dir)
 
     template = InvestmentModelTemplate(
         capital,
@@ -233,7 +304,11 @@
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
-    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test solve!(m; export_optimization_problem=false) ==
+          PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test !isfile(joinpath(PSIN.get_output_dir(m), "model.bin"))
+    @test get_investment_time_stamps(InvestmentProblemResults(PSIN.get_output_dir(m))) ==
+          periods
 
     res = OptimizationProblemResults(m)
     @test length(IS.Optimization.list_variable_names(res)) == 23

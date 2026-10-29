@@ -7,6 +7,7 @@ export InvestmentModel
 export InvestmentModelTemplate
 export TransportModel
 export OptimizationProblemResults
+export InvestmentProblemResults
 
 ### Algorithms ###
 export SingleInstanceSolve
@@ -119,6 +120,7 @@ export list_aux_variable_names
 export list_parameter_names
 export list_dual_names
 export get_timestamps
+export get_investment_time_stamps
 export get_model_base_power
 export get_objective_value
 export get_optimizer_stats
