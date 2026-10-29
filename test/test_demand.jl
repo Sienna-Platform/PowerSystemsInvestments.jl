@@ -478,3 +478,209 @@ _reserve_margin() = PSIP.CapacityReserveMargin(;
         ),
     )
 end
+
+# A 100 MW flexible demand at 50% except in hour 18 (100%) and, by default, hour 19 (80%),
+# with up to 80 MW of gas, so hour 18 has 20 MW more demand than gas. A small shift cost
+# keeps the model from shifting where it gains nothing.
+function _flexible_test_model(;
+    gas_max=80.0,
+    hour_19=0.8,
+    shift_cost=LinearCurve(0.01),
+    kwargs...,
+)
+    shape = [h == 18 ? 1.0 : h == 19 ? hour_19 : 0.5 for h in 0:23]
+    demand = _demand(
+        "demand";
+        conformity=PSY.LoadConformity.NON_CONFORMING,
+        peak_demand_mw=100.0,
+        value_of_lost_load=10_000.0,
+        flexible_fraction=0.2,
+        shift_cost=shift_cost,
+        kwargs...,
+    )
+    return _demand_test_model(
+        [(demand, shape, nothing)];
+        formulation=FlexibleDemandDispatch,
+        gas_max=gas_max,
+    )
+end
+
+# Solved values of a flexible demand variable in the hours of the first representative day
+function _flexible_values(m, variable_type, name="demand")
+    variable = PSIN.get_variable(
+        PSIN.get_optimization_container(m),
+        variable_type(),
+        DEMAND_TYPE,
+        "FlexibleDemandDispatch",
+    )
+    return [JuMP.value(variable[name, h + 1]) for h in 0:23]
+end
+
+function _solved_flexible(m)
+    @test _build_status(m) == BUILT
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    return m
+end
+
+@testset "Flexible demand without a window is its baseline" begin
+    m = _solved_flexible(_flexible_test_model())
+    # 20 MW of hour 18 is shed, as under UnservedDemandDispatch
+    @test _flexible_values(m, UnservedDemandVariable, "demand__tier1")[19] ≈ 20.0
+    @test all(≈(0.0; atol=1e-6), _flexible_values(m, DemandDeferredVariable))
+    @test all(≈(0.0; atol=1e-6), _flexible_values(m, DemandRecoveredVariable))
+end
+
+@testset "Flexible demand is delayed within its window" begin
+    # Hour 19 has no spare gas, so a one-hour delay only works by also delaying 16 MW (the
+    # flexible share) of hour 19 to hour 20, and 4 MW of hour 18 is shed
+    m = _solved_flexible(_flexible_test_model(; max_demand_delay=1.0))
+    @test _flexible_values(m, UnservedDemandVariable, "demand__tier1")[19] ≈ 4.0
+    # With two hours the 20 MW are served in hour 20, the first with spare gas
+    m = _solved_flexible(_flexible_test_model(; max_demand_delay=2.0))
+    unserved = _flexible_values(m, UnservedDemandVariable, "demand__tier1")
+    deferred = _flexible_values(m, DemandDeferredVariable)
+    recovered = _flexible_values(m, DemandRecoveredVariable)
+    @test all(≈(0.0; atol=1e-6), unserved)
+    @test deferred[19] ≈ 20.0
+    @test recovered[21] ≈ 20.0
+    @test sum(deferred) ≈ 20.0
+    @test sum(recovered) ≈ 20.0
+end
+
+@testset "Flexible demand is advanced within its window" begin
+    m = _solved_flexible(_flexible_test_model(; max_demand_advance=2.0))
+    unserved = _flexible_values(m, UnservedDemandVariable, "demand__tier1")
+    deferred = _flexible_values(m, DemandDeferredVariable)
+    recovered = _flexible_values(m, DemandRecoveredVariable)
+    backlog = _flexible_values(m, DemandBacklogVariable)
+    @test all(≈(0.0; atol=1e-6), unserved)
+    @test deferred[19] ≈ 20.0
+    # Served in hours 16 and 17, so the backlog is negative before hour 18
+    @test recovered[17] + recovered[18] ≈ 20.0
+    @test backlog[18] ≈ -20.0
+    @test all(≈(0.0; atol=1e-6), recovered[19:24])
+end
+
+@testset "Shifting losses increase consumption" begin
+    m = _solved_flexible(
+        _flexible_test_model(; hour_19=0.5, max_demand_delay=2.0, shift_efficiency=0.8),
+    )
+    deferred = _flexible_values(m, DemandDeferredVariable)
+    recovered = _flexible_values(m, DemandRecoveredVariable)
+    @test sum(deferred) ≈ 20.0
+    # 20 MWh deferred take 25 MWh to serve, and the backlog closes over the day
+    @test sum(recovered) ≈ 25.0
+    @test sum(deferred .- 0.8 .* recovered) ≈ 0.0 atol = 1e-6
+end
+
+@testset "Flexible demand constraints and costs" begin
+    m = _flexible_test_model(;
+        max_demand_delay=2.0,
+        shift_cost=LinearCurve(5.0),
+        max_demand_curtailment=0.1,
+        curtailment_cost=LinearCurve(500.0),
+    )
+    @test _build_status(m) == BUILT
+    container = PSIN.get_optimization_container(m)
+    variable(type) =
+        PSIN.get_variable(container, type(), DEMAND_TYPE, "FlexibleDemandDispatch")
+    deferred = variable(DemandDeferredVariable)
+    recovered = variable(DemandRecoveredVariable)
+    unserved = variable(UnservedDemandVariable)
+
+    # The shift cost is charged once, on deferred demand, with the same weight and
+    # discounting as unserved demand
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    @test JuMP.coefficient(objective, deferred["demand", 19]) / 5.0 ≈
+          JuMP.coefficient(objective, unserved["demand__tier2", 19]) / 10_000.0
+    @test JuMP.coefficient(objective, recovered["demand", 19]) == 0.0
+
+    # Deferred and unserved demand together are at most the demand
+    limit = JuMP.constraint_object(
+        PSIN.get_constraint(
+            container,
+            DemandDeferralLimitConstraint(),
+            DEMAND_TYPE,
+            "FlexibleDemandDispatch",
+        )[
+            "demand",
+            19,
+        ],
+    )
+    @test JuMP.coefficient(limit.func, deferred["demand", 19]) == 1.0
+    @test JuMP.coefficient(limit.func, unserved["demand__tier1", 19]) == 1.0
+    @test JuMP.coefficient(limit.func, unserved["demand__tier2", 19]) == 1.0
+    @test limit.set.upper ≈ 100.0
+
+    # Bounds: the flexible share of the step's demand and of the day's peak
+    @test JuMP.upper_bound(deferred["demand", 1]) ≈ 10.0
+    @test JuMP.upper_bound(recovered["demand", 1]) ≈ 20.0
+end
+
+@testset "Flexible demand in requirements" begin
+    # Coefficient of a flexible demand variable of the first hour in a requirement constraint
+    function coefficient(m, constraint_type, requirement_type, name, variable_type)
+        container = PSIN.get_optimization_container(m)
+        constraint =
+            PSIN.get_constraint(container, constraint_type(), requirement_type)[name, 1]
+        variable = PSIN.get_variable(
+            container,
+            variable_type(),
+            DEMAND_TYPE,
+            "FlexibleDemandDispatch",
+        )
+        return JuMP.coefficient(
+            JuMP.constraint_object(constraint).func,
+            variable["demand", 1],
+        )
+    end
+
+    # The reserve margin credits the net demand shifted out of a step
+    m = _flexible_test_model(; max_demand_delay=2.0)
+    _attach_requirement!(m, _reserve_margin(), RequirementCapacityReserveMargin)
+    @test _build_status(m) == BUILT
+    args = (CapacityReserveMarginConstraint, PSIP.CapacityReserveMargin, "reserve_margin")
+    @test coefficient(m, args..., DemandDeferredVariable) == 1.0
+    @test coefficient(m, args..., DemandRecoveredVariable) == -1.0
+
+    # Hourly matching covers demand where it is served
+    m = _flexible_test_model(; max_demand_delay=2.0)
+    _attach_requirement!(
+        m,
+        PSIP.HourlyMatching(; name="hourly_matching", id=2, available=true),
+        RequirementHourlyMatching,
+    )
+    @test _build_status(m) == BUILT
+    args = (HourlyMatchingConstraint, PSIP.HourlyMatching, "hourly_matching")
+    @test coefficient(m, args..., DemandDeferredVariable) == 1.0
+    @test coefficient(m, args..., DemandRecoveredVariable) == -1.0
+end
+
+@testset "Flexible demand checks" begin
+    flexible(; kwargs...) = _demand("demand"; flexible_fraction=0.2, kwargs...)
+    @test_throws r"flexible_fraction" PSIN.check_flexible_demand(
+        flexible(; flexible_fraction=1.5),
+    )
+    @test_throws r"shift_efficiency" PSIN.check_flexible_demand(
+        flexible(; max_demand_delay=2.0, shift_efficiency=0.0),
+    )
+    @test_throws r"windows" PSIN.check_flexible_demand(flexible(; max_demand_delay=-1.0))
+    @test_throws r"not supported" PSIN.check_flexible_demand(
+        flexible(;
+            max_demand_delay=2.0,
+            shift_cost=PiecewiseIncrementalCurve(0.0, [0.0, 1.0], [5.0]),
+        ),
+    )
+    @test_logs (:warn, r"none of its demand can be shifted") PSIN.check_flexible_demand(
+        flexible(),
+    )
+    @test_logs PSIN.check_flexible_demand(flexible(; max_demand_advance=1.0))
+
+    # Windows in time steps: 0 forbids shifting, and a window stays within its day
+    m = _flexible_test_model()
+    @test _build_status(m) == BUILT
+    time_mapping = PSIN.get_time_mapping(PSIN.get_optimization_container(m))
+    @test PSIN._shift_window(time_mapping, 1, 0.0) == 0
+    @test PSIN._shift_window(time_mapping, 1, 2.5) == 3
+    @test PSIN._shift_window(time_mapping, 1, 100.0) == 23
+end

@@ -414,6 +414,11 @@ end
 
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        # The JuMP model is only written to the output directory when asked for
+        @test !isfile(joinpath(path, "jump_model.json"))
+        @test solve!(model; output_dir=path, export_optimization_problem=true) ==
+              PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        @test isfile(joinpath(path, "jump_model.json"))
 
         # Hydro is the only supply, so its daily budget of 0.5 × 24 hours of capacity must
         # cover the daily demand of 2400 MWh (2030) and 2880 MWh (2035)

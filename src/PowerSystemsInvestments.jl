@@ -42,6 +42,7 @@ export BasicDispatch
 export BasicDispatchWithBudget
 export BasicDispatchWithLosses
 export UnservedDemandDispatch
+export FlexibleDemandDispatch
 export ContinuousThermalCommitment
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
@@ -74,6 +75,10 @@ export CarbonCapConstraint
 export CapacityReserveMarginConstraint
 export CapacityRequirementConstraint
 export HourlyMatchingConstraint
+export DemandBacklogConstraint
+export DemandDelayConstraint
+export DemandAdvanceConstraint
+export DemandDeferralLimitConstraint
 export RequirementSlackVariable
 export HydroEnergyBudgetConstraint
 
@@ -81,6 +86,9 @@ export HydroEnergyBudgetConstraint
 export BuildCapacity
 export ActivePowerVariable
 export UnservedDemandVariable
+export DemandDeferredVariable
+export DemandRecoveredVariable
+export DemandBacklogVariable
 export BuildEnergyCapacity
 export BuildPowerCapacity
 export BuildWindCapacity

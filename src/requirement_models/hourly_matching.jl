@@ -134,19 +134,29 @@ function add_constraints!(
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             demand = zeros(length(time_slices))
-            # Unserved demand does not need to be matched
-            unserved = Dict(t => JuMP.AffExpr(0.0) for t in time_slices)
+            # Unserved demand does not need to be matched, and shifted demand is matched
+            # where it is served
+            adjustment = Dict(t => JuMP.AffExpr(0.0) for t in time_slices)
             for d in demands
+                formulation = _demand_formulation(names_to_model_map, d)
                 for (ix, t) in enumerate(time_slices)
                     demand[ix] += JuMP.constant(demand_expression[PSIP.get_name(d), t])
                 end
                 _add_unserved_demand!(
-                    t -> unserved[t],
+                    t -> adjustment[t],
                     container,
                     d,
-                    _demand_formulation(names_to_model_map, d),
+                    formulation,
                     time_slices,
                     1.0,
+                )
+                _add_demand_shift!(
+                    t -> adjustment[t],
+                    container,
+                    d,
+                    formulation,
+                    time_slices,
+                    -1.0,
                 )
             end
             slack_cost = if req_name in slack_names
@@ -182,7 +192,7 @@ function add_constraints!(
                         slack_cost * slacks[req_name, t],
                     )
                 end
-                JuMP.add_to_expression!(output, unserved[t])
+                JuMP.add_to_expression!(output, adjustment[t])
                 con[req_name, t] = JuMP.@constraint(jump_model, output >= demand[ix])
             end
         end

@@ -316,7 +316,8 @@ function _add_eligible_generation!(
 end
 
 # Weighted demand of the contributing demand technologies of a requirement, plus the losses
-# of its contributing storage. The demand is gross, or with `served` net of unserved demand.
+# of its contributing storage. The demand is gross, or with `served` net of unserved demand;
+# demand shifted in time is counted where it is served, so shifting losses count.
 function _add_demand_and_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -330,15 +331,17 @@ function _add_demand_and_storage_losses!(
     weight = get_time_step_weight(container, op_ix)
     demand = get_expression(container, DemandExpression(), PSIP.Portfolio)
     for d in _contributing_demands(p, requirement)
+        formulation = _demand_formulation(names_to_model_map, d)
         for t in time_slices
             JuMP.add_to_expression!(expression, weight, demand[PSIP.get_name(d), t])
         end
+        _add_demand_shift!(_ -> expression, container, d, formulation, time_slices, weight)
         if served
             _add_unserved_demand!(
                 _ -> expression,
                 container,
                 d,
-                _demand_formulation(names_to_model_map, d),
+                formulation,
                 time_slices,
                 -weight,
             )

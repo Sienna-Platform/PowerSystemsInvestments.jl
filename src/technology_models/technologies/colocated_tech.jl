@@ -14,11 +14,11 @@ get_expression_multiplier(::WeightedEnergyGeneration, ::ActiveInPowerVariable, :
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::FeasibilityTechnologyFormulation) = 1.0
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::FeasibilityTechnologyFormulation) = -1.0
 
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_power_limits(d).max
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_energy_limits(d).max
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity) = PSIP.get_capacity_limits_wind(d).max
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity) = PSIP.get_capacity_limits_solar(d).max
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = PSIP.get_max_inverter_capacity(d)
+get_cumulative_limits(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_power_limits(d)
+get_cumulative_limits(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_energy_limits(d)
+get_cumulative_limits(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity) = PSIP.get_capacity_limits_wind(d)
+get_cumulative_limits(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity) = PSIP.get_capacity_limits_solar(d)
+get_cumulative_limits(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = (min=PSIP.get_min_inverter_capacity(d), max=PSIP.get_max_inverter_capacity(d))
 
 get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCapacity) = (get_power_capital_cost(d, PSIP.get_capital_costs_storage(d)), PSIP.get_interconnection_cost(PSIP.get_capital_costs_storage(d)))
 get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = (PSIP.get_energy_capital_cost(PSIP.get_capital_costs_storage(d)), 0.0)
@@ -136,7 +136,7 @@ function add_constraints!(
     devices::U,
     formulation::S,
 ) where {
-    T <: MaximumCumulativeInvestmentConstraint,
+    T <: CumulativeInvestmentLimitConstraint,
     U <: Vector{D},
     V <: CumulativeInvestmentExpressionType,
     S <: InvestmentTechnologyFormulation,
@@ -146,7 +146,7 @@ function add_constraints!(
     tech_model = string(S)
 
     device_names = PSIP.get_name.(devices)
-    con_ub = add_constraints_container!(
+    con = add_constraints_container!(
         container,
         T(),
         D,
@@ -159,11 +159,12 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        max_capacity = get_max_cap(d, V())
+        limits = get_cumulative_limits(d, V())
+        _check_cumulative_limits(d, limits)
         for t in time_steps
-            con_ub[name, t] = JuMP.@constraint(
+            con[name, t] = JuMP.@constraint(
                 get_jump_model(container),
-                installed_cap[name, t] <= max_capacity
+                limits.min <= installed_cap[name, t] <= limits.max
             )
         end
     end

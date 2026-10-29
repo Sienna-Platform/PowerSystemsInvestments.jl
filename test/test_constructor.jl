@@ -358,7 +358,7 @@ end
 
     c = PSIN.get_constraint(
         container,
-        PSIN.MaximumCumulativeCapacity(),
+        PSIN.CumulativeCapacityLimit(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
         "ContinuousInvestment",
     )
@@ -392,7 +392,7 @@ end
 
     c = PSIN.get_constraint(
         container,
-        PSIN.MaximumCumulativeCapacity(),
+        PSIN.CumulativeCapacityLimit(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
         "ContinuousInvestment",
     )

@@ -389,15 +389,26 @@ function add_constraints!(
             for t in keys(demand)
                 demand[t] += JuMP.constant(demand_expression[PSIP.get_name(d), t])
             end
-            # Price-responsive demand counts as capacity; involuntary shedding does not
+            # Curtailment and the net demand shifted out of a time step count as capacity;
+            # involuntary shedding does not. The shift is credited in full until requirements
+            # have a derating.
+            formulation = _demand_formulation(names_to_model_map, d)
             _add_unserved_demand!(
                 t -> reserve[t],
                 container,
                 d,
-                _demand_formulation(names_to_model_map, d),
+                formulation,
                 keys(reserve),
                 1.0;
                 credited=true,
+            )
+            _add_demand_shift!(
+                t -> reserve[t],
+                container,
+                d,
+                formulation,
+                keys(reserve),
+                -1.0,
             )
         end
 

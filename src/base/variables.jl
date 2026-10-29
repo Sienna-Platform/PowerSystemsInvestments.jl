@@ -114,6 +114,21 @@ Demand left unserved in one tier of a demand's unserved demand cost (MW)
 struct UnservedDemandVariable <: OperationsVariableType end
 
 """
+Flexible demand deferred out of a time step: served later, or already served earlier (MW)
+"""
+struct DemandDeferredVariable <: OperationsVariableType end
+
+"""
+Flexible demand served in a time step instead of its original one (MW)
+"""
+struct DemandRecoveredVariable <: OperationsVariableType end
+
+"""
+Flexible demand deferred and not yet served (MWh); negative when demand was served early
+"""
+struct DemandBacklogVariable <: OperationsVariableType end
+
+"""
 Whether a prospective PTDF branch is built by an investment period.
 """
 struct BranchBuiltVariable <: InvestmentVariableType end
