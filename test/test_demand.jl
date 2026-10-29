@@ -6,7 +6,7 @@ const DEMAND_TEST_DAYS = [
     collect(DateTime(year, 1, 1, 0):Hour(1):DateTime(year, 1, 1, 23)) for
     year in (2030, 2035)
 ]
-const DEMAND_TYPE = PSIP.DemandRequirement{PSY.PowerLoad}
+const DEMAND_TYPE = PSIP.ProjectedDemand{PSY.PowerLoad}
 const GAS_TYPE = PSIP.SupplyTechnology{PSY.ThermalStandard}
 
 function _demand_financial_data()
@@ -263,13 +263,20 @@ end
     end
 end
 
-# One demand of 100 MW in every hour with the given unserved demand cost
-function _unserved_test_model(cost; kwargs...)
+# One demand of 100 MW in every hour, with the given value of lost load and curtailment
+function _unserved_test_model(;
+    value_of_lost_load,
+    max_demand_curtailment=0.0,
+    curtailment_cost=LinearCurve(0.0),
+    kwargs...,
+)
     demand = _demand(
         "demand";
         conformity=PSY.LoadConformity.NON_CONFORMING,
         peak_demand_mw=100.0,
-        unserved_demand_cost=cost,
+        value_of_lost_load=value_of_lost_load,
+        max_demand_curtailment=max_demand_curtailment,
+        curtailment_cost=curtailment_cost,
     )
     return _demand_test_model(
         [(demand, ones(24), nothing)];
@@ -277,6 +284,14 @@ function _unserved_test_model(cost; kwargs...)
         kwargs...,
     )
 end
+
+# 20% of demand curtailable at 30 USD/MWh, 30% at 70 and the rest shed at 1000
+_tiered_test_model(; kwargs...) = _unserved_test_model(;
+    value_of_lost_load=1000.0,
+    max_demand_curtailment=0.5,
+    curtailment_cost=PiecewiseIncrementalCurve(0.0, [0.0, 0.2, 0.5], [30.0, 70.0]),
+    kwargs...,
+)
 
 # Solved unserved demand of each tier in the first hour
 function _solved_unserved(m)
@@ -291,64 +306,91 @@ function _solved_unserved(m)
     return Dict(name => JuMP.value(unserved[name, 1]) for name in axes(unserved, 1))
 end
 
-@testset "Unserved demand with a single price" begin
+@testset "Unserved demand at the value of lost load" begin
     # Shedding is cheaper than gas
-    @test _solved_unserved(_unserved_test_model(LinearCurve(30.0)))["demand__tier1"] ≈ 100.0
+    @test _solved_unserved(_unserved_test_model(; value_of_lost_load=30.0))["demand__tier1"] ≈
+          100.0
     # Gas is cheaper, but limited to 60 MW
-    @test _solved_unserved(_unserved_test_model(LinearCurve(80.0); gas_max=60.0))["demand__tier1"] ≈
-          40.0
-    @test _solved_unserved(_unserved_test_model(LinearCurve(80.0)))["demand__tier1"] ≈ 0.0 atol =
-        1e-6
+    unserved =
+        _solved_unserved(_unserved_test_model(; value_of_lost_load=80.0, gas_max=60.0))
+    @test unserved["demand__tier1"] ≈ 40.0
+    unserved = _solved_unserved(_unserved_test_model(; value_of_lost_load=80.0))
+    @test unserved["demand__tier1"] ≈ 0.0 atol = 1e-6
 end
 
-@testset "Unserved demand tiers shed in price order" begin
-    # 20% of demand at 30 USD/MWh, 30% at 70 and the rest at 1000
-    cost = PiecewiseIncrementalCurve(0.0, [0.0, 0.2, 0.5, 1.0], [30.0, 70.0, 1000.0])
-    unserved = _solved_unserved(_unserved_test_model(cost))
+@testset "Curtailment tiers shed in price order" begin
+    unserved = _solved_unserved(_tiered_test_model())
     @test unserved["demand__tier1"] ≈ 20.0
     @test unserved["demand__tier2"] ≈ 0.0 atol = 1e-6
     @test unserved["demand__tier3"] ≈ 0.0 atol = 1e-6
     # With 60 MW of gas, the next cheapest tier covers the remaining 20 MW
-    unserved = _solved_unserved(_unserved_test_model(cost; gas_max=60.0))
+    unserved = _solved_unserved(_tiered_test_model(; gas_max=60.0))
     @test unserved["demand__tier1"] ≈ 20.0
     @test unserved["demand__tier2"] ≈ 20.0
     @test unserved["demand__tier3"] ≈ 0.0 atol = 1e-6
+    # A single curtailment price covers all curtailable demand, and shedding only the rest
+    unserved = _solved_unserved(
+        _unserved_test_model(;
+            value_of_lost_load=1000.0,
+            max_demand_curtailment=0.3,
+            curtailment_cost=LinearCurve(30.0),
+            gas_max=50.0,
+        ),
+    )
+    @test unserved["demand__tier1"] ≈ 30.0
+    @test unserved["demand__tier2"] ≈ 20.0
 
-    @test_throws r"must start at 0" PSIN._unserved_tiers(
-        PiecewiseIncrementalCurve(0.0, [0.1, 1.0], [30.0]),
+    tiers(; kwargs...) = PSIN._unserved_tiers(_demand("demand"; kwargs...))
+    @test tiers(; value_of_lost_load=500.0) == [(1.0, 500.0)]
+    @test_throws r"must start at 0" tiers(;
+        max_demand_curtailment=0.5,
+        curtailment_cost=PiecewiseIncrementalCurve(0.0, [0.1, 0.5], [30.0]),
     )
-    @test_throws r"end at most at 1" PSIN._unserved_tiers(
-        PiecewiseIncrementalCurve(0.0, [0.0, 1.5], [30.0]),
+    @test_throws r"end at max_demand_curtailment" tiers(;
+        max_demand_curtailment=0.5,
+        curtailment_cost=PiecewiseIncrementalCurve(0.0, [0.0, 0.4], [30.0]),
     )
-    @test_throws r"not supported" PSIN._unserved_tiers(
-        PiecewisePointCurve([(0.0, 0.0), (1.0, 1.0)]),
+    @test_throws r"between 0 and 1" tiers(; max_demand_curtailment=1.5)
+    @test_throws r"not supported" tiers(;
+        max_demand_curtailment=0.5,
+        curtailment_cost=PiecewisePointCurve([(0.0, 0.0), (0.5, 1.0)]),
     )
 end
 
-@testset "Quadratic unserved demand cost" begin
-    # The marginal cost of unserved demand, 2aU + b, equals the gas cost at U = (50 - 10) / 1
-    unserved = _solved_unserved(_unserved_test_model(QuadraticCurve(0.5, 10.0, 0.0)))
-    @test unserved["demand__tier1"] ≈ 40.0 rtol = 1e-4
-end
+@testset "Curtailment fields that are set inconsistently warn" begin
+    # Adds the unserved demand variables of the model's demand in a new container
+    function add_unserved_variables(m)
+        p = PSIN.get_portfolio(m)
+        container = PSIN.SingleOptimizationContainer(PSIN.Settings(p), JuMP.Model())
+        PSIN.init_optimization_container!(container, PSIN.get_template(m), p)
+        PSIN.initialize_demands!(container, p)
+        demand = PSIP.get_technology(DEMAND_TYPE, p, "demand")
+        return () -> PSIN.add_variable!(
+            container,
+            UnservedDemandVariable(),
+            [demand],
+            UnservedDemandDispatch(),
+        )
+    end
 
-@testset "Quadratic unserved demand cost with discrete variables warns" begin
-    m = _unserved_test_model(
-        QuadraticCurve(0.5, 10.0, 0.0);
-        gas_investment=IntegerInvestment,
+    free = add_unserved_variables(
+        _unserved_test_model(; value_of_lost_load=1000.0, max_demand_curtailment=0.2),
     )
-    @test _build_status(m) == BUILT
-    template = PSIN.get_template(m)
-    # The model stage, which the build already ran, warns once the discrete variables exist
-    @test_logs (:warn, r"mixed-integer QP") match_mode = :any PSIN.construct_technologies!(
-        PSIN.get_optimization_container(m),
-        PSIN.get_portfolio(m),
-        ["demand"],
-        PSIN.ModelConstructStage(),
-        PSIN.get_operation_model(template),
-        DEMAND_TYPE,
-        UnservedDemandDispatch,
-        PSIN.get_transport_model(template),
-        PSIN.TechnologyModel[],
+    @test_logs (:warn, r"at no cost") free()
+    unused = add_unserved_variables(
+        _unserved_test_model(;
+            value_of_lost_load=1000.0,
+            curtailment_cost=LinearCurve(30.0),
+        ),
+    )
+    @test_logs (:warn, r"never curtailed") unused()
+    consistent = add_unserved_variables(_tiered_test_model())
+    @test_logs min_level = Logging.Warn consistent()
+    @test_throws r"Is max_demand_curtailment unset" PSIN._unserved_tiers(
+        _demand(
+            "demand";
+            curtailment_cost=PiecewiseIncrementalCurve(0.0, [0.0, 0.2], [30.0]),
+        ),
     )
 end
 
@@ -394,10 +436,8 @@ _reserve_margin() = PSIP.CapacityReserveMargin(;
 )
 
 @testset "Unserved demand in requirements" begin
-    cost = PiecewiseIncrementalCurve(0.0, [0.0, 0.2, 0.5, 1.0], [30.0, 70.0, 1000.0])
-
-    # The reserve margin credits every tier but the most expensive
-    m = _unserved_test_model(cost)
+    # The reserve margin credits curtailment, not involuntary shedding
+    m = _tiered_test_model()
     _attach_requirement!(m, _reserve_margin(), RequirementCapacityReserveMargin)
     @test _build_status(m) == BUILT
     @test _unserved_coefficients(
@@ -407,8 +447,8 @@ _reserve_margin() = PSIP.CapacityReserveMargin(;
         "reserve_margin",
     ) == Dict("demand__tier1" => 1.0, "demand__tier2" => 1.0, "demand__tier3" => 0.0)
 
-    # A single price is involuntary shedding, so it gets no credit
-    m = _unserved_test_model(LinearCurve(1000.0))
+    # Without curtailment there is nothing to credit
+    m = _unserved_test_model(; value_of_lost_load=1000.0)
     _attach_requirement!(m, _reserve_margin(), RequirementCapacityReserveMargin)
     @test _build_status(m) == BUILT
     @test _unserved_coefficients(
@@ -419,7 +459,7 @@ _reserve_margin() = PSIP.CapacityReserveMargin(;
     ) == Dict("demand__tier1" => 0.0)
 
     # Hourly matching only covers the demand that is served
-    m = _unserved_test_model(cost)
+    m = _tiered_test_model()
     _attach_requirement!(
         m,
         PSIP.HourlyMatching(; name="hourly_matching", id=2, available=true),

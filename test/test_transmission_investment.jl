@@ -15,7 +15,7 @@ function _transmission_template(transport)
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -67,8 +67,8 @@ function _nodal_line_model(formulation)
         (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind", 2),
         (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal", 1),
         (PSIP.SupplyTechnology{PSY.ThermalStandard}, "expensive_thermal", 1),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1", 1),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2", 2),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand1", 1),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand2", 2),
     )
         PSIP.set_region!(PSIP.get_technology(type, p_5bus, name), [nodes[node]])
     end

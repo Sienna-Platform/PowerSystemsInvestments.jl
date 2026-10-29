@@ -22,7 +22,7 @@
     set_technology_model!(
         template,
         ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -191,7 +191,7 @@ function _ramp_test_solution(ramp_limits, start_up_cost)
     set_technology_model!(
         template,
         ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -285,7 +285,7 @@ function _commitment_cost_test_model(operation_cost)
     set_technology_model!(
         template,
         ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,

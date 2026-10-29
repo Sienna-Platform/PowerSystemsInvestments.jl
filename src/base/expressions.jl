@@ -7,7 +7,7 @@ abstract type CumulativeInvestmentExpressionType <: InvestmentExpressionType end
 struct SupplyTotal <: OperationsExpressionType end
 struct DemandTotal <: OperationsExpressionType end
 struct EnergyBalance <: OperationsExpressionType end
-# Demand of each DemandRequirement (MW), a constant at every time step
+# Demand of each ProjectedDemand (MW), a constant at every time step
 struct DemandExpression <: OperationsExpressionType end
 struct PTDFBranchFlow <: OperationsExpressionType end
 

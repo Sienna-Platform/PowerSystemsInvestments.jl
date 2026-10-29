@@ -13,7 +13,7 @@ function _set_multi_region_supply_models!(template::InvestmentModelTemplate)
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -152,7 +152,7 @@ end
         PSIP.set_region!(thermal, [nodes[1]])
     end
     for (name, node) in zip(["demand1", "demand2"], nodes)
-        demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, name)
+        demand = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p_5bus, name)
         PSIP.set_region!(demand, [node])
     end
 

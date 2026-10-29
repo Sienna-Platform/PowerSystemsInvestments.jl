@@ -111,7 +111,7 @@ end
 
     #Define technology models
     demand_model = PSIN.TechnologyModel(
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.StaticLoadInvestment,
         PSIN.BasicDispatch,
         PSIN.BasicDispatchFeasibility,
@@ -140,14 +140,14 @@ end
 
     # Argument Stage
 
-    #DemandRequirements
+    #ProjectedDemands
     PSIN.construct_technologies!(
         container,
         p_5bus,
         ["demand1"],
         PSIN.ArgumentConstructStage(),
         capital,
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.StaticLoadInvestment,
         transport_model,
         [demand_model],
@@ -158,7 +158,7 @@ end
         ["demand1"],
         PSIN.ArgumentConstructStage(),
         operations,
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.BasicDispatch,
         transport_model,
         [demand_model],
@@ -296,14 +296,14 @@ end
 
     # Model Stage
 
-    #DemandRequirement{PowerLoad}
+    #ProjectedDemand{PowerLoad}
     PSIN.construct_technologies!(
         container,
         p_5bus,
         ["demand1"],
         PSIN.ModelConstructStage(),
         capital,
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.StaticLoadInvestment,
         transport_model,
         [demand_model],
@@ -314,7 +314,7 @@ end
         ["demand1"],
         PSIN.ModelConstructStage(),
         operations,
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.BasicDispatch,
         transport_model,
         [demand_model],

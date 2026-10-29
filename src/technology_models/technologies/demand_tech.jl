@@ -1,7 +1,6 @@
-_supported_investment_formulations(::Type{<:PSIP.DemandRequirement}) =
-    (StaticLoadInvestment,)
+_supported_investment_formulations(::Type{<:PSIP.ProjectedDemand}) = (StaticLoadInvestment,)
 
-function get_default_time_series_names(::Type{U}) where {U <: PSIP.DemandRequirement}
+function get_default_time_series_names(::Type{U}) where {U <: PSIP.ProjectedDemand}
     # TODO: We need to discuss about an API for timeseries names for users
     return "ops_demand"
 end
@@ -12,7 +11,7 @@ function get_default_attributes(
     ::Type{W},
     ::Type{X},
 ) where {
-    U <: PSIP.DemandRequirement,
+    U <: PSIP.ProjectedDemand,
     V <: InvestmentTechnologyFormulation,
     W <: OperationsTechnologyFormulation,
     X <: FeasibilityTechnologyFormulation,
@@ -21,49 +20,67 @@ function get_default_attributes(
 end
 
 # Region of the energy balance a demand is in
-_balance_region(::TransportModel{SingleRegionBalanceModel}, ::PSIP.DemandRequirement) =
+_balance_region(::TransportModel{SingleRegionBalanceModel}, ::PSIP.ProjectedDemand) =
     SINGLE_REGION
-_balance_region(::TransportModel, d::PSIP.DemandRequirement) =
+_balance_region(::TransportModel, d::PSIP.ProjectedDemand) =
     PSIP.get_name(only(PSIP.get_region(d)))
 
 ################### Unserved demand ####################
 
-# Tiers of a demand's unserved demand cost: the fraction of demand each one covers and its
-# price (USD/MWh). The quadratic term is added to the objective separately (_quadratic_term).
-function _unserved_tiers(curve::Union{PSY.LinearCurve, PSY.QuadraticCurve})
+# Curtailment tiers of a demand: the fraction of demand each one covers and its price (USD/MWh)
+function _curtailment_tiers(curve::PSY.LinearCurve, max_curtailment::Float64)
     if IS.get_constant_term(curve) != 0.0
-        error("An unserved demand cost must be zero when all demand is served.")
+        error("A curtailment cost must be zero when nothing is curtailed.")
     end
-    return [(1.0, IS.get_proportional_term(curve))]
+    max_curtailment == 0.0 && return Tuple{Float64, Float64}[]
+    return [(max_curtailment, IS.get_proportional_term(curve))]
 end
 
-function _unserved_tiers(curve::PSY.PiecewiseIncrementalCurve)
+function _curtailment_tiers(curve::PSY.PiecewiseIncrementalCurve, max_curtailment::Float64)
     x_coords = IS.get_x_coords(curve)
     slopes = IS.get_slopes(curve)
-    if first(x_coords) != 0.0 || last(x_coords) > 1.0 || !issorted(x_coords; lt=<=)
+    if first(x_coords) != 0.0 ||
+       !isapprox(last(x_coords), max_curtailment) ||
+       !issorted(x_coords; lt=<=)
         error(
-            "The x coordinates of a piecewise unserved demand cost are fractions of demand: " *
-            "they must start at 0, increase, and end at most at 1. Got $(x_coords).",
+            "The x coordinates of a piecewise curtailment cost are fractions of demand: " *
+            "they must start at 0, increase, and end at max_demand_curtailment " *
+            "($(max_curtailment)). Got $(x_coords)." *
+            (max_curtailment == 0.0 ? " Is max_demand_curtailment unset?" : ""),
         )
-    end
-    if any(<(0.0), slopes)
-        error("The prices of an unserved demand cost must be non-negative. Got $(slopes).")
     end
     return [(x_coords[k + 1] - x_coords[k], slopes[k]) for k in eachindex(slopes)]
 end
 
-function _unserved_tiers(curve::PSY.ValueCurve)
+function _curtailment_tiers(curve::PSY.ValueCurve, ::Float64)
     error(
-        "Unserved demand costs of type $(typeof(curve)) are not supported. Use a " *
-        "LinearCurve, a PiecewiseIncrementalCurve or a QuadraticCurve.",
+        "Curtailment costs of type $(typeof(curve)) are not supported. Use a LinearCurve " *
+        "or a PiecewiseIncrementalCurve.",
     )
 end
 
-_unserved_tiers(d::PSIP.DemandRequirement) =
-    _unserved_tiers(PSIP.get_unserved_demand_cost(d))
+# Tiers of a demand's unserved demand: its curtailment tiers, then the rest of the demand,
+# shed involuntarily at the value of lost load
+function _unserved_tiers(d::PSIP.ProjectedDemand)
+    max_curtailment = PSIP.get_max_demand_curtailment(d)
+    if !(0.0 <= max_curtailment <= 1.0)
+        error(
+            "max_demand_curtailment of demand $(PSIP.get_name(d)) is a fraction of " *
+            "demand and must be between 0 and 1. Got $(max_curtailment).",
+        )
+    end
+    tiers = _curtailment_tiers(PSIP.get_curtailment_cost(d), max_curtailment)
+    push!(tiers, (1.0 - max_curtailment, PSIP.get_value_of_lost_load(d)))
+    if any(<(0.0), last.(tiers))
+        error(
+            "The unserved demand prices of demand $(PSIP.get_name(d)) must be non-negative.",
+        )
+    end
+    return tiers
+end
 
 # Variable names of the tiers of a demand's unserved demand
-_unserved_names(d::PSIP.DemandRequirement) =
+_unserved_names(d::PSIP.ProjectedDemand) =
     ["$(PSIP.get_name(d))__tier$(k)" for k in eachindex(_unserved_tiers(d))]
 
 # Each tier of unserved demand is at most its share of the demand
@@ -76,7 +93,7 @@ function add_variable!(
     T <: UnservedDemandVariable,
     S <: UnservedDemandDispatch,
     U <: Vector{D},
-} where {D <: PSIP.DemandRequirement}
+} where {D <: PSIP.ProjectedDemand}
     IS.@assert_op length(devices) > 0
     time_steps = get_operational_time_steps(get_time_mapping(container))
     names = [name for d in devices for name in _unserved_names(d)]
@@ -92,9 +109,19 @@ function add_variable!(
     store_names = get_store_variable_names(get_settings(container))
     demand = get_expression(container, DemandExpression(), PSIP.Portfolio)
     for d in devices
-        for ((share, _), name) in zip(_unserved_tiers(d), _unserved_names(d)),
-            t in time_steps
-
+        tiers = _unserved_tiers(d)
+        max_curtailment = PSIP.get_max_demand_curtailment(d)
+        # A piecewise curtailment cost needs a positive max_demand_curtailment, so a demand
+        # without curtailment has a linear cost here
+        if max_curtailment == 0.0 &&
+           IS.get_proportional_term(PSIP.get_curtailment_cost(d)) != 0.0
+            @warn "Demand $(PSIP.get_name(d)) has a curtailment_cost but its " *
+                  "max_demand_curtailment is 0, so it is never curtailed."
+        elseif max_curtailment > 0.0 && all(iszero, last.(tiers[1:(end - 1)]))
+            @warn "Demand $(PSIP.get_name(d)) can curtail $(max_curtailment) of its " *
+                  "demand at no cost. Set its curtailment_cost."
+        end
+        for ((share, _), name) in zip(tiers, _unserved_names(d)), t in time_steps
             variable[name, t] = JuMP.@variable(
                 jump_model,
                 lower_bound = 0.0,
@@ -107,13 +134,12 @@ function add_variable!(
 end
 
 # Adds coefficient times a demand's unserved demand at each time step to the expression
-# `expression_at(t)`. With `credited`, only the tiers a capacity reserve margin credits:
-# every one but the most expensive, which stands for involuntary shedding (if several tie
-# for the highest price, none of them is credited).
+# `expression_at(t)`. With `credited`, only the curtailment a capacity reserve margin
+# credits, not the involuntary shedding (the last tier).
 function _add_unserved_demand!(
     expression_at::Function,
     container::SingleOptimizationContainer,
-    d::PSIP.DemandRequirement,
+    d::PSIP.ProjectedDemand,
     formulation::UnservedDemandDispatch,
     time_steps,
     coefficient::Float64;
@@ -125,10 +151,8 @@ function _add_unserved_demand!(
         typeof(d),
         string(typeof(formulation)),
     )
-    tiers = _unserved_tiers(d)
-    highest_price = maximum(last.(tiers))
-    for ((_, price), name) in zip(tiers, _unserved_names(d))
-        credited && price == highest_price && continue
+    names = _unserved_names(d)
+    for name in (credited ? names[1:(end - 1)] : names)
         for t in time_steps
             JuMP.add_to_expression!(expression_at(t), coefficient, variable[name, t])
         end
@@ -139,7 +163,7 @@ end
 _add_unserved_demand!(
     ::Function,
     ::SingleOptimizationContainer,
-    ::PSIP.DemandRequirement,
+    ::PSIP.ProjectedDemand,
     ::OperationsTechnologyFormulation,
     time_steps,
     ::Float64;
@@ -151,7 +175,7 @@ function objective_function!(
     container::SingleOptimizationContainer,
     devices::U,
     formulation::S,
-) where {S <: UnservedDemandDispatch, U <: Vector{D}} where {D <: PSIP.DemandRequirement}
+) where {S <: UnservedDemandDispatch, U <: Vector{D}} where {D <: PSIP.ProjectedDemand}
     time_mapping = get_time_mapping(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
@@ -159,7 +183,6 @@ function objective_function!(
     for d in devices
         tiers = _unserved_tiers(d)
         names = _unserved_names(d)
-        curve = PSIP.get_unserved_demand_cost(d)
         for op_ix in get_operational_indexes(time_mapping)
             factor =
                 get_time_step_weight(container, op_ix) *
@@ -171,21 +194,11 @@ function objective_function!(
                         factor * price * variable[name, t],
                     )
                 end
-                quadratic = _quadratic_term(curve)
-                if quadratic != 0.0
-                    add_to_objective_operations_expression!(
-                        container,
-                        factor * quadratic * variable[only(names), t]^2,
-                    )
-                end
             end
         end
     end
     return
 end
-
-_quadratic_term(::PSY.ValueCurve) = 0.0
-_quadratic_term(curve::PSY.QuadraticCurve) = IS.get_quadratic_term(curve)
 
 ################## Expressions ###################
 
@@ -196,7 +209,7 @@ function add_to_expression!(
     devices::U,
     ::OperationsTechnologyFormulation,
     transport_model::TransportModel,
-) where {T <: EnergyBalance, U <: Vector{D}} where {D <: PSIP.DemandRequirement}
+) where {T <: EnergyBalance, U <: Vector{D}} where {D <: PSIP.ProjectedDemand}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     expression = get_expression(container, T(), PSIP.Portfolio)
@@ -223,7 +236,7 @@ function add_to_expression!(
     devices::U,
     formulation::UnservedDemandDispatch,
     transport_model::TransportModel,
-) where {T <: EnergyBalance, U <: Vector{D}} where {D <: PSIP.DemandRequirement}
+) where {T <: EnergyBalance, U <: Vector{D}} where {D <: PSIP.ProjectedDemand}
     IS.@assert_op length(devices) > 0
     expression = get_expression(container, T(), PSIP.Portfolio)
     time_steps = get_operational_time_steps(get_time_mapping(container))
@@ -249,7 +262,7 @@ function add_to_expression!(
     devices::U,
     ::OperationsTechnologyFormulation,
     transport_model::TransportModel,
-) where {T <: WeightedEnergyDemand, U <: Vector{D}} where {D <: PSIP.DemandRequirement}
+) where {T <: WeightedEnergyDemand, U <: Vector{D}} where {D <: PSIP.ProjectedDemand}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -274,7 +287,7 @@ function add_to_expression!(
     devices::U,
     formulation::BasicDispatchFeasibility,
     transport_model::TransportModel,
-) where {T <: FeasibilitySurplus, U <: Vector{D}} where {D <: PSIP.DemandRequirement}
+) where {T <: FeasibilitySurplus, U <: Vector{D}} where {D <: PSIP.ProjectedDemand}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     consecutive_slices = get_consecutive_slices(time_mapping)

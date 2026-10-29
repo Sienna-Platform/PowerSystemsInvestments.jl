@@ -156,7 +156,7 @@ function _time_step_test_model(step_hours::Int)
         ),
         financial_data=financial_data(),
     )
-    demand = DemandRequirement{PowerLoad}(;
+    demand = ProjectedDemand{PowerLoad}(;
         name="demand",
         id=4,
         available=true,
@@ -204,7 +204,7 @@ function _time_step_test_model(step_hours::Int)
     set_technology_model!(
         template,
         ["demand"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,

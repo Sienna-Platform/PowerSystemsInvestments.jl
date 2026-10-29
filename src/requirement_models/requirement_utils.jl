@@ -1,7 +1,7 @@
 _is_resource(::PSIP.Technology) = false
 _is_resource(::PSIP.ResourceTechnology) = true
 _is_demand(::PSIP.Technology) = false
-_is_demand(::PSIP.DemandRequirement) = true
+_is_demand(::PSIP.ProjectedDemand) = true
 _is_line(::PSIP.Technology) = false
 _is_line(::PSIP.TransmissionTechnology) = true
 
@@ -166,7 +166,7 @@ end
 # the template has a fixed demand.
 function _demand_formulation(
     names_to_model_map::Dict{String, TechnologyModel},
-    d::PSIP.DemandRequirement,
+    d::PSIP.ProjectedDemand,
 )
     name = PSIP.get_name(d)
     if haskey(names_to_model_map, name)

@@ -30,7 +30,7 @@ function _make_fuel_cost_model(variable_cost=nothing)
     set_technology_model!(
         template,
         ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,

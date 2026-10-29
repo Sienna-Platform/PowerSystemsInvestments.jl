@@ -2,8 +2,8 @@ const PTDF_TECHNOLOGIES = (
     (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal", ContinuousInvestment),
     (PSIP.SupplyTechnology{PSY.ThermalStandard}, "expensive_thermal", ContinuousInvestment),
     (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind", ContinuousInvestment),
-    (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1", StaticLoadInvestment),
-    (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2", StaticLoadInvestment),
+    (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand1", StaticLoadInvestment),
+    (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand2", StaticLoadInvestment),
 )
 
 const PTDF_LINE_TYPE = PSIP.NodalACTransportTechnology{PSY.Line}
@@ -47,7 +47,7 @@ end
 # `discrete_lines` are (name, from, to, reactance, formulation, unit size, capacity limit),
 # and `hvdc_lines` are (name, from, to, operations formulation, line loss).
 _operations_formulation(::Type{<:PSIP.Technology}, demand_formulation) = BasicDispatch
-_operations_formulation(::Type{<:PSIP.DemandRequirement}, demand_formulation) =
+_operations_formulation(::Type{<:PSIP.ProjectedDemand}, demand_formulation) =
     demand_formulation
 
 function _nodal_test_model(
@@ -531,7 +531,7 @@ end
     unserved = PSIN.get_variable(
         container,
         UnservedDemandVariable(),
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         "UnservedDemandDispatch",
     )
     @test all(JuMP.value.(unserved.data) .<= 1e-6)
@@ -1132,7 +1132,7 @@ end
     )
     PSIP.add_requirement!(p, requirement)
     thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
-    demand_type = PSIP.DemandRequirement{PSY.PowerLoad}
+    demand_type = PSIP.ProjectedDemand{PSY.PowerLoad}
     for (type, name) in (
         (thermal_type, "cheap_thermal"),
         (demand_type, "demand2"),

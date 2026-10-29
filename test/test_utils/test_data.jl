@@ -290,7 +290,7 @@ function test_2_zone_portfolio()
         TimeArray(tstamp_2035_ops, ts_load_2035 ./ peak_load),
     )
 
-    t_demand1 = DemandRequirement{PowerLoad}(
+    t_demand1 = ProjectedDemand{PowerLoad}(
         name="demand1",
         id=1,
         available=true,
@@ -300,7 +300,7 @@ function test_2_zone_portfolio()
         conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
-    t_demand2 = DemandRequirement{PowerLoad}(
+    t_demand2 = ProjectedDemand{PowerLoad}(
         name="demand2",
         id=1,
         available=true,
@@ -523,7 +523,7 @@ function test_hydro_portfolio()
     ts_demand_2035 =
         SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(1.0, 24)))
 
-    t_demand = DemandRequirement{PowerLoad}(
+    t_demand = ProjectedDemand{PowerLoad}(
         name="demand",
         id=1,
         available=true,
@@ -614,7 +614,7 @@ function test_hydro_basic_dispatch_portfolio()
     ts_demand_2035 =
         SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(1.0, 24)))
 
-    t_demand = DemandRequirement{PowerLoad}(
+    t_demand = ProjectedDemand{PowerLoad}(
         name="demand",
         id=1,
         available=true,
@@ -725,7 +725,7 @@ function test_constrained_hydro_portfolio()
     ts_demand_2035 =
         SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(1.0, 24)))
 
-    t_demand = DemandRequirement{PowerLoad}(
+    t_demand = ProjectedDemand{PowerLoad}(
         name="demand",
         id=1,
         available=true,

@@ -1,7 +1,7 @@
-# Demand of each DemandRequirement in MW (DemandExpression): its normalized "ops_demand" shape
+# Demand of each ProjectedDemand in MW (DemandExpression): its normalized "ops_demand" shape
 # times its peak in the year of each representative period
 function initialize_demands!(container::SingleOptimizationContainer, p::PSIP.Portfolio)
-    demands = collect(PSIP.get_technologies(PSIP.DemandRequirement, p))
+    demands = collect(PSIP.get_technologies(PSIP.ProjectedDemand, p))
     isempty(demands) && return
     time_mapping = get_time_mapping(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -12,7 +12,7 @@ function initialize_demands!(container::SingleOptimizationContainer, p::PSIP.Por
         op_ix in get_all_indexes(time_mapping)
     )
     last_year = maximum(values(years))
-    series_name = get_default_time_series_names(PSIP.DemandRequirement)
+    series_name = get_default_time_series_names(PSIP.ProjectedDemand)
     expression = add_expression_container!(
         container,
         DemandExpression(),
