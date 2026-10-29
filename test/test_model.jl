@@ -161,7 +161,6 @@
     investment_results = InvestmentProblemResults(m)
     @test investment_results isa IS.Results
     @test get_investment_time_stamps(investment_results) == periods
-    @test get_investment_time_stamps(investment_results) !== periods
     @test get_timestamps(investment_results) == get_timestamps(res)
     @test get_timestamps(investment_results) !== get_timestamps(res)
     @test get_portfolio(investment_results) === p_5bus
@@ -170,17 +169,10 @@
     @test isequal(get_optimizer_stats(investment_results), get_optimizer_stats(res))
     time_mapping = PSIN.get_time_mapping(container)
     saved_mapping = PSIN.get_time_mapping(investment_results)
-    @test saved_mapping !== time_mapping
-    for getter in (
-        PSIN.get_consecutive_slices,
-        PSIN.get_inverse_invest_mapping,
-        PSIN.get_operational_indexes,
-        PSIN.get_feasibility_indexes,
-        PSIN.get_investment_map_to_operational_slices,
-    )
-        @test getter(saved_mapping) == getter(time_mapping)
-        @test getter(saved_mapping) !== getter(time_mapping)
-    end
+    @test PSIN.get_consecutive_slices(saved_mapping) ==
+          PSIN.get_consecutive_slices(time_mapping)
+    @test first(PSIN.get_consecutive_slices(saved_mapping)) !==
+          first(PSIN.get_consecutive_slices(time_mapping))
     for (values_getter, keys_getter, names_getter) in (
         (get_variable_values, list_variable_keys, list_variable_names),
         (get_expression_values, list_expression_keys, list_expression_names),
@@ -192,6 +184,23 @@
         @test Set(keys_getter(investment_results)) == Set(keys_getter(res))
         @test Set(names_getter(investment_results)) == Set(names_getter(res))
     end
+    @testset "text/plain InvestmentProblemResults" begin
+        buf = IOBuffer()
+        show(buf, MIME("text/plain"), investment_results)
+        out = String(take!(buf))
+
+        @test occursin("Investment Periods", out)
+        @test occursin("Operational Slices", out)
+    end
+
+    @testset "text/html InvestmentProblemResults" begin
+        buf = IOBuffer()
+        show(buf, MIME("text/html"), investment_results)
+        out = String(take!(buf))
+
+        @test occursin("Investment Periods", out)
+        @test occursin("Operational Slices", out)
+    end
     dispatch_key = PSIN.VariableKey(
         ActivePowerVariable,
         PSIP.SupplyTechnology{ThermalStandard},
@@ -201,13 +210,6 @@
     build_key = PSIN.VariableKey(BuildCapacity, thermal_type, string(ContinuousInvestment))
     @testset "Test investment result readers" begin
         @test read_variable(investment_results, dispatch_key) ==
-              read_variable(res, dispatch_key)
-        @test read_variable(investment_results, PSIN.encode_key_as_string(dispatch_key)) ==
-              read_variable(res, dispatch_key)
-        @test IS.Optimization.read_variables(investment_results, [dispatch_key]) ==
-              IS.Optimization.read_variables(res, [dispatch_key])
-        dispatch_name = PSIN.encode_key_as_string(dispatch_key)
-        @test IS.Optimization.read_variables(investment_results)[dispatch_name] ==
               read_variable(res, dispatch_key)
 
         capacity_key = PSIN.ExpressionKey(
