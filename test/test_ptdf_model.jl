@@ -84,7 +84,7 @@ function _nodal_test_model(
     regions = Dict(
         n => PSIP.Node(;
             name=n,
-            id=i,
+            id=100 + i,
             bus_type=(i == 1 ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ),
         ) for (i, n) in enumerate(nodes)
     )
@@ -143,7 +143,7 @@ function _nodal_test_model(
         PSIP.add_supplemental_attribute!(
             p_5bus,
             line,
-            PSIP.ExistingDevices(; existing_devices=[device]),
+            PSIP.ExistingDevices(; id=1, existing_devices=[device]),
         )
     end
     set_technology_model!(
@@ -278,7 +278,7 @@ function _ptdf_network_data(lines; tol=0.0)
     nodes = Dict(
         n => PSIP.Node(;
             name=n,
-            id=i,
+            id=100 + i,
             bus_type=(n == "A" ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ),
         ) for (i, n) in enumerate(("A", "B", "C", "D"))
     )
@@ -293,7 +293,7 @@ function _ptdf_network_data(lines; tol=0.0)
             PSIP.add_supplemental_attribute!(
                 portfolio,
                 line,
-                PSIP.ExistingDevices(; existing_devices=["1"]),
+                PSIP.ExistingDevices(; id=1, existing_devices=["1"]),
             )
         end
         push!(get!(names_by_formulation, formulation, String[]), name)
@@ -372,7 +372,8 @@ end
     @test_throws ErrorException _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (max_capacity=1e8,)),
     ])
-    @test_throws ErrorException _ptdf_network_data([
+    # PSIP rejects a non-positive unit size when the line is added
+    @test_logs (:error, r"unit size") match_mode = :any @test_throws IS.InvalidValue _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (unit_size=0.0,)),
     ])
     @test_logs (:warn, r"susceptance per MW") match_mode = :any _ptdf_network_data([

@@ -138,7 +138,7 @@ end
     p_5bus, op_days = test_2_zone_portfolio()
     capital, weights, feasibility = _multi_region_supply_models()
 
-    nodes = [PSIP.Node(; name="Node_1", id=1), PSIP.Node(; name="Node_2", id=2)]
+    nodes = [PSIP.Node(; name="Node_1", id=101), PSIP.Node(; name="Node_2", id=102)]
     for node in nodes
         PSIP.add_region!(p_5bus, node)
     end

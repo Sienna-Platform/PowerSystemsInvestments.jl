@@ -99,7 +99,7 @@ function _end_use_model(;
         PSIP.add_supplemental_attribute!(
             portfolio,
             electrolyzer,
-            PSIP.ExistingDevices(; existing_devices=["existing_electrolyzer"]),
+            PSIP.ExistingDevices(; id=1, existing_devices=["existing_electrolyzer"]),
         )
     end
 
