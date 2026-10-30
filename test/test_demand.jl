@@ -104,7 +104,7 @@ function _demand_test_model(
             PSIP.add_supplemental_attribute!(
                 portfolio,
                 demand,
-                PSIP.ExistingDevices(; existing_devices=existing),
+                PSIP.ExistingDevices(; id=1, existing_devices=existing),
             )
         end
         isnothing(shape) && continue

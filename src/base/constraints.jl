@@ -7,6 +7,8 @@ struct CumulativeCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
 struct SingleUnitInvestmentConstraint <: ISOPT.ConstraintType end
 
+struct RetrofitPotentialConstraint <: ISOPT.ConstraintType end
+
 struct CumulativePowerCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
 struct CumulativeEnergyCapacityLimit <: CumulativeInvestmentLimitConstraint end

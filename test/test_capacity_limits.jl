@@ -202,7 +202,7 @@ function _limit_model(limits; existing=false)
         PSIP.add_supplemental_attribute!(
             portfolio,
             gas,
-            PSIP.ExistingDevices(; existing_devices=["existing_gas"]),
+            PSIP.ExistingDevices(; id=1, existing_devices=["existing_gas"]),
         )
     end
     demand = PSIP.ProjectedDemand{PSY.PowerLoad}(;

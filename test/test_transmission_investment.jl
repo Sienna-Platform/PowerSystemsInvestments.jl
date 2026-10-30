@@ -59,7 +59,7 @@ end
 # Nodal line between two nodes holding the zones' technologies
 function _nodal_line_model(formulation)
     template, p_5bus = _transmission_template(NodalBalanceModel)
-    nodes = [PSIP.Node(; name="Node_1", id=1), PSIP.Node(; name="Node_2", id=2)]
+    nodes = [PSIP.Node(; name="Node_1", id=101), PSIP.Node(; name="Node_2", id=102)]
     for node in nodes
         PSIP.add_region!(p_5bus, node)
     end
