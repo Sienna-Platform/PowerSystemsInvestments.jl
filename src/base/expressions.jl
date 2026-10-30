@@ -7,6 +7,8 @@ abstract type CumulativeInvestmentExpressionType <: InvestmentExpressionType end
 struct SupplyTotal <: OperationsExpressionType end
 struct DemandTotal <: OperationsExpressionType end
 struct EnergyBalance <: OperationsExpressionType end
+# Demand of each ProjectedDemand (MW), a constant at every time step
+struct DemandExpression <: OperationsExpressionType end
 struct PTDFBranchFlow <: OperationsExpressionType end
 
 # Weighted (representative-day) energy expressions. Always created (where
@@ -35,6 +37,8 @@ struct FixedOperationModelCost <: InvestmentExpressionType end
 struct TotalCapitalCost <: ISOPT.ExpressionType end
 
 struct VariableOMCost <: OperationsExpressionType end
+# Value of the product of an end-use technology, a negative operating cost
+struct ProductRevenue <: OperationsExpressionType end
 
 struct FuelConsumptionExpression <: OperationsExpressionType end
 

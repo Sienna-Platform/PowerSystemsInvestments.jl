@@ -23,7 +23,7 @@ function construct_transport!(
     p::PSIP.Portfolio,
     transport_model::TransportModel{NodalBalanceModel},
 )
-    add_constraints!(container, NodalBalanceConstraint, p, get_use_slacks(transport_model))
+    add_constraints!(container, NodalBalanceConstraint, p)
     return
 end
 
@@ -33,10 +33,6 @@ function construct_transport!(
     transport_model::TransportModel{NodalPTDFModel},
 )
     network = get_network_data(transport_model)
-    # Slacks are injections, so they come before the flows
-    if get_use_slacks(transport_model)
-        _add_balance_slacks!(container, PSIP.Portfolio, network.ptdf.axes[1])
-    end
     add_variable!(container, BranchBuiltVariable(), p, network)
     add_variable!(container, VirtualTransactionVariable(), p, network)
     add_expression!(container, PTDFBranchFlow(), p, network)

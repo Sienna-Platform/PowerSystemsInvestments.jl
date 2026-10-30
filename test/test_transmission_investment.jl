@@ -10,12 +10,12 @@ function _transmission_template(transport)
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(transport, use_slacks=false),
+        TransportModel(transport),
     )
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -59,7 +59,7 @@ end
 # Nodal line between two nodes holding the zones' technologies
 function _nodal_line_model(formulation)
     template, p_5bus = _transmission_template(NodalBalanceModel)
-    nodes = [PSIP.Node(; name="Node_1", id=1), PSIP.Node(; name="Node_2", id=2)]
+    nodes = [PSIP.Node(; name="Node_1", id=101), PSIP.Node(; name="Node_2", id=102)]
     for node in nodes
         PSIP.add_region!(p_5bus, node)
     end
@@ -67,8 +67,8 @@ function _nodal_line_model(formulation)
         (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind", 2),
         (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal", 1),
         (PSIP.SupplyTechnology{PSY.ThermalStandard}, "expensive_thermal", 1),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1", 1),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2", 2),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand1", 1),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand2", 2),
     )
         PSIP.set_region!(PSIP.get_technology(type, p_5bus, name), [nodes[node]])
     end

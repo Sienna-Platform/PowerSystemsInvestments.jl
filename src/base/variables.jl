@@ -109,16 +109,24 @@ Amount of capacity that has been started up at a timepoint
 struct StartUpCapacityVariable <: OperationsVariableType end
 
 """
-Unserved-energy slack on a system power-balance constraint (deficit: injection < 0).
-Only created when the TransportModel is built with `use_slacks = true`.
+Demand left unserved in one tier of a demand's unserved demand cost (MW)
 """
-struct BalanceSlackUp <: OperationsVariableType end
+struct UnservedDemandVariable <: OperationsVariableType end
 
 """
-Over-supply slack on a system power-balance constraint (surplus: injection > 0).
-Only created when the TransportModel is built with `use_slacks = true`.
+Flexible demand deferred out of a time step: served later, or already served earlier (MW)
 """
-struct BalanceSlackDown <: OperationsVariableType end
+struct DemandDeferredVariable <: OperationsVariableType end
+
+"""
+Flexible demand served in a time step instead of its original one (MW)
+"""
+struct DemandRecoveredVariable <: OperationsVariableType end
+
+"""
+Flexible demand deferred and not yet served (MWh); negative when demand was served early
+"""
+struct DemandBacklogVariable <: OperationsVariableType end
 
 """
 Whether a prospective PTDF branch is built by an investment period.

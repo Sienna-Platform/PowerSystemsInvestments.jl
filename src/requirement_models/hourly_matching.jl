@@ -50,7 +50,7 @@ function construct_requirement!(
 ) where {T <: PSIP.HourlyMatching, B <: RequirementHourlyMatching, X <: RequirementModel}
     for name in names
         req = PSIP.get_requirement(T, p, name)
-        _check_contributors(p, req; demands=true)
+        _check_contributors(p, req; demands=true, end_use_demand=true)
         _warn_ignored_contributors(_contributing_lines(p, req), req, "Lines")
     end
     return
@@ -92,12 +92,12 @@ function add_constraints!(
 ) where {T <: PSIP.HourlyMatching, X <: RequirementModel}
     time_mapping = get_time_mapping(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
     time_steps = [t for op_ix in operational_indexes for t in consecutive_slices[op_ix]]
     jump_model = get_jump_model(container)
     store_names = get_store_variable_names(get_settings(container))
+    demand_expression = get_expression(container, DemandExpression(), PSIP.Portfolio)
 
     names = PSIP.get_name.(requirements)
     con = add_constraints_container!(
@@ -127,6 +127,12 @@ function add_constraints!(
         req_name = PSIP.get_name(req)
         resources = _contributing_resources(p, req)
         demands = _contributing_demands(p, req)
+        end_uses = _contributing_end_uses(p, req)
+        end_use_formulations = [
+            get_operations_formulation(
+                _contributor_model(names_to_model_map, req_name, d),
+            )() for d in end_uses
+        ]
         resource_models = [
             _contributor_model(names_to_model_map, req_name, resource) for
             resource in resources
@@ -134,15 +140,41 @@ function add_constraints!(
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             demand = zeros(length(time_slices))
+            # Unserved demand does not need to be matched, and shifted demand is matched
+            # where it is served
+            adjustment = Dict(t => JuMP.AffExpr(0.0) for t in time_slices)
             for d in demands
-                time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-                check_initial_timestamp(
-                    time_series,
+                formulation = _demand_formulation(names_to_model_map, d)
+                for (ix, t) in enumerate(time_slices)
+                    demand[ix] += JuMP.constant(demand_expression[PSIP.get_name(d), t])
+                end
+                _add_unserved_demand!(
+                    t -> adjustment[t],
+                    container,
                     d,
-                    time_stamps[first(time_slices)],
-                    op_ix,
+                    formulation,
+                    time_slices,
+                    1.0,
                 )
-                demand .+= TimeSeries.values(time_series.data)
+                _add_demand_shift!(
+                    t -> adjustment[t],
+                    container,
+                    d,
+                    formulation,
+                    time_slices,
+                    -1.0,
+                )
+            end
+            # The consumption of end-use technologies must be matched too
+            for (d, formulation) in zip(end_uses, end_use_formulations)
+                _add_end_use_consumption!(
+                    t -> adjustment[t],
+                    container,
+                    d,
+                    formulation,
+                    time_slices,
+                    -1.0,
+                )
             end
             slack_cost = if req_name in slack_names
                 get_attributes(model)["slack_penalty"] *
@@ -177,6 +209,7 @@ function add_constraints!(
                         slack_cost * slacks[req_name, t],
                     )
                 end
+                JuMP.add_to_expression!(output, adjustment[t])
                 con[req_name, t] = JuMP.@constraint(jump_model, output >= demand[ix])
             end
         end

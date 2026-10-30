@@ -24,7 +24,7 @@ function get_variable_names_and_regions(d::PSIP.SupplyTechnology)
     return collect(zip(get_variable_names(d), PSIP.get_name.(regions)))
 end
 
-# Existing capacity and the minimum capacity limit are not defined per region
+# Existing capacity is not defined per region
 function check_multi_region_technology(d::PSIP.SupplyTechnology, init_cap)
     if length(PSIP.get_region(d)) <= 1
         return
@@ -34,13 +34,6 @@ function check_multi_region_technology(d::PSIP.SupplyTechnology, init_cap)
         error(
             "Technology $name is located in more than one region and has existing capacity. " *
             "Technologies with existing capacity must be located in a single region.",
-        )
-    end
-    if !iszero(PSIP.get_capacity_limits(d).min)
-        error(
-            "Technology $name is located in more than one region and has a minimum capacity " *
-            "limit. Minimum capacity limits are only supported for technologies located in " *
-            "a single region.",
         )
     end
     return

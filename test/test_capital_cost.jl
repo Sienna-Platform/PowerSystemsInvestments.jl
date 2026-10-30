@@ -24,7 +24,7 @@ function _capital_cost_template(op_days)
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
     return template, capital
 end
@@ -406,7 +406,7 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
                 capital,
                 PSIN.OperationalRepresentativeDays(op_days, [365, 365]),
                 RepresentativePeriods(Vector{Vector{DateTime}}()),
-                TransportModel(SingleRegionBalanceModel, use_slacks=false),
+                TransportModel(SingleRegionBalanceModel),
             )
             container = PSIN.SingleOptimizationContainer(
                 PSIN.Settings(p),
