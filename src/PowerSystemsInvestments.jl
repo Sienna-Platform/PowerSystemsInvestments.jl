@@ -73,6 +73,9 @@ export ActivePowerSolarVariable
 export FlowActivePowerVariable
 
 ### Expressions ###
+export CapacityAdditions
+export PowerCapacityAdditions
+export EnergyCapacityAdditions
 export CumulativeCapacity
 export CapitalCost
 export TotalCapitalCost
@@ -129,6 +132,7 @@ export read_variable
 export read_optimizer_stats
 export read_expression
 export get_variable
+export get_variable_names
 export get_constraint
 export get_expression
 

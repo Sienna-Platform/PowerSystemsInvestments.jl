@@ -296,6 +296,8 @@ end
 Read result tables using each key's time axis.
 `start_time` must be on that axis and `len` counts its entries.
 In a mixed request, the same window arguments are applied independently to each key.
+Use `cols` to select a nonempty vector of component names for variables and expressions.
+The default `:` reads all components and wide tables preserve the requested column order.
 """
 function read_results_with_keys(
     results::InvestmentProblemResults,
@@ -303,10 +305,19 @@ function read_results_with_keys(
     start_time::Union{Nothing, Dates.DateTime}=nothing,
     len::Union{Nothing, Int}=nothing,
     table_format::IS.TableFormat=IS.TableFormat.LONG,
+    cols::Union{Colon, Vector{String}}=(:),
 )
+    cols isa Vector &&
+        isempty(cols) &&
+        throw(ArgumentError("cols must contain at least one component name."))
     tables = Dict{OptimizationContainerKey, DataFrames.DataFrame}()
     for key in keys
         if !(key isa Union{VariableKey, ExpressionKey})
+            cols isa Colon || throw(
+                ArgumentError(
+                    "Column selection is supported for variables and expressions.",
+                ),
+            )
             merge!(
                 tables,
                 read_results_with_keys(
@@ -324,6 +335,12 @@ function read_results_with_keys(
         table = values[key]
         timestamps = get_timestamps(results, key)
         component_column = ISOPT.get_first_dimension_result_column_name(key)
+        if cols isa Vector
+            for name in cols
+                name in table[!, component_column] || throw(KeyError(name))
+            end
+            table = filter(component_column => in(cols), table)
+        end
         for component in DataFrames.groupby(table, component_column)
             if sort(component.time_index) != eachindex(timestamps)
                 throw(
@@ -348,6 +365,9 @@ function read_results_with_keys(
                 table_format,
             ),
         )
+        if cols isa Vector && table_format == IS.TableFormat.WIDE
+            DataFrames.select!(tables[key], ["DateTime"; cols])
+        end
     end
     return tables
 end

@@ -299,7 +299,55 @@
         malformed_builds = get_variable_values(malformed)[build_key]
         rows = findall(==("expensive_thermal"), malformed_builds.name)
         malformed_builds[rows[2], :time_index] = 1
-        @test_throws ArgumentError read_variable(malformed, build_key; len=1)
+        @test_throws ArgumentError read_variable(
+            malformed,
+            build_key;
+            cols=["expensive_thermal"],
+            len=1,
+        )
+    end
+
+    @testset "Test investment result column selection" begin
+        capacity_key = PSIN.ExpressionKey(
+            CumulativeCapacity,
+            thermal_type,
+            string(ContinuousInvestment),
+        )
+        for (reader, key) in
+            ((read_variable, dispatch_key), (read_expression, capacity_key))
+            full = reader(investment_results, key)
+            @test reader(investment_results, key; cols=["expensive_thermal"]) ==
+                  full[full.name .== "expensive_thermal", :]
+            full_wide = reader(investment_results, key; table_format=IS.TableFormat.WIDE)
+            @test reader(
+                investment_results,
+                key;
+                cols=["expensive_thermal", "cheap_thermal"],
+                table_format=IS.TableFormat.WIDE,
+            ) == full_wide[!, ["DateTime", "expensive_thermal", "cheap_thermal"]]
+            @test reader(
+                investment_results,
+                key;
+                cols=["expensive_thermal"],
+                start_time=DateTime(2035, 1, 1),
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            ) == full_wide[
+                full_wide.DateTime .== DateTime(2035, 1, 1),
+                ["DateTime", "expensive_thermal"],
+            ]
+            @test reader(investment_results, key) == full
+        end
+        @test_throws ArgumentError read_variable(
+            investment_results,
+            build_key;
+            cols=String[],
+        )
+        @test_throws KeyError read_variable(
+            investment_results,
+            build_key;
+            cols=["missing_technology"],
+        )
     end
 
     # Investment results after reload
@@ -308,15 +356,34 @@
     @test get_investment_time_stamps(saved_results) == periods
     @test get_variable_values(saved_results) == get_variable_values(res)
     @test get_expression_values(saved_results) == get_expression_values(res)
+    for (variable_type, expression_type, technology_type) in (
+        (BuildCapacity, CapacityAdditions, thermal_type),
+        (BuildPowerCapacity, PowerCapacityAdditions, storage_type),
+        (BuildEnergyCapacity, EnergyCapacityAdditions, storage_type),
+    )
+        @test read_expression(
+            saved_results,
+            PSIN.ExpressionKey(
+                expression_type,
+                technology_type,
+                string(ContinuousInvestment),
+            ),
+        ) == read_variable(
+            investment_results,
+            PSIN.VariableKey(variable_type, technology_type, string(ContinuousInvestment)),
+        )
+    end
     @test read_variable(
         saved_results,
         build_key;
+        cols=["expensive_thermal"],
         start_time=DateTime(2035, 1, 1),
         len=1,
         table_format=IS.TableFormat.WIDE,
     ) == read_variable(
         investment_results,
         build_key;
+        cols=["expensive_thermal"],
         start_time=DateTime(2035, 1, 1),
         len=1,
         table_format=IS.TableFormat.WIDE,
@@ -1116,13 +1183,22 @@ end
         build = PSIN.get_variable(container, PSIN.BuildCapacity(), thermal_type, meta)
         capacity =
             PSIN.get_expression(container, PSIN.CumulativeCapacity(), thermal_type, meta)
-        for t in PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+        additions =
+            PSIN.get_expression(container, PSIN.CapacityAdditions(), thermal_type, meta)
+        time_steps = PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+        for t in time_steps
             @test is_discrete(build["expensive_thermal", t])
             # Each unit built adds unit_size MW of capacity.
-            @test JuMP.coefficient(
-                capacity["expensive_thermal", t],
-                build["expensive_thermal", 1],
-            ) == unit_size
+            for build_t in time_steps
+                @test JuMP.coefficient(
+                    capacity["expensive_thermal", t],
+                    build["expensive_thermal", build_t],
+                ) == (build_t <= t ? unit_size : 0.0)
+                @test JuMP.coefficient(
+                    additions["expensive_thermal", t],
+                    build["expensive_thermal", build_t],
+                ) == (t == build_t ? unit_size : 0.0)
+            end
         end
 
         # The cost of building one unit is the per-MW cost of the continuous formulation
@@ -1134,6 +1210,14 @@ end
         @test unit_cost ≈ unit_size * mw_cost
 
         @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        results = InvestmentProblemResults(m)
+        saved_results = InvestmentProblemResults(PSIN.get_output_dir(m))
+        build_key = PSIN.VariableKey(BuildCapacity, thermal_type, meta)
+        additions_key = PSIN.ExpressionKey(CapacityAdditions, thermal_type, meta)
+        raw_builds = read_variable(results, build_key)
+        @test read_variable(saved_results, build_key) == raw_builds
+        @test read_expression(saved_results, additions_key).value ≈
+              unit_size .* raw_builds.value
     end
 
     # A discrete investment needs a positive unit size.
@@ -1194,19 +1278,24 @@ end
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
 
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    results = InvestmentProblemResults(m)
+    saved_results = InvestmentProblemResults(PSIN.get_output_dir(m))
     container = PSIN.get_optimization_container(m)
     storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
     # Power capacity is built in units of the discharge size and energy capacity in units of
     # the energy size.
-    for (variable_type, expression_type, unit_size) in (
+    for (variable_type, expression_type, additions_type, unit_size) in (
         (
             PSIN.BuildPowerCapacity,
             PSIN.CumulativePowerCapacity,
+            PSIN.PowerCapacityAdditions,
             PSIP.get_unit_size_discharge(storage),
         ),
         (
             PSIN.BuildEnergyCapacity,
             PSIN.CumulativeEnergyCapacity,
+            PSIN.EnergyCapacityAdditions,
             PSIP.get_unit_size_energy(storage),
         ),
     )
@@ -1219,9 +1308,29 @@ end
             "IntegerInvestment",
         )
         @test JuMP.is_integer(build["test_storage", 1])
-        @test JuMP.coefficient(capacity["test_storage", 1], build["test_storage", 1]) ==
-              unit_size
+        additions = PSIN.get_expression(
+            container,
+            additions_type(),
+            storage_type,
+            "IntegerInvestment",
+        )
+        time_steps = PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+        for t in time_steps, build_t in time_steps
+            @test JuMP.coefficient(
+                capacity["test_storage", t],
+                build["test_storage", build_t],
+            ) == (build_t <= t ? unit_size : 0.0)
+            @test JuMP.coefficient(
+                additions["test_storage", t],
+                build["test_storage", build_t],
+            ) == (t == build_t ? unit_size : 0.0)
+        end
+        build_key = PSIN.VariableKey(variable_type, storage_type, "IntegerInvestment")
+        additions_key =
+            PSIN.ExpressionKey(additions_type, storage_type, "IntegerInvestment")
+        raw_builds = read_variable(results, build_key)
+        @test read_variable(saved_results, build_key) == raw_builds
+        @test read_expression(saved_results, additions_key).value ≈
+              unit_size .* raw_builds.value
     end
-
-    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 end
