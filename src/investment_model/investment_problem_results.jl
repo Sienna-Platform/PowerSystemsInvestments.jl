@@ -52,16 +52,16 @@ set_portfolio!(results::OptimizationProblemResults, portfolio::PSIP.Portfolio) =
     ISOPT.set_source_data!(results, portfolio)
 
 """
-Results from an investment model with its investment intervals and operational time mapping.
+Results from an investment model with its investment intervals and operational time
+mapping.
 
 Construct from a solved `InvestmentModel` or load from a directory saved by `solve!` or
-`serialize_results`.
-Loaded results have no attached portfolio.
-Use `set_portfolio!` to attach it.
+`serialize_results`. Loaded results have no attached portfolio. Use `set_portfolio!` to
+attach it.
 
-Use `get_investment_time_stamps` for investment intervals and `get_timestamps` for operational
-timestamps.
-`OptimizationProblemResults(results)` returns the underlying optimization results.
+Use `get_investment_time_stamps` for investment intervals and `get_timestamps` for
+operational timestamps. `OptimizationProblemResults(results)` returns the underlying
+optimization results.
 """
 struct InvestmentProblemResults <: IS.Results
     results::OptimizationProblemResults
@@ -126,9 +126,9 @@ IS.get_total_cost(results::InvestmentProblemResults) = get_objective_value(resul
 get_timestamps(results::InvestmentProblemResults) = get_timestamps(results.results)
 
 """
-Return timestamps for a result key.
-Investment entries use period starts and weighted-energy expressions use operational slice starts.
-Other operational entries use the model's operational timestamps.
+Return timestamps for a result key. Investment entries use period starts and
+weighted-energy expressions use operational slice starts. Other operational entries use
+the model's operational timestamps.
 """
 function get_timestamps(
     results::InvestmentProblemResults,
@@ -293,11 +293,11 @@ function ISOPT._process_timestamps(
 end
 
 """
-Read result tables using each key's time axis.
-`start_time` must be on that axis and `len` counts its entries.
-In a mixed request, the same window arguments are applied independently to each key.
-Use `cols` to select a nonempty vector of component names for variables and expressions.
-The default `:` reads all components and wide tables preserve the requested column order.
+Read result tables using each key's time axis. `start_time` must be on that axis and
+`len` counts its entries. In a mixed request, the same window arguments are applied
+independently to each key. Use `cols` to select a nonempty vector of component names for
+variables and expressions. The default `:` reads all components and wide tables preserve
+the requested column order.
 """
 function read_results_with_keys(
     results::InvestmentProblemResults,
@@ -381,9 +381,9 @@ export_results(
 ) = export_results(results.results, exports; kwargs...)
 
 """
-Save investment results and their time mapping in `directory`.
-The optimization results remain readable with `OptimizationProblemResults(directory)`.
-Keep both binary results files together when moving or copying the saved results.
+Save investment results and their time mapping in `directory`. The optimization results
+remain readable with `OptimizationProblemResults(directory)`. Keep both binary results
+files together when moving or copying the saved results.
 """
 function serialize_results(results::InvestmentProblemResults, directory::AbstractString)
     serialize_results(OptimizationProblemResults(results), directory)
