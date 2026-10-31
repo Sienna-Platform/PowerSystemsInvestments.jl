@@ -16,6 +16,10 @@ struct WeightedEnergyDemand <: OperationsExpressionType end
 struct WeightedEnergyShareGeneration <: OperationsExpressionType end
 struct WeightedEnergyShareDemand <: OperationsExpressionType end
 
+struct CapacityAdditions <: InvestmentExpressionType end
+struct PowerCapacityAdditions <: InvestmentExpressionType end
+struct EnergyCapacityAdditions <: InvestmentExpressionType end
+
 struct CumulativeCapacity <: CumulativeInvestmentExpressionType end
 
 struct CumulativePowerCapacity <: CumulativeInvestmentExpressionType end
@@ -32,6 +36,10 @@ struct TotalCapitalCost <: ISOPT.ExpressionType end
 struct VariableOMCost <: OperationsExpressionType end
 
 struct FeasibilitySurplus <: FeasibilityExpressionType end
+
+should_write_resulting_value(::Type{CapacityAdditions}) = true
+should_write_resulting_value(::Type{PowerCapacityAdditions}) = true
+should_write_resulting_value(::Type{EnergyCapacityAdditions}) = true
 
 should_write_resulting_value(::Type{CumulativeCapacity}) = true
 should_write_resulting_value(::Type{CumulativePowerCapacity}) = true
