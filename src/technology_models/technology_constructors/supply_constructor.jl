@@ -191,6 +191,7 @@ function construct_technologies!(
         C(),
         tech_model_vector,
     )
+    add_curtailment_cost!(container, devices, C(), tech_model_vector)
     return
 end
 
