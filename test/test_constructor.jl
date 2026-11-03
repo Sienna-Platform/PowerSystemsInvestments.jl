@@ -122,6 +122,17 @@ end
         PSIN.BasicDispatch,
         PSIN.BasicDispatchFeasibility,
     )
+    wind_type = PSIP.SupplyTechnology{PSY.RenewableDispatch}
+    wind = PSIP.get_technology(wind_type, p_5bus, "wind")
+    wind_cost = PSIP.get_operation_costs(wind)
+    PSIP.set_operation_costs!(
+        wind,
+        RenewableGenerationCost(;
+            variable=PSY.get_variable(wind_cost),
+            fixed=PSY.get_fixed(wind_cost),
+            curtailment_cost=CostCurve(LinearCurve(15.0)),
+        ),
+    )
     thermal_model = PSIN.TechnologyModel(
         PSIP.SupplyTechnology{PSY.ThermalStandard},
         PSIN.ContinuousInvestment,
@@ -363,6 +374,34 @@ end
         "ContinuousInvestment",
     )
     @test length(c) == length(PSIN.get_investment_time_steps(container.time_mapping))
+
+    # Curtailment cost
+    wind_dispatch =
+        PSIN.get_variable(container, PSIN.ActivePowerVariable(), wind_type, "BasicDispatch")
+    wind_build = PSIN.get_variable(
+        container,
+        PSIN.BuildCapacity(),
+        wind_type,
+        "ContinuousInvestment",
+    )
+    curtailment_cost =
+        PSIN.get_expression(container, PSIN.CurtailmentCost(), wind_type, "BasicDispatch")
+    wind_profile = IS.get_time_series(
+        IS.SingleTimeSeries,
+        wind,
+        "ops_variable_cap_factor";
+        year="2030",
+        rep_day=1,
+    )
+    expected_cost = 15.0 * 365 * sum(1.07^-i for i in 0:4) / 1.07^5
+    @test JuMP.coefficient(curtailment_cost["wind", 1], wind_dispatch["wind", 1]) ≈
+          -expected_cost
+    @test JuMP.coefficient(curtailment_cost["wind", 1], wind_build["wind", 1]) ≈
+          expected_cost * 0.92 * first(TimeSeries.values(IS.get_data(wind_profile)))
+    operation_terms = PSIN.get_operation_terms(container.objective_function)
+    @test JuMP.coefficient(operation_terms, wind_dispatch["wind", 1]) ≈ -expected_cost
+    @test JuMP.coefficient(operation_terms, wind_build["wind", 1]) ≈
+          sum(JuMP.coefficient(cost, wind_build["wind", 1]) for cost in curtailment_cost)
 
     #SupplyTechnology{ThermalStandard}
     PSIN.construct_technologies!(

@@ -1045,6 +1045,93 @@ function objective_function!(
     return
 end
 
+# Price per MWh of available renewable generation that is not dispatched.
+get_curtailment_cost(::PSY.OperationalCost) = 0.0
+get_curtailment_cost(cost::PSY.RenewableGenerationCost) =
+    get_curtailment_cost(PSY.get_curtailment_cost(cost))
+get_curtailment_cost(curve::PSY.CostCurve) = throw_unsupported_curve(curve)
+get_curtailment_cost(curve::PSY.CostCurve{PSY.LinearCurve}) =
+    PSY.get_proportional_term(PSY.get_value_curve(curve))
+
+function add_curtailment_cost!(
+    ::SingleOptimizationContainer,
+    ::Vector{<:PSIP.SupplyTechnology},
+    ::OperationsTechnologyFormulation,
+    ::Vector{<:TechnologyModel},
+)
+    return
+end
+
+function add_curtailment_cost!(
+    container::SingleOptimizationContainer,
+    devices::Vector{D},
+    formulation::BasicDispatch,
+    tech_model_vector::Vector{<:TechnologyModel},
+) where {D <: PSIP.SupplyTechnology{PSY.RenewableDispatch}}
+    costs = get_curtailment_cost.(PSIP.get_operation_costs.(devices))
+    indexes = findall(!iszero, costs)
+    if isempty(indexes)
+        return
+    end
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    time_stamps = get_time_stamps(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    investment_time_stamps = get_investment_time_stamps(time_mapping)
+    discount_factor = 1.0 / (1.0 + get_discount_rate(container))
+    tech_model = string(typeof(formulation))
+    dispatch = get_variable(container, ActivePowerVariable(), D, tech_model)
+    add_expression_container!(
+        container,
+        CurtailmentCost(),
+        D,
+        PSIP.get_name.(devices[indexes]),
+        time_steps;
+        meta=tech_model,
+    )
+    for i in indexes
+        d = devices[i]
+        availability = get_availability(d)
+        names = get_variable_names(d)
+        inv_model = string(get_investment_formulation(tech_model_vector[i]))
+        installed = get_expression(container, CumulativeCapacity(), D, inv_model)
+        tech_base_year = PSIP.get_technology_base_year(PSIP.get_financial_data(d))
+        dollars_to_base_year =
+            (
+                1.0 + get_inflation_rate(container)
+            )^(get_base_year(container) - tech_base_year)
+        for op_ix in get_operational_indexes(time_mapping)
+            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+            profile = TimeSeries.values(time_series.data)
+            period = inverse_invest_mapping[op_ix]
+            period_start_year = Dates.year(first(investment_time_stamps[period]))
+            cost_factor =
+                costs[i] *
+                dollars_to_base_year *
+                get_time_step_weight(container, op_ix) *
+                _period_cost_factor(container, period)
+            for (j, t) in enumerate(consecutive_slices[op_ix])
+                step_cost =
+                    cost_factor *
+                    discount_factor^(Dates.year(time_stamps[t]) - period_start_year)
+                for name in names
+                    cost = JuMP.@expression(
+                        get_jump_model(container),
+                        step_cost * (
+                            availability * profile[j] * installed[name, period] -
+                            dispatch[name, t]
+                        )
+                    )
+                    add_to_objective_operations_expression!(container, cost)
+                    add_to_expression!(container, CurtailmentCost, cost, d, t, tech_model)
+                end
+            end
+        end
+    end
+    return
+end
+
 # ActivePowerLimitsConstraint for HydroDispatch + BasicDispatchWithBudget
 function add_constraints!(
     container::SingleOptimizationContainer,

@@ -119,6 +119,7 @@ export CapitalCost
 export TotalCapitalCost
 export FixedOperationModelCost
 export VariableOMCost
+export CurtailmentCost
 export ProductRevenue
 export FuelCost
 export StartUpCost
