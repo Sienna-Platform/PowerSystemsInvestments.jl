@@ -1,6 +1,7 @@
 #! format: off
 _supported_investment_formulations(::Type{<:PSIP.SupplyTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment, RetrofitInvestment)
 _supported_operation_formulations(::Type{<:PSIP.SupplyTechnology}) = (BasicDispatch, BasicDispatchWithBudget)
+_supported_operation_formulations(::Type{PSIP.SupplyTechnology{T}}) where {T <: Union{PSY.RenewableDispatch, PSY.RenewableNonDispatch}} = (BasicDispatch, BasicDispatchWithBudget, FixedOutput)
 _supported_operation_formulations(::Type{<:PSIP.SupplyTechnology{PSY.ThermalStandard}}) = (BasicDispatch, BasicDispatchWithBudget, ContinuousThermalCommitment)
 
 get_variable_lower_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = 0.0
@@ -154,7 +155,12 @@ function add_expression!(
 ) where {
     T <: WeightedEnergyGeneration,
     U <: Vector{D},
-    S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
+    S <: Union{
+        BasicDispatch,
+        FixedOutput,
+        BasicDispatchWithBudget,
+        ThermalCommitmentFormulation,
+    },
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -283,7 +289,12 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{V},
 ) where {
-    S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
+    S <: Union{
+        BasicDispatch,
+        FixedOutput,
+        BasicDispatchWithBudget,
+        ThermalCommitmentFormulation,
+    },
     T <: EnergyBalance,
     U <: Vector{D},
     V <: SingleRegionBalanceModel,
@@ -314,7 +325,12 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{V},
 ) where {
-    S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
+    S <: Union{
+        BasicDispatch,
+        FixedOutput,
+        BasicDispatchWithBudget,
+        ThermalCommitmentFormulation,
+    },
     T <: EnergyBalance,
     U <: Vector{D},
     V <: MultiRegionBalanceModel,
@@ -345,7 +361,12 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{V},
 ) where {
-    S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
+    S <: Union{
+        BasicDispatch,
+        FixedOutput,
+        BasicDispatchWithBudget,
+        ThermalCommitmentFormulation,
+    },
     T <: EnergyBalance,
     U <: Vector{D},
     V <: AbstractNodalTransportAggregation,
@@ -509,6 +530,66 @@ function add_constraints!(
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     active_power[name, t] <=
+                    availability * ts_data[ix] * installed_cap[name, time_step_inv]
+                )
+            end
+        end
+    end
+    return
+end
+
+# Generation equals the available capacity profile #
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+    tech_model_vector::Vector{X},
+) where {
+    T <: ActivePowerLimitsConstraint,
+    U <: Vector{D},
+    V <: ActivePowerVariable,
+    S <: FixedOutput,
+    X <: TechnologyModel,
+} where {
+    D <: Union{
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIP.SupplyTechnology{PSY.RenewableNonDispatch},
+    },
+}
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+    device_names = get_variable_names(devices)
+    con_eq = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+
+    active_power = get_variable(container, V(), D, tech_model)
+    operational_indexes = get_all_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+
+    for (ix, d) in enumerate(devices)
+        tech_model = tech_model_vector[ix]
+        inv_model = string(get_investment_formulation(tech_model))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        availability = get_availability(d)
+        for name in get_variable_names(d), op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+            ts_data = TimeSeries.values(time_series.data)
+            time_step_inv = inverse_invest_mapping[op_ix]
+            for (ix, t) in enumerate(time_slices)
+                con_eq[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    active_power[name, t] ==
                     availability * ts_data[ix] * installed_cap[name, time_step_inv]
                 )
             end
@@ -1032,7 +1113,10 @@ function objective_function!(
     container::SingleOptimizationContainer,
     devices::Vector{T},
     formulation::S,
-) where {T <: PSIP.SupplyTechnology, S <: Union{BasicDispatch, BasicDispatchWithBudget}}
+) where {
+    T <: PSIP.SupplyTechnology,
+    S <: Union{BasicDispatch, FixedOutput, BasicDispatchWithBudget},
+}
     tech_model = string(S)
     add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model)
     return
