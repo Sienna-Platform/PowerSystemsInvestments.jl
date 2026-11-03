@@ -40,6 +40,7 @@ export BinaryInvestment
 
 ### Operation Formulations ###
 export BasicDispatch
+export FixedOutput
 export BasicDispatchWithBudget
 export BasicDispatchWithLosses
 export UnservedDemandDispatch
