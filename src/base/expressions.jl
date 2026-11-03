@@ -20,8 +20,7 @@ struct CumulativeCapacity <: CumulativeInvestmentExpressionType end
 
 struct CumulativePowerCapacity <: CumulativeInvestmentExpressionType end
 struct CumulativeEnergyCapacity <: CumulativeInvestmentExpressionType end
-struct CumulativeWindCapacity <: CumulativeInvestmentExpressionType end
-struct CumulativeSolarCapacity <: CumulativeInvestmentExpressionType end
+struct CumulativeSupplyCapacity <: CumulativeInvestmentExpressionType end
 struct CumulativeInverterCapacity <: CumulativeInvestmentExpressionType end
 
 struct CapitalCost <: InvestmentExpressionType end
@@ -36,8 +35,7 @@ struct FeasibilitySurplus <: FeasibilityExpressionType end
 should_write_resulting_value(::Type{CumulativeCapacity}) = true
 should_write_resulting_value(::Type{CumulativePowerCapacity}) = true
 should_write_resulting_value(::Type{CumulativeEnergyCapacity}) = true
-should_write_resulting_value(::Type{CumulativeSolarCapacity}) = true
-should_write_resulting_value(::Type{CumulativeWindCapacity}) = true
+should_write_resulting_value(::Type{CumulativeSupplyCapacity}) = true
 should_write_resulting_value(::Type{CumulativeInverterCapacity}) = true
 
 should_write_resulting_value(::Type{WeightedEnergyGeneration}) = true

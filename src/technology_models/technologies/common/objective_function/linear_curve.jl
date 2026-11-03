@@ -59,6 +59,32 @@ function _add_cost_to_objective!(
     return _add_cost_to_objective!(container, T(), technology, value_curve, U(), tech_model)
 end
 
+# Overnight capital cost plus last-mile interconnection cost, both in $/MW
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    capital_cost::PSIP.CapitalCost,
+    ::U,
+    tech_model::String,
+) where {T <: VariableType, U <: AbstractTechnologyFormulation}
+    value_curve = PSIP.get_capital_cost(capital_cost)
+    cost_component = PSY.get_function_data(value_curve)
+    proportional_term =
+        PSY.get_proportional_term(cost_component) +
+        PSIP.get_interconnection_cost(capital_cost)
+    multiplier = objective_function_multiplier(T(), U())
+    _add_linearcurve_cost!(
+        container,
+        T(),
+        technology,
+        value_curve,
+        multiplier * proportional_term,
+        tech_model,
+    )
+    return
+end
+
 #Fixed OM calculated from build capacity
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
@@ -90,7 +116,7 @@ function _add_cost_to_objective!(
     ::U,
     tech_model::String,
 ) where {T <: OperationsVariableType, U <: AbstractTechnologyFormulation}
-    cost_curve = PSY.get_variable(om_cost)
+    cost_curve = PSY.get_variable_operation_cost(om_cost)
     value_curve = PSY.get_value_curve(cost_curve)
     proportional_term = PSY.get_proportional_term(value_curve)
     multiplier = objective_function_multiplier(T(), U())

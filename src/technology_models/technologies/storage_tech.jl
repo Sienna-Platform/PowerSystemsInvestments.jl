@@ -35,8 +35,12 @@ get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 
 # TODO: Defaulting to using discharge values for symmetric storage, but we need to be careful if we implement asymmetric storage investments
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d, IS.NU).max
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_limits_energy(d, IS.NU).max
+get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = resolve_capacity_limits(PSIP.get_capacity_limits_discharge(d, IS.NU), d).max
+get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = resolve_capacity_limits(PSIP.get_capacity_limits_energy(d, IS.NU), d).max
+
+# Interconnection cost scales with MW, so it is charged on the power (discharge) capacity
+get_capital_cost_data(d::PSIP.StorageTechnology, ::BuildPowerCapacity) = PSIP.CapitalCost(PSIP.get_discharge_capital_cost(PSIP.get_capital_costs(d)), PSIP.get_interconnection_cost(PSIP.get_capital_costs(d)))
+get_capital_cost_data(d::PSIP.StorageTechnology, ::BuildEnergyCapacity) = PSIP.CapitalCost(PSIP.get_energy_capital_cost(PSIP.get_capital_costs(d)), 0.0)
 
 get_init_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 get_init_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mwh(p, d)
@@ -337,7 +341,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region (node) supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -373,7 +377,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -442,7 +446,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],
@@ -477,7 +481,7 @@ function add_to_expression!(
     for d in devices, t in time_steps
         name = PSIP.get_name(d)
         # Only 1 region (node) supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
+        region = PSY.get_name(only(PSIP.get_region(d)))
         _add_to_jump_expression!(
             expression[region, t],
             variable[name, t],

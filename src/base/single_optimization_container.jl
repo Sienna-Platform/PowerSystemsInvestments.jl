@@ -571,7 +571,7 @@ function _make_system_expressions!(
     ::Type{MultiRegionBalanceModel},
     port::PSIP.Portfolio,
 )
-    regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
+    regions = PSY.get_name.(PSIP.get_regions(PSY.Area, port))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
@@ -591,7 +591,7 @@ function _make_system_expressions!(
     ::Type{NodalBalanceModel},
     port::PSIP.Portfolio,
 )
-    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    nodes = PSY.get_name.(PSIP.get_regions(PSY.ACBus, port))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)

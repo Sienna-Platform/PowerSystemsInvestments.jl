@@ -8,9 +8,7 @@ struct MaximumCumulativePowerCapacity <: MaximumCumulativeInvestmentConstraint e
 
 struct MaximumCumulativeEnergyCapacity <: MaximumCumulativeInvestmentConstraint end
 
-struct MaximumCumulativeWindCapacity <: MaximumCumulativeInvestmentConstraint end
-
-struct MaximumCumulativeSolarCapacity <: MaximumCumulativeInvestmentConstraint end
+struct MaximumCumulativeSupplyCapacity <: MaximumCumulativeInvestmentConstraint end
 
 struct MaximumCumulativeInverterCapacity <: MaximumCumulativeInvestmentConstraint end
 
@@ -41,9 +39,7 @@ struct ActivePowerDischargeVariableLimitsConstraint <: OperationVariableLimitsCo
 
 struct ActivePowerChargeVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
 
-struct ActivePowerWindVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
-
-struct ActivePowerSolarVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
+struct ActivePowerSupplyVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
 
 struct StateOfChargeLimitsConstraint <: OperationVariableLimitsConstraintType end
 

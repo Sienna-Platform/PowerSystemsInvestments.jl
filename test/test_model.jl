@@ -87,11 +87,11 @@
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IS.Optimization.ModelBuildStatus.BUILT
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemOutputs(m)
-    @test length(IOM.list_variable_names(res)) == 23
+    @test length(IOM.list_variable_names(res)) == 21
     @test length(IOM.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 
@@ -166,11 +166,11 @@
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IS.Optimization.ModelBuildStatus.BUILT
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemOutputs(m)
-    @test length(IOM.list_variable_names(res)) == 23
+    @test length(IOM.list_variable_names(res)) == 21
     @test length(IOM.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 
@@ -292,7 +292,7 @@ end
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IS.Optimization.ModelBuildStatus.BUILT
 
     # Force infeasibility by setting the RHS of a registered balance constraint to an
     # impossibly large demand value, so the constraint is captured in the IIS conflict dict.
@@ -356,7 +356,7 @@ end
 
     mktempdir() do path
         status = build!(model; output_dir=path)
-        @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+        @test status == IS.Optimization.ModelBuildStatus.BUILT
 
         container = PSIN.get_optimization_container(model)
 
@@ -524,7 +524,7 @@ end
 
     mktempdir() do path
         status = build!(model; output_dir=path)
-        @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+        @test status == IS.Optimization.ModelBuildStatus.BUILT
 
         container = PSIN.get_optimization_container(model)
 
@@ -660,7 +660,7 @@ end
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IS.Optimization.ModelBuildStatus.BUILT
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     container = PSIN.get_optimization_container(m)
@@ -692,8 +692,7 @@ end
         IS.SingleTimeSeries,
         demand2,
         "ops_demand";
-        year="2030",
-        rep_day=1,
+        features=Dict("year" => "2030", "rep_day" => 1),
     )
     total_demand_2030 = sum(TimeSeries.values(d_2030.data))
 

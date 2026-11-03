@@ -504,7 +504,7 @@ set_console_level!(model::InvestmentModel, val) =
     IOM.set_console_level!(get_internal(model), val)
 set_file_level!(model::InvestmentModel, val) = IOM.set_file_level!(get_internal(model), val)
 
-function set_status!(model::InvestmentModel, status::ISOPT.ModelBuildStatus)
+function set_status!(model::InvestmentModel, status::ISOPT.ModelBuildStatus.Value)
     IOM.set_status!(get_internal(model), status)
     return
 end

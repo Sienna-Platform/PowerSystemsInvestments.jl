@@ -10,11 +10,8 @@ get_variable_upper_bound(::ActiveInPowerVariable, d::PSIP.ColocatedSupplyStorage
 get_variable_lower_bound(::ActiveOutPowerVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::ActiveOutPowerVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = nothing
 
-get_variable_lower_bound(::ActivePowerSolarVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = 0.0
-get_variable_upper_bound(::ActivePowerSolarVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = nothing
-
-get_variable_lower_bound(::ActivePowerWindVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = 0.0
-get_variable_upper_bound(::ActivePowerWindVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = nothing
+get_variable_lower_bound(::ActivePowerSupplyVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = 0.0
+get_variable_upper_bound(::ActivePowerSupplyVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = nothing
 
 get_variable_lower_bound(::ActivePowerChargeVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = 0.0
 get_variable_upper_bound(::ActivePowerChargeVariable, d::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = nothing
@@ -44,51 +41,35 @@ get_expression_multiplier(::WeightedEnergyGeneration, ::ActiveInPowerVariable, :
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.ColocatedSupplyStorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_power_limits(d, IS.NU).max
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_energy_limits(d, IS.NU).max
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity) = PSIP.get_capacity_limits_wind(d, IS.NU).max
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity) = PSIP.get_capacity_limits_solar(d, IS.NU).max
-get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = PSIP.get_max_inverter_capacity(d, IS.NU)
+# A co-located technology owns one supply and one storage technology (masked in the
+# portfolio); their data is read from those subcomponents.
+get_supply(d::PSIP.ColocatedSupplyStorageTechnology) = PSIP.get_supply_technology(d)
+get_storage(d::PSIP.ColocatedSupplyStorageTechnology) = PSIP.get_storage_technology(d)
+
+get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity) = get_max_cap(get_storage(d), CumulativePowerCapacity())
+get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeEnergyCapacity) = get_max_cap(get_storage(d), CumulativeEnergyCapacity())
+get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSupplyCapacity) = resolve_capacity_limits(PSIP.get_capacity_limits(get_supply(d), IS.NU), get_supply(d)).max
+get_max_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = PSIP.get_inverter_capacity_limits(d, IS.NU).max
 
 get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeEnergyCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
-get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
+get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSupplyCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 get_init_cap(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity, p::PSIP.Portfolio) = PSIP.get_existing_capacity_mw(p, d)
 
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCapacity) = PSIP.get_capital_costs_power(d, IS.NU)
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = PSIP.get_capital_costs_energy(d, IS.NU)
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildWindCapacity) = PSIP.get_capital_costs_wind(d, IS.NU)
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildSolarCapacity) = PSIP.get_capital_costs_solar(d, IS.NU)
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildInverterCapacity) = PSIP.get_capital_costs_inverter(d, IS.NU)
+get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCapacity) = get_capital_cost_data(get_storage(d), BuildPowerCapacity())
+get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = get_capital_cost_data(get_storage(d), BuildEnergyCapacity())
+get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildSupplyCapacity) = PSIP.get_capital_costs(get_supply(d))
+get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildInverterCapacity) = PSIP.get_capital_costs_inverter(d)
 
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCapacity) = PSIP.get_operation_costs_power(d, IS.NU)
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = PSIP.get_operation_costs_energy(d, IS.NU)
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildWindCapacity) = PSIP.get_operation_costs_wind(d, IS.NU)
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildSolarCapacity) = PSIP.get_operation_costs_solar(d, IS.NU)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCapacity) = PSIP.get_operation_costs(get_storage(d), IS.NU)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = PSIP.get_operation_costs(get_storage(d), IS.NU)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildSupplyCapacity) = PSIP.get_operation_costs(get_supply(d), IS.NU)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildInverterCapacity) = PSIP.get_operation_costs_inverter(d, IS.NU)
 
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerChargeVariable) = PSIP.get_operation_costs_power(d, IS.NU)
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerDischargeVariable) = PSIP.get_operation_costs_power(d, IS.NU)
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerWindVariable) = PSIP.get_operation_costs_wind(d, IS.NU)
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerSolarVariable) = PSIP.get_operation_costs_solar(d, IS.NU)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerChargeVariable) = PSIP.get_operation_costs(get_storage(d), IS.NU)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerDischargeVariable) = PSIP.get_operation_costs(get_storage(d), IS.NU)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerSupplyVariable) = PSIP.get_operation_costs(get_supply(d), IS.NU)
 #! format: on
-
-function get_default_time_series_names(
-    ::Type{U},
-    ::ActivePowerWindVariable,
-) where {U <: PSIP.ColocatedSupplyStorageTechnology}
-    # TODO: We need to discuss about an API for timeseries names for users
-    return "ops_wind_variable_cap_factor"
-end
-
-function get_default_time_series_names(
-    ::Type{U},
-    ::ActivePowerSolarVariable,
-) where {U <: PSIP.ColocatedSupplyStorageTechnology}
-    # TODO: We need to discuss about an API for timeseries names for users
-    return "ops_solar_variable_cap_factor"
-end
 
 function get_default_attributes(
     ::Type{U},
@@ -255,13 +236,10 @@ function add_constraints!(
     formulation::S,
     tech_model_vector::Vector{X},
 ) where {
-    T <: Union{
-        ActivePowerSolarVariableLimitsConstraint,
-        ActivePowerWindVariableLimitsConstraint,
-    },
+    T <: ActivePowerSupplyVariableLimitsConstraint,
     U <: Vector{D},
-    V <: Union{ActivePowerWindVariable, ActivePowerSolarVariable},
-    W <: Union{CumulativeWindCapacity, CumulativeSolarCapacity},
+    V <: ActivePowerSupplyVariable,
+    W <: CumulativeSupplyCapacity,
     S <: OperationsColocatedFormulation,
     X <: TechnologyModel,
 } where {D <: PSIP.ColocatedSupplyStorageTechnology}
@@ -289,10 +267,11 @@ function add_constraints!(
         tech_model = tech_model_vector[ix]
         inv_model = string(get_investment_formulation(tech_model))
         installed_cap = get_expression(container, W(), D, inv_model)
+        # The capacity factor time series is attached to the supply subcomponent
+        supply = get_supply(d)
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
-            ts_name = get_default_time_series_names(D, V())
-            time_series = retrieve_ops_time_series(d, op_ix, time_mapping, ts_name)
+            time_series = retrieve_ops_time_series(supply, op_ix, time_mapping)
             ts_data = TimeSeries.values(time_series.data)
             first_tstamp = time_stamps[first(time_slices)]
             first_ts_tstamp = IS.get_initial_timestamp(time_series)
@@ -352,8 +331,8 @@ function add_constraints!(
         get_variable(container, ActivePowerChargeVariable(), D, tech_model)
     active_power_discharge =
         get_variable(container, ActivePowerDischargeVariable(), D, tech_model)
-    active_power_wind = get_variable(container, ActivePowerWindVariable(), D, tech_model)
-    active_power_solar = get_variable(container, ActivePowerSolarVariable(), D, tech_model)
+    active_power_supply =
+        get_variable(container, ActivePowerSupplyVariable(), D, tech_model)
 
     for d in devices
         name = PSIP.get_name(d)
@@ -361,9 +340,7 @@ function add_constraints!(
             con_out[name, t] = JuMP.@constraint(
                 get_jump_model(container),
                 active_power_out[name, t] ==
-                active_power_discharge[name, t] +
-                active_power_wind[name, t] +
-                active_power_solar[name, t]
+                active_power_discharge[name, t] + active_power_supply[name, t]
             )
             con_in[name, t] = JuMP.@constraint(
                 get_jump_model(container),
@@ -409,8 +386,8 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        efficiency_in = PSIP.get_efficiency_storage(d).in
-        efficiency_out = PSIP.get_efficiency_storage(d).out
+        efficiency_in = PSIP.get_efficiency(get_storage(d)).in
+        efficiency_out = PSIP.get_efficiency(get_storage(d)).out
         # For each period and first representative day, the initial storage is zero
         init_storage = 0.0
         for stage in get_investment_time_steps(time_mapping)
@@ -490,8 +467,8 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        efficiency_in = PSIP.get_efficiency_storage(d).in
-        efficiency_out = PSIP.get_efficiency_storage(d).out
+        efficiency_in = PSIP.get_efficiency(get_storage(d)).in
+        efficiency_out = PSIP.get_efficiency(get_storage(d)).out
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             if length(time_slices) == 1
@@ -555,14 +532,7 @@ function objective_function!(
     )
     add_variable_cost!(
         container,
-        ActivePowerWindVariable(),
-        devices,
-        formulation,
-        tech_model,
-    )
-    add_variable_cost!(
-        container,
-        ActivePowerSolarVariable(),
+        ActivePowerSupplyVariable(),
         devices,
         formulation,
         tech_model,
@@ -578,13 +548,11 @@ function objective_function!(
     tech_model = string(S)
     add_capital_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildSolarCapacity(), devices, formulation, tech_model)
-    add_capital_cost!(container, BuildWindCapacity(), devices, formulation, tech_model)
+    add_capital_cost!(container, BuildSupplyCapacity(), devices, formulation, tech_model)
     add_capital_cost!(container, BuildInverterCapacity(), devices, formulation, tech_model)
     add_fixed_om_cost!(container, BuildEnergyCapacity(), devices, formulation, tech_model)
     add_fixed_om_cost!(container, BuildPowerCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildSolarCapacity(), devices, formulation, tech_model)
-    add_fixed_om_cost!(container, BuildWindCapacity(), devices, formulation, tech_model)
+    add_fixed_om_cost!(container, BuildSupplyCapacity(), devices, formulation, tech_model)
     add_fixed_om_cost!(container, BuildInverterCapacity(), devices, formulation, tech_model)
     return
 end

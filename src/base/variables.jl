@@ -24,13 +24,9 @@ Total installed capacity for a technology
 struct BuildEnergyCapacity <: BuildInvestmentVariableType end
 
 """
-TODO
+Capacity built for the supply component of a co-located supply + storage technology
 """
-struct BuildWindCapacity <: BuildInvestmentVariableType end
-"""
-TODO
-"""
-struct BuildSolarCapacity <: BuildInvestmentVariableType end
+struct BuildSupplyCapacity <: BuildInvestmentVariableType end
 """
 TODO
 """
@@ -69,14 +65,9 @@ Dispatch of a technology at a timepoint
 struct ActivePowerDischargeVariable <: OperationsVariableType end
 
 """
-Dispatch of a technology at a timepoint
+Dispatch of the supply component of a co-located supply + storage technology at a timepoint
 """
-struct ActivePowerWindVariable <: OperationsVariableType end
-
-"""
-Dispatch of a technology at a timepoint
-"""
-struct ActivePowerSolarVariable <: OperationsVariableType end
+struct ActivePowerSupplyVariable <: OperationsVariableType end
 
 """
 Struct to dispatch the creation of bidirectional Active Power Flow Variables

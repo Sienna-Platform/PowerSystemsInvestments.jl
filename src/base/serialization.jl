@@ -44,7 +44,7 @@ function serialize_problem(model::InvestmentModel; optimizer=nothing)
         portfolio_filename =
             joinpath(get_output_dir(model), make_portfolio_filename(portfolio))
         # Skip serialization if the system is already in the folder
-        !ispath(portfolio_filename) && PSIP.to_json(portfolio, portfolio_filename)
+        !ispath(portfolio_filename) && PSIP.to_file(portfolio, portfolio_filename)
     else
         portfolio_filename = nothing
     end
