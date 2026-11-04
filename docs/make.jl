@@ -1,23 +1,23 @@
 using Documenter, PowerSystemsInvestments
 
-pages = OrderedDict(
+pages = [
     "Welcome Page" => "index.md",
     "Quick Start Guide" => "quick_start_guide.md",
     "Tutorials" => "tutorials/intro_page.md",
     "Public API Reference" => "api/public.md",
     "Internal API Reference" => "api/internal.md",
-)
+]
 
 makedocs(
     modules=[PowerSystemsInvestments],
     format=Documenter.HTML(prettyurls=haskey(ENV, "GITHUB_ACTIONS")),
     sitename="PowerSystemsInvestments.jl",
     authors="Jose Daniel Lara",
-    pages=Any[p for p in pages],
+    pages=pages,
 )
 
 deploydocs(
-    repo="github.com/NREL-Sienna/PowerSystemsInvestments.git",
+    repo="github.com/Sienna-Platform/PowerSystemsInvestments.jl.git",
     target="build",
     branch="gh-pages",
     devbranch="main",

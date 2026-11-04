@@ -1,7 +1,7 @@
 @testset "Printing" begin
     p_5bus, op_days = test_2_zone_portfolio()
-    # 2 representative days (24-hours for 5 years each)
-    weights = [365 * 5, 365 * 5]
+    # 2 representative days (24 hours each), one per period, with per-year weights
+    weights = [365, 365]
     # 2 periods: 2030-2035, 2035-2040
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),

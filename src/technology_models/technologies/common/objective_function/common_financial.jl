@@ -22,3 +22,14 @@ function amortize_overnight_term_to_base_year_dollars(
         dollars_to_base_year
     return amortized_proportional_term, discount_factor, base_year
 end
+
+"""
+Present value, at the start of an investment period, of one unit paid at the start of each
+year of the period.
+"""
+function investment_period_annuity_factor(discount_rate::Float64, inv_tuple)
+    num_years =
+        Dates.value(Dates.Year(inv_tuple[2])) - Dates.value(Dates.Year(inv_tuple[1])) + 1
+    discount_factor = 1.0 / (1.0 + discount_rate)
+    return sum(discount_factor^k for k in 0:(num_years - 1))
+end
