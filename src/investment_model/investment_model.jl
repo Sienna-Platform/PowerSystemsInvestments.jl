@@ -2,6 +2,8 @@ mutable struct InvestmentModel{S <: SolutionAlgorithm}
     name::Symbol
     template::InvestmentModelTemplate
     portfolio::PSIP.Portfolio
+    # Time mapping passed by the user. When `nothing`, it is built from the template.
+    time_mapping::Union{Nothing, InvestmentTimeMapping}
     internal::Union{Nothing, IOM.ModelInternal}
     simulation_info::SimulationInfo
     store::InvestmentModelStore
@@ -14,6 +16,7 @@ function InvestmentModel(
     portfolio::PSIP.Portfolio,
     settings::Settings,
     jump_model::Union{Nothing, JuMP.Model}=nothing;
+    time_mapping::Union{Nothing, InvestmentTimeMapping}=nothing,
 )
     internal = IOM.ModelInternal(SingleOptimizationContainer(settings, jump_model))
 
@@ -21,6 +24,7 @@ function InvestmentModel(
         :CEM,
         template,
         portfolio,
+        time_mapping,
         internal,
         SimulationInfo(),
         InvestmentModelStore(),
@@ -47,6 +51,7 @@ function InvestmentModel(
     check_numerical_bounds=true,
     initial_time=UNSET_INI_TIME,
     time_series_cache_size::Int=IS.TIME_SERIES_CACHE_SIZE_BYTES,
+    time_mapping::Union{Nothing, InvestmentTimeMapping}=nothing,
 )
     settings = Settings(
         portfolio;
@@ -63,7 +68,14 @@ function InvestmentModel(
         check_numerical_bounds=check_numerical_bounds,
         store_variable_names=store_variable_names,
     )
-    return InvestmentModel(template, alg, portfolio, settings, jump_model)
+    return InvestmentModel(
+        template,
+        alg,
+        portfolio,
+        settings,
+        jump_model;
+        time_mapping=time_mapping,
+    )
 end
 
 function build_impl!(::InvestmentModel{T}) where {T}
@@ -341,6 +353,29 @@ function init_model_store_params!(model::InvestmentModel)
     return
 end
 
+_get_time_mapping(::Nothing, template::InvestmentModelTemplate) =
+    InvestmentTimeMapping(template)
+
+function _get_time_mapping(time_mapping::InvestmentTimeMapping, ::InvestmentModelTemplate)
+    @info "Using the time mapping passed to the InvestmentModel. The investment years, " *
+          "representative series and sample periods in the template are not used."
+    return time_mapping
+end
+
+"""
+Return `model` to the `EMPTY` status so it can be built again: replace its optimization
+container with an empty one and clear its store. The template, portfolio and any time mapping
+passed by the user are kept.
+"""
+function reset!(model::InvestmentModel)
+    internal = get_internal(model)
+    IOM.set_container!(internal, SingleOptimizationContainer(get_settings(model), nothing))
+    IOM.set_initial_conditions_model_container!(internal, nothing)
+    empty!(get_store(model))
+    set_status!(model, ModelBuildStatus.EMPTY)
+    return
+end
+
 function build_pre_step!(model::InvestmentModel)
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Build pre-step" begin
         # TODO: add template validation
@@ -357,6 +392,7 @@ function build_pre_step!(model::InvestmentModel)
             get_optimization_container(model),
             get_template(model),
             get_portfolio(model),
+            _get_time_mapping(model.time_mapping, get_template(model)),
         )
         @info "Initializing ModelStoreParams"
         init_model_store_params!(model)

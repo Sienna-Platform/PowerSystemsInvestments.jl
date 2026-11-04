@@ -17,7 +17,7 @@ end
 Base.@kwdef mutable struct SingleOptimizationContainer <:
                            ISOPT.AbstractOptimizationContainer
     JuMPmodel::JuMP.Model
-    time_mapping::InvestmentTimeMapping
+    time_mapping::Union{Nothing, InvestmentTimeMapping}
     settings::Settings
     settings_copy::Settings
     variables::Dict{IOM.VariableKey, AbstractArray}
@@ -54,7 +54,7 @@ function SingleOptimizationContainer(
 
     return SingleOptimizationContainer(
         jump_model,
-        InvestmentTimeMapping(nothing),
+        nothing,
         settings,
         copy_for_serialization(settings),
         Dict{VariableKey, AbstractArray}(),
@@ -109,10 +109,13 @@ get_objective_expression(container::SingleOptimizationContainer) =
     container.objective_function
 is_synchronized(container::SingleOptimizationContainer) =
     container.objective_function.synchronized
-set_time_mapping!(
+function set_time_mapping!(
     container::SingleOptimizationContainer,
     time_mapping::InvestmentTimeMapping,
-) = container.time_mapping = time_mapping
+)
+    container.time_mapping = time_mapping
+    return
+end
 set_base_year!(container::SingleOptimizationContainer, base_year::Int) =
     container.base_year = base_year
 set_discount_rate!(container::SingleOptimizationContainer, discount_rate::Float64) =
@@ -175,15 +178,15 @@ function init_optimization_container!(
     container::SingleOptimizationContainer,
     template::InvestmentModelTemplate,
     portfolio::PSIP.Portfolio,
+    time_mapping::InvestmentTimeMapping=InvestmentTimeMapping(template),
 )
     # The order of operations matter
     transport_model = get_transport_model(template)
     settings = get_settings(container)
 
     # Update Time Mapping
-    time_map = InvestmentTimeMapping(template)
-    set_time_mapping!(container, time_map)
-    check_operational_weights(time_map)
+    set_time_mapping!(container, time_mapping)
+    check_operational_weights(time_mapping)
     # Set Financial Data in Container from Portfolio
     set_base_year!(container, PSIP.get_base_year(portfolio))
     set_discount_rate!(container, PSIP.get_discount_rate(portfolio))

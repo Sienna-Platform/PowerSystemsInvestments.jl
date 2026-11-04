@@ -1002,3 +1002,120 @@ end
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 end
+
+function _time_mapping_test_model(operational_weights; kwargs...)
+    p_5bus, op_days = test_2_zone_portfolio()
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, operational_weights),
+        RepresentativePeriods(Vector{Vector{DateTime}}()),
+        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+    )
+    for (names, tech_type, investment, operation) in (
+        (
+            ["demand1", "demand2"],
+            PSIP.DemandRequirement{PSY.PowerLoad},
+            StaticLoadInvestment,
+            BasicDispatch,
+        ),
+        (
+            ["wind"],
+            PSIP.SupplyTechnology{PSY.RenewableDispatch},
+            ContinuousInvestment,
+            BasicDispatch,
+        ),
+        (
+            ["cheap_thermal", "expensive_thermal"],
+            PSIP.SupplyTechnology{PSY.ThermalStandard},
+            ContinuousInvestment,
+            BasicDispatch,
+        ),
+        (
+            ["test_branch"],
+            PSIP.AggregateTransportTechnology{PSY.ACBranch},
+            ContinuousInvestment,
+            BasicDispatch,
+        ),
+        (
+            ["test_storage"],
+            PSIP.StorageTechnology{EnergyReservoirStorage},
+            ContinuousInvestment,
+            CyclicalStorageDispatch,
+        ),
+        (
+            ["colocated_test"],
+            ColocatedSupplyStorageTechnology{RenewableDispatch},
+            ContinuousInvestment,
+            CyclicalColocatedDispatch,
+        ),
+    )
+        set_technology_model!(
+            template,
+            names,
+            tech_type,
+            investment,
+            operation,
+            BasicDispatchFeasibility,
+        )
+    end
+    model = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        kwargs...,
+    )
+    return model, periods, op_days
+end
+
+@testset "InvestmentModel with a time mapping passed by the user" begin
+    # Reference: the time mapping is built from the template's per-year weights.
+    reference, periods, op_days = _time_mapping_test_model([365.0, 365.0])
+    @test build!(reference; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatus.BUILT
+    @test solve!(reference) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    reference_objective = JuMP.objective_value(PSIN.get_jump_model(reference))
+
+    # The template has placeholder weights; the passed mapping overrides them.
+    time_mapping = PSIN.InvestmentTimeMapping(
+        periods,
+        op_days,
+        Vector{Vector{DateTime}}();
+        operational_weights=[365.0, 365.0],
+    )
+    m, _, _ = _time_mapping_test_model([1.0, 1.0]; time_mapping=time_mapping)
+    # The placeholder weights would warn if they were used.
+    status =
+        @test_logs min_level = Logging.Warn build!(m; output_dir=mktempdir(; cleanup=true))
+    @test status == IS.Optimization.ModelBuildStatus.BUILT
+    container = PSIN.get_optimization_container(m)
+    @test PSIN.get_time_mapping(container) === time_mapping
+    @test PSIN.get_operational_weights(container) == [365.0, 365.0]
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test JuMP.objective_value(PSIN.get_jump_model(m)) ≈ reference_objective
+
+    # Building again resets the model and keeps the passed time mapping.
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatus.BUILT
+    rebuilt_container = PSIN.get_optimization_container(m)
+    @test rebuilt_container !== container
+    @test PSIN.get_time_mapping(rebuilt_container) === time_mapping
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test JuMP.objective_value(PSIN.get_jump_model(m)) ≈ reference_objective
+end
+
+@testset "InvestmentModel builds again without a passed time mapping" begin
+    m, _, _ = _time_mapping_test_model([365.0, 365.0])
+    for _ in 1:2
+        @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+              IS.Optimization.ModelBuildStatus.BUILT
+        @test PSIN.get_operational_weights(PSIN.get_optimization_container(m)) ==
+              [365.0, 365.0]
+        @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    end
+end

@@ -16,14 +16,6 @@ struct InvestmentIntervals
     map_to_feasibility_slices::Dict{Int, Vector{Int}}
 end
 
-function InvestmentIntervals(::Nothing)
-    return InvestmentIntervals(
-        Vector{NTuple{2, Dates.Date}}(),
-        Dict{Int, Vector{Int}}(),
-        Dict{Int, Vector{Int}}(),
-    )
-end
-
 """
 Time steps of the operational and feasibility slices, in the order the model indexes them.
 
@@ -45,17 +37,6 @@ struct OperationalPeriods
     feasibility_indexes::Vector{Int}
     operational_indexes::Vector{Int}
     weights::Vector{Float64}
-end
-
-function OperationalPeriods(::Nothing)
-    return OperationalPeriods(
-        Vector{Dates.DateTime}(),
-        Vector{UnitRange{Int}}(),
-        Vector{Int}(),
-        Vector{Int}(),
-        Vector{Int}(),
-        Vector{Float64}(),
-    )
 end
 
 """
@@ -162,10 +143,6 @@ function InvestmentTimeMapping(template::InvestmentModelTemplate)
         get_feasibility_model(template).sample_periods;
         operational_weights=operation_model.series_weights,
     )
-end
-
-function InvestmentTimeMapping(::Nothing)
-    return InvestmentTimeMapping(InvestmentIntervals(nothing), OperationalPeriods(nothing))
 end
 
 get_consecutive_slices(tm::InvestmentTimeMapping) = tm.operation.consecutive_slices
