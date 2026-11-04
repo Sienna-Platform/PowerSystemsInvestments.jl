@@ -160,7 +160,12 @@ function add_expression!(
 ) where {
     T <: WeightedEnergyGeneration,
     U <: Vector{D},
-    S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
+    S <: Union{
+        BasicDispatch,
+        FixedOutput,
+        BasicDispatchWithBudget,
+        ThermalCommitmentFormulation,
+    },
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -298,7 +303,12 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{V},
 ) where {
-    S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
+    S <: Union{
+        BasicDispatch,
+        FixedOutput,
+        BasicDispatchWithBudget,
+        ThermalCommitmentFormulation,
+    },
     T <: EnergyBalance,
     U <: Vector{D},
     V <: SingleRegionBalanceModel,
@@ -329,7 +339,12 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{V},
 ) where {
-    S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
+    S <: Union{
+        BasicDispatch,
+        FixedOutput,
+        BasicDispatchWithBudget,
+        ThermalCommitmentFormulation,
+    },
     T <: EnergyBalance,
     U <: Vector{D},
     V <: MultiRegionBalanceModel,
@@ -360,7 +375,12 @@ function add_to_expression!(
     formulation::S,
     transport_model::TransportModel{V},
 ) where {
-    S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
+    S <: Union{
+        BasicDispatch,
+        FixedOutput,
+        BasicDispatchWithBudget,
+        ThermalCommitmentFormulation,
+    },
     T <: EnergyBalance,
     U <: Vector{D},
     V <: AbstractNodalTransportAggregation,
@@ -522,6 +542,68 @@ function add_constraints!(
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     active_power[name, t] <=
+                    availability * ts_data[ix] * installed_cap[name, time_step_inv]
+                )
+            end
+        end
+    end
+    return
+end
+
+# Generation equals the available capacity profile #
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+    tech_model_vector::Vector{X},
+) where {
+    T <: ActivePowerLimitsConstraint,
+    U <: Vector{D},
+    V <: ActivePowerVariable,
+    S <: FixedOutput,
+    X <: TechnologyModel,
+} where {
+    D <: Union{
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIP.SupplyTechnology{PSY.RenewableNonDispatch},
+    },
+}
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    tech_model = string(S)
+    device_names = get_variable_names(devices)
+    con_eq = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+
+    active_power = get_variable(container, V(), D, tech_model)
+    operational_indexes = get_all_indexes(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    time_stamps = get_time_stamps(time_mapping)
+
+    for (ix, d) in enumerate(devices)
+        tech_model = tech_model_vector[ix]
+        inv_model = string(get_investment_formulation(tech_model))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        availability = get_availability(d)
+        for name in get_variable_names(d), op_ix in operational_indexes
+            time_slices = consecutive_slices[op_ix]
+            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+            ts_data = TimeSeries.values(time_series.data)
+            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
+            time_step_inv = inverse_invest_mapping[op_ix]
+            for (ix, t) in enumerate(time_slices)
+                con_eq[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    active_power[name, t] ==
                     availability * ts_data[ix] * installed_cap[name, time_step_inv]
                 )
             end
@@ -984,7 +1066,10 @@ function objective_function!(
     container::SingleOptimizationContainer,
     devices::Vector{T},
     formulation::S,
-) where {T <: PSIP.SupplyTechnology, S <: Union{BasicDispatch, BasicDispatchWithBudget}}
+) where {
+    T <: PSIP.SupplyTechnology,
+    S <: Union{BasicDispatch, FixedOutput, BasicDispatchWithBudget},
+}
     tech_model = string(S)
     add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model)
     return
@@ -1042,6 +1127,93 @@ function objective_function!(
     tech_model = string(B)
     add_capital_cost!(container, BuildCapacity(), devices, formulation, tech_model)
     add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
+    return
+end
+
+# Price per MWh of available renewable generation that is not dispatched.
+get_curtailment_cost(::PSY.OperationalCost) = 0.0
+get_curtailment_cost(cost::PSY.RenewableGenerationCost) =
+    get_curtailment_cost(PSY.get_curtailment_cost(cost))
+get_curtailment_cost(curve::PSY.CostCurve) = throw_unsupported_curve(curve)
+get_curtailment_cost(curve::PSY.CostCurve{PSY.LinearCurve}) =
+    PSY.get_proportional_term(PSY.get_value_curve(curve))
+
+function add_curtailment_cost!(
+    ::SingleOptimizationContainer,
+    ::Vector{<:PSIP.SupplyTechnology},
+    ::OperationsTechnologyFormulation,
+    ::Vector{<:TechnologyModel},
+)
+    return
+end
+
+function add_curtailment_cost!(
+    container::SingleOptimizationContainer,
+    devices::Vector{D},
+    formulation::BasicDispatch,
+    tech_model_vector::Vector{<:TechnologyModel},
+) where {D <: PSIP.SupplyTechnology{PSY.RenewableDispatch}}
+    costs = get_curtailment_cost.(PSIP.get_operation_costs.(devices))
+    indexes = findall(!iszero, costs)
+    if isempty(indexes)
+        return
+    end
+    time_mapping = get_time_mapping(container)
+    time_steps = get_time_steps(time_mapping)
+    time_stamps = get_time_stamps(time_mapping)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    investment_time_stamps = get_investment_time_stamps(time_mapping)
+    discount_factor = 1.0 / (1.0 + get_discount_rate(container))
+    tech_model = string(typeof(formulation))
+    dispatch = get_variable(container, ActivePowerVariable(), D, tech_model)
+    add_expression_container!(
+        container,
+        CurtailmentCost(),
+        D,
+        PSIP.get_name.(devices[indexes]),
+        time_steps;
+        meta=tech_model,
+    )
+    for i in indexes
+        d = devices[i]
+        availability = get_availability(d)
+        names = get_variable_names(d)
+        inv_model = string(get_investment_formulation(tech_model_vector[i]))
+        installed = get_expression(container, CumulativeCapacity(), D, inv_model)
+        tech_base_year = PSIP.get_technology_base_year(PSIP.get_financial_data(d))
+        dollars_to_base_year =
+            (
+                1.0 + get_inflation_rate(container)
+            )^(get_base_year(container) - tech_base_year)
+        for op_ix in get_operational_indexes(time_mapping)
+            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
+            profile = TimeSeries.values(time_series.data)
+            period = inverse_invest_mapping[op_ix]
+            period_start_year = Dates.year(first(investment_time_stamps[period]))
+            cost_factor =
+                costs[i] *
+                dollars_to_base_year *
+                get_time_step_weight(container, op_ix) *
+                _period_cost_factor(container, period)
+            for (j, t) in enumerate(consecutive_slices[op_ix])
+                step_cost =
+                    cost_factor *
+                    discount_factor^(Dates.year(time_stamps[t]) - period_start_year)
+                for name in names
+                    cost = JuMP.@expression(
+                        get_jump_model(container),
+                        step_cost * (
+                            availability * profile[j] * installed[name, period] -
+                            dispatch[name, t]
+                        )
+                    )
+                    add_to_objective_operations_expression!(container, cost)
+                    add_to_expression!(container, CurtailmentCost, cost, d, t, tech_model)
+                end
+            end
+        end
+    end
     return
 end
 

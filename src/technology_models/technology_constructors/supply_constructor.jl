@@ -59,6 +59,39 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
+    T <: Union{
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIP.SupplyTechnology{PSY.RenewableNonDispatch},
+    },
+    C <: FixedOutput,
+    X <: TechnologyModel,
+}
+    devices = [PSIP.get_technology(T, p, n) for n in names]
+
+    add_variable!(container, ActivePowerVariable(), devices, C())
+
+    # EnergyBalance
+    add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
+
+    # WeightedEnergyGeneration
+    add_expression!(container, WeightedEnergyGeneration(), devices, C())
+
+    # FuelConsumptionExpression
+    add_expression!(container, FuelConsumptionExpression(), devices, C())
+    return
+end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    names::Vector{String},
+    ::ArgumentConstructStage,
+    ::OperationCostModel,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
+    transport_model::TransportModel{<:AbstractTransportAggregation},
+    tech_model_vector::Vector{X},
+) where {
     T <: PSIP.SupplyTechnology{PSY.ThermalStandard},
     C <: ContinuousThermalCommitment,
     X <: TechnologyModel,
@@ -158,6 +191,42 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {T <: PSIP.SupplyTechnology, C <: BasicDispatch, X <: TechnologyModel}
+    devices = [PSIP.get_technology(T, p, n) for n in names]
+
+    # Operations Component of objective function
+    objective_function!(container, devices, C())
+
+    # Dispatch constraint
+    add_constraints!(
+        container,
+        ActivePowerLimitsConstraint(),
+        ActivePowerVariable(),
+        devices,
+        C(),
+        tech_model_vector,
+    )
+    add_curtailment_cost!(container, devices, C(), tech_model_vector)
+    return
+end
+
+function construct_technologies!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    names::Vector{String},
+    ::ModelConstructStage,
+    model::OperationCostModel,
+    tech_type::Type{T},
+    tech_formulation::Type{C},
+    transport_model::TransportModel{<:AbstractTransportAggregation},
+    tech_model_vector::Vector{X},
+) where {
+    T <: Union{
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIP.SupplyTechnology{PSY.RenewableNonDispatch},
+    },
+    C <: FixedOutput,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Operations Component of objective function
