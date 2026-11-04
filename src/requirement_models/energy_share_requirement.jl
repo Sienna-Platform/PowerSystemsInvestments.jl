@@ -62,7 +62,10 @@ Return the operational representative-slice indices (`op_ix`) that belong to the
 investment period containing `target_year`. Raises an error if `target_year`
 falls outside every investment period.
 """
-function _energy_share_operational_indexes(time_mapping::TimeMapping, target_year::Int)
+function _energy_share_operational_indexes(
+    time_mapping::InvestmentTimeMapping,
+    target_year::Int,
+)
     investment_stamps = get_investment_time_stamps(time_mapping)
     map_to_op = get_investment_map_to_operational_slices(time_mapping)
     target_ivx = findfirst(

@@ -17,7 +17,7 @@ end
 Base.@kwdef mutable struct SingleOptimizationContainer <:
                            ISOPT.AbstractOptimizationContainer
     JuMPmodel::JuMP.Model
-    time_mapping::TimeMapping
+    time_mapping::InvestmentTimeMapping
     settings::Settings
     settings_copy::Settings
     variables::Dict{IOM.VariableKey, AbstractArray}
@@ -27,7 +27,6 @@ Base.@kwdef mutable struct SingleOptimizationContainer <:
     objective_function::ObjectiveFunction
     expressions::Dict{IOM.ExpressionKey, AbstractArray}
     primal_values_cache::PrimalValuesCache
-    operational_weights::Union{Nothing, Vector{Float64}}
     base_year::Int
     discount_rate::Float64
     inflation_rate::Float64
@@ -55,7 +54,7 @@ function SingleOptimizationContainer(
 
     return SingleOptimizationContainer(
         jump_model,
-        TimeMapping(nothing),
+        InvestmentTimeMapping(nothing),
         settings,
         copy_for_serialization(settings),
         Dict{VariableKey, AbstractArray}(),
@@ -65,7 +64,6 @@ function SingleOptimizationContainer(
         ObjectiveFunction(),
         Dict{ExpressionKey, AbstractArray}(),
         PrimalValuesCache(),
-        nothing,
         2020,
         0.0,
         0.0,
@@ -96,7 +94,7 @@ get_resolution(container::SingleOptimizationContainer) = get_resolution(containe
 get_settings(container::SingleOptimizationContainer) = container.settings
 get_time_mapping(container::SingleOptimizationContainer) = container.time_mapping
 get_operational_weights(container::SingleOptimizationContainer) =
-    container.operational_weights
+    get_operational_weights(container.time_mapping)
 get_base_year(container::SingleOptimizationContainer) = container.base_year
 get_discount_rate(container::SingleOptimizationContainer) = container.discount_rate
 get_inflation_rate(container::SingleOptimizationContainer) = container.inflation_rate
@@ -111,12 +109,10 @@ get_objective_expression(container::SingleOptimizationContainer) =
     container.objective_function
 is_synchronized(container::SingleOptimizationContainer) =
     container.objective_function.synchronized
-set_time_mapping!(container::SingleOptimizationContainer, time_mapping::TimeMapping) =
-    container.time_mapping = time_mapping
-set_operational_weights!(
+set_time_mapping!(
     container::SingleOptimizationContainer,
-    operational_weights::Union{Nothing, Vector{Float64}},
-) = container.operational_weights = operational_weights
+    time_mapping::InvestmentTimeMapping,
+) = container.time_mapping = time_mapping
 set_base_year!(container::SingleOptimizationContainer, base_year::Int) =
     container.base_year = base_year
 set_discount_rate!(container::SingleOptimizationContainer, discount_rate::Float64) =
@@ -175,48 +171,6 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
     return
 end
 
-"""
-Warn when the operational weights of an investment period do not represent one year.
-
-Weights are the number of times each representative slice occurs per year. Operation costs
-are multiplied by the number of years of the investment period when they are discounted, so
-weights that already include the period length would count those costs more than once.
-"""
-function check_operational_weights(
-    time_mapping::TimeMapping,
-    operational_weights::Vector{Float64},
-)
-    consecutive_slices = get_consecutive_slices(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
-    investment_time_stamps = get_investment_time_stamps(time_mapping)
-    investment_to_operational_ixs = get_investment_map_to_operational_slices(time_mapping)
-    for stage in get_investment_time_steps(time_mapping)
-        stage_operational_indexes = investment_to_operational_ixs[stage]
-        isempty(stage_operational_indexes) && continue
-        represented_hours = 0.0
-        for op_ix in stage_operational_indexes
-            time_slices = consecutive_slices[op_ix]
-            # A slice with a single time step is assumed to last one hour.
-            hours_per_step = 1.0
-            if length(time_slices) > 1
-                step = time_stamps[time_slices[2]] - time_stamps[time_slices[1]]
-                hours_per_step = Dates.value(Dates.Millisecond(step)) / 3.6e6
-            end
-            represented_hours +=
-                operational_weights[op_ix] * length(time_slices) * hours_per_step
-        end
-        represented_years = represented_hours / HOURS_PER_YEAR
-        if abs(represented_years - 1.0) > OPERATIONAL_WEIGHTS_TOLERANCE
-            @warn "The operational weights of investment period $(investment_time_stamps[stage]) " *
-                  "represent $(round(represented_years; digits=3)) years of operation. " *
-                  "Weights must be per-year: the weighted duration of the representative " *
-                  "slices of each investment period should add up to one year. The length " *
-                  "of the period is applied separately when costs are discounted."
-        end
-    end
-    return
-end
-
 function init_optimization_container!(
     container::SingleOptimizationContainer,
     template::InvestmentModelTemplate,
@@ -227,19 +181,9 @@ function init_optimization_container!(
     settings = get_settings(container)
 
     # Update Time Mapping
-    capital_model = get_capital_model(template)
-    operation_model = get_operation_model(template)
-    feasibility_model = get_feasibility_model(template)
-
-    time_map = TimeMapping(
-        capital_model.investment_years,
-        operation_model.representative_series,
-        feasibility_model.sample_periods,
-    )
-
+    time_map = InvestmentTimeMapping(template)
     set_time_mapping!(container, time_map)
-    set_operational_weights!(container, operation_model.series_weights)
-    check_operational_weights(time_map, operation_model.series_weights)
+    check_operational_weights(time_map)
     # Set Financial Data in Container from Portfolio
     set_base_year!(container, PSIP.get_base_year(portfolio))
     set_discount_rate!(container, PSIP.get_discount_rate(portfolio))

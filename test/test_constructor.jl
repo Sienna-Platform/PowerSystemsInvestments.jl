@@ -35,23 +35,28 @@ end
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
     ]
-    time_mapping = PSIN.TimeMapping(periods, op_days, Vector{Vector{DateTime}}())
+    no_feasibility = Vector{Vector{DateTime}}()
+    _time_mapping(weights) = PSIN.InvestmentTimeMapping(
+        periods,
+        op_days,
+        no_feasibility;
+        operational_weights=weights,
+    )
 
     @test_logs min_level = Logging.Warn PSIN.check_operational_weights(
-        time_mapping,
-        [365.0, 365.0],
+        _time_mapping([365.0, 365.0]),
     )
     # Weights that include the length of the period are flagged, one warning per period.
     @test_logs(
         (:warn, r"represent 5.0 years"),
         (:warn, r"represent 5.0 years"),
         min_level = Logging.Warn,
-        PSIN.check_operational_weights(time_mapping, [365.0 * 5, 365.0 * 5]),
+        PSIN.check_operational_weights(_time_mapping([365.0 * 5, 365.0 * 5])),
     )
     @test_logs(
         (:warn, r"represent 0.5 years"),
         min_level = Logging.Warn,
-        PSIN.check_operational_weights(time_mapping, [365.0, 182.5]),
+        PSIN.check_operational_weights(_time_mapping([365.0, 182.5])),
     )
 end
 
