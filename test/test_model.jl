@@ -8,7 +8,6 @@
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
     ]
     capital = DiscountedCashFlow(
-        0.07, # discount rate
         Year(2025), # base year
         periods, # vector of periods
     )
@@ -246,7 +245,7 @@ end
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
     ]
-    capital = DiscountedCashFlow(0.07, Year(2025), periods)
+    capital = DiscountedCashFlow(Year(2025), periods)
     operations = OperationalRepresentativeDays(op_days, weights)
     feasibility = RepresentativePeriods(Vector{Vector{Dates}}())
 
@@ -316,7 +315,7 @@ end
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
     ]
-    capital = DiscountedCashFlow(0.07, Year(2025), periods)
+    capital = DiscountedCashFlow(Year(2025), periods)
     operations = OperationalRepresentativeDays(op_days, weights)
     feasibility = RepresentativePeriods(Vector{Vector{Dates}}())
 
@@ -390,7 +389,7 @@ end
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
     ]
-    capital = DiscountedCashFlow(0.07, Year(2025), periods)
+    capital = DiscountedCashFlow(Year(2025), periods)
     operations = OperationalRepresentativeDays(op_days, weights)
     feasibility = RepresentativePeriods(Vector{Vector{Dates}}())
 
@@ -484,7 +483,7 @@ end
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
     ]
-    capital = DiscountedCashFlow(0.07, Year(2025), periods)
+    capital = DiscountedCashFlow(Year(2025), periods)
     operations = OperationalRepresentativeDays(op_days, weights)
     feasibility = RepresentativePeriods(Vector{Vector{Dates}}())
 
@@ -598,7 +597,7 @@ end
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
     ]
-    capital = DiscountedCashFlow(0.07, Year(2025), periods)
+    capital = DiscountedCashFlow(Year(2025), periods)
     operations = OperationalRepresentativeDays(op_days, weights)
     feasibility = RepresentativePeriods(Vector{Vector{Dates}}())
 

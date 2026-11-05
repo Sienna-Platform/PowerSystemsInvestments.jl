@@ -241,10 +241,11 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: InvestmentExpressionType}
     time_mapping = get_time_mapping(container)
+    financials = PSIP.get_financial_data(technology)
     base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
-    tech_base_year = PSIP.get_technology_base_year(technology)
+    discount_rate = PSIP.get_discount_rate(financials)
+    inflation_rate = PSIP.get_inflation_rate(financials)
+    tech_base_year = PSIP.get_technology_base_year(financials)
 
     discount_factor = 1 / (1 + discount_rate)
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
@@ -281,8 +282,8 @@ function _add_linearcurve_cost!(
 ) where {T <: OperationsVariableType}
     financials = PSIP.get_financial_data(technology)
     base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
+    discount_rate = PSIP.get_discount_rate(financials)
+    inflation_rate = PSIP.get_inflation_rate(financials)
     tech_base_year = PSIP.get_technology_base_year(financials)
     time_mapping = get_time_mapping(container)
     operational_weights = get_operational_weights(container)

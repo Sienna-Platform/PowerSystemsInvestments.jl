@@ -63,6 +63,9 @@ function test_2_zone_portfolio()
         debt_rate=0.04,
         return_on_equity=0.10,
         tax_rate=0.21,
+        discount_rate=discount_rate,
+        inflation_rate=inflation_rate,
+        interest_rate=interest_rate,
     )
 
     thermals = collect(get_components(ThermalStandard, sys))
@@ -396,12 +399,7 @@ function test_2_zone_portfolio()
     ####################
     ##### Portfolio #####
     #####################
-    p_5bus = Portfolio(
-        2025, # base_year,
-        discount_rate,
-        inflation_rate,
-        interest_rate,
-    )
+    p_5bus = Portfolio()
     PSIP.set_name!(p_5bus, "test")
 
     add_region!(p_5bus, z1)
@@ -449,6 +447,9 @@ function test_hydro_portfolio()
         debt_rate=0.04,
         return_on_equity=0.10,
         tax_rate=0.21,
+        discount_rate=discount_rate,
+        inflation_rate=inflation_rate,
+        interest_rate=interest_rate,
     )
 
     tstamp_2030_ops = collect(
@@ -509,7 +510,7 @@ function test_hydro_portfolio()
         value_of_lost_load=0.0,
     )
 
-    p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
+    p = Portfolio()
     PSIP.set_name!(p, "hydro_test")
     add_region!(p, z1)
     add_technology!(p, t_hydro)
@@ -535,6 +536,9 @@ function test_hydro_basic_dispatch_portfolio()
         debt_rate=0.04,
         return_on_equity=0.10,
         tax_rate=0.21,
+        discount_rate=discount_rate,
+        inflation_rate=inflation_rate,
+        interest_rate=interest_rate,
     )
 
     tstamp_2030_ops = collect(
@@ -596,7 +600,7 @@ function test_hydro_basic_dispatch_portfolio()
         value_of_lost_load=0.0,
     )
 
-    p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
+    p = Portfolio()
     PSIP.set_name!(p, "hydro_basic_dispatch_test")
     add_region!(p, z1)
     add_technology!(p, t_hydro)
@@ -622,6 +626,9 @@ function test_constrained_hydro_portfolio()
         debt_rate=0.04,
         return_on_equity=0.10,
         tax_rate=0.21,
+        discount_rate=discount_rate,
+        inflation_rate=inflation_rate,
+        interest_rate=interest_rate,
     )
 
     tstamp_2030_ops = collect(
@@ -702,7 +709,7 @@ function test_constrained_hydro_portfolio()
         value_of_lost_load=0.0,
     )
 
-    p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
+    p = Portfolio()
     PSIP.set_name!(p, "hydro_constrained_test")
     add_region!(p, z1)
     add_technology!(p, t_hydro)
