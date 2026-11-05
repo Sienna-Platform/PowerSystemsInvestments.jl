@@ -8,7 +8,6 @@
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
     ]
     capital = DiscountedCashFlow(
-        0.07, # discount rate
         Year(2025), # base year
         periods, # vector of periods
     )

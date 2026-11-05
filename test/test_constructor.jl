@@ -24,8 +24,7 @@ end
     p_5bus, op_days = test_2_zone_portfolio()
 
     capital = DiscountedCashFlow(
-        0.07, # Discount Rate
-        Year(2025), # Base Year to Discount Cost (Not implemented yet)
+        Year(2025), # Base Year to Discount Cost
         [
             (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
             (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
