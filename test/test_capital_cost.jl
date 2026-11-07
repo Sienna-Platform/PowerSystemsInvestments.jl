@@ -75,38 +75,20 @@ end
 
 _curve_slope(vc) = PSY.get_proportional_term(PSY.get_function_data(vc))
 
-# Closed-form expected capital coefficient per investment step, mirroring
-# amortize_overnight_term_to_base_year_dollars + the NPV discounting in
-# _add_linearcurve_cost!. `proportional_term` is the capital ($/MW) slope plus any
-# interconnection cost ($/MW). The objective multiplier for BuildCapacity is 1.0.
-function _expected_capital_coefficients(container, tech, proportional_term)
-    fin = PSIP.get_financial_data(tech)
-    base_year = PSIN.get_base_year(container)
-    discount_rate = PSIN.get_discount_rate(container)
-    inflation_rate = PSIN.get_inflation_rate(container)
-    wacc = PSIP.get_wacc(fin)
-    crp = PSIP.get_capital_recovery_period(fin)
-    tech_base_year = PSIP.get_technology_base_year(fin)
-
-    capital_recovery_factor = wacc / (1 - (1 + wacc)^(-(crp)))
-    lump_amortized_payments = (1 - (1 + discount_rate)^(-(crp))) / discount_rate
-    dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
-    amortized_proportional_term =
-        proportional_term *
-        capital_recovery_factor *
-        lump_amortized_payments *
-        dollars_to_base_year
-    discount_factor = 1 / (1 + discount_rate)
-
-    inv_tuples = PSIN.get_investment_time_stamps(container.time_mapping)
-    inv_steps = PSIN.get_investment_time_steps(container.time_mapping)
-    return [
-        begin
-            year = Dates.value.(Dates.Year.(inv_tuples[t][1]))
-            amortized_proportional_term * discount_factor^(year - base_year)
-        end for t in inv_steps
-    ]
+# Capital coefficients ($/MW) per investment period computed by hand, independently of the
+# package: the overnight cost is paid in 30 annual payments at the WACC of the test data,
+# 0.6·0.04·(1 − 0.21) + 0.4·0.10 = 0.05896, whose value at the build year is discounted at 7%
+# over 30 years and then to 2025. `multipliers` are the "inv_capex" values of the periods
+# starting in 2030 and 2035.
+function _hand_capital_coefficients(proportional_term, multipliers)
+    wacc = 0.05896
+    annualized = wacc / (1 - (1 + wacc)^-30) * (1 - 1.07^-30) / 0.07
+    return proportional_term * annualized .* multipliers .* [1.07^-5, 1.07^-10]
 end
+
+# 2035 capex multipliers of the test data
+const CHEAP_THERMAL_CAPEX = [1.0, 6869.263 / 6937.377]
+const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
 
 @testset "Capital Cost Calculation" begin
     tech_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
@@ -149,12 +131,13 @@ end
 
         @test all(>(0), coef_cheap)
         @test all(>(0), coef_expensive)
-        # Both interconnection costs are zero, and both techs share financial data, so the
-        # amortization/discount factors are identical: the ratio of capital coefficients
-        # must equal the ratio of the capital curve slopes.
-        for (cc, ce) in zip(coef_cheap, coef_expensive)
-            @test cc / ce ≈ slope_cheap / slope_expensive
-        end
+        # Both techs share financial data, so the ratio of capital coefficients is the ratio
+        # of the capital curve slopes times the ratio of their capex multipliers.
+        @test coef_cheap ./ coef_expensive ≈
+              slope_cheap / slope_expensive .* CHEAP_THERMAL_CAPEX ./
+              EXPENSIVE_THERMAL_CAPEX
+        @test coef_expensive ≈
+              _hand_capital_coefficients(slope_expensive, EXPENSIVE_THERMAL_CAPEX)
     end
 
     @testset "Supply interconnection cost adds to the per-MW capital term" begin
@@ -310,11 +293,9 @@ end
             tech_type,
             "cheap_thermal",
         )
-        expected = _expected_capital_coefficients(container, cheap, slope)
-        @test length(coef) == length(expected)
-        for (c, e) in zip(coef, expected)
-            @test c ≈ e
-        end
+        @test slope == 6937.377e3
+        @test coef ≈ _hand_capital_coefficients(slope, CHEAP_THERMAL_CAPEX)
+        @test coef ≈ [4.40955631e6, 3.11308409e6] rtol = 1e-8
 
         # With interconnection: the amortized/discounted term uses slope + interconnection.
         interconnection = 1234.5
@@ -333,10 +314,109 @@ end
             tech_type,
             "cheap_thermal",
         )
-        ic_expected =
-            _expected_capital_coefficients(ic_container, cheap, slope + interconnection)
-        for (c, e) in zip(ic_coef, ic_expected)
-            @test c ≈ e
+        @test ic_coef ≈
+              _hand_capital_coefficients(slope + interconnection, CHEAP_THERMAL_CAPEX)
+
+        # Costs given in dollars of a later year are deflated to the base year at the 5%
+        # inflation rate of the portfolio
+        PSIP.set_technology_base_year!(PSIP.get_financial_data(cheap), 2030)
+        inflated_container =
+            _build_capital_container(p, template, capital, tech_type, tm, ["cheap_thermal"])
+        inflated_coef = _capital_coefficients(
+            inflated_container,
+            PSIN.BuildCapacity(),
+            tech_type,
+            "cheap_thermal",
+        )
+        @test inflated_coef ≈ ic_coef * 1.05^-5
+    end
+
+    @testset "Capex time series must cover every investment period" begin
+        p, op_days = test_2_zone_portfolio()
+        template, capital = _capital_cost_template(op_days)
+        wind_type = PSIP.SupplyTechnology{PSY.RenewableDispatch}
+        tm = PSIN.TechnologyModel(
+            wind_type,
+            PSIN.ContinuousInvestment,
+            PSIN.BasicDispatch,
+            PSIN.BasicDispatchFeasibility,
+        )
+        wind = PSIP.get_technology(wind_type, p, "wind")
+        PSIP.remove_time_series!(p, IS.SingleTimeSeries, wind, "inv_capex")
+        PSIP.add_time_series!(
+            p,
+            wind,
+            SingleTimeSeries(
+                "inv_capex",
+                TimeArray([DateTime("2030-01-01"), DateTime("2040-01-01")], [1.0, 0.5]),
+            ),
+        )
+        @test_throws r"has no value for the investment period starting in 2035" _build_capital_container(
+            p,
+            template,
+            capital,
+            wind_type,
+            tm,
+            ["wind"],
+        )
+    end
+
+    @testset "Storage charge capital cost is not supported" begin
+        storage_type = PSIP.StorageTechnology{PSY.EnergyReservoirStorage}
+        p, op_days = test_2_zone_portfolio()
+        template, capital = _capital_cost_template(op_days)
+        tm = PSIN.TechnologyModel(
+            storage_type,
+            PSIN.ContinuousInvestment,
+            PSIN.CyclicalStorageDispatch,
+            PSIN.BasicDispatchFeasibility,
+        )
+        stor = PSIP.get_technology(storage_type, p, "test_storage")
+        scost = PSIP.get_capital_costs_storage(stor)
+        PSIP.set_capital_costs_storage!(
+            stor,
+            PSIP.StorageCapitalCost(;
+                charge_capital_cost=LinearCurve(1000.0),
+                discharge_capital_cost=PSIP.get_discharge_capital_cost(scost),
+                energy_capital_cost=PSIP.get_energy_capital_cost(scost),
+                interconnection_cost=0.0,
+            ),
+        )
+        @test_throws r"has a charge capital cost" _build_capital_container(
+            p,
+            template,
+            capital,
+            storage_type,
+            tm,
+            ["test_storage"],
+        )
+    end
+
+    @testset "Discounting must match the portfolio" begin
+        p, op_days = test_2_zone_portfolio()
+        periods = [
+            (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+            (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+        ]
+        for capital in (
+            DiscountedCashFlow(0.05, Year(2025), periods),
+            DiscountedCashFlow(0.07, Year(2020), periods),
+        )
+            template = InvestmentModelTemplate(
+                capital,
+                PSIN.OperationalRepresentativeDays(op_days, [365, 365]),
+                RepresentativePeriods(Vector{Vector{DateTime}}()),
+                TransportModel(SingleRegionBalanceModel, use_slacks=false),
+            )
+            container = PSIN.SingleOptimizationContainer(
+                PSIN.Settings(p),
+                JuMP.Model(HiGHS.Optimizer),
+            )
+            @test_throws r"but the portfolio has discount rate 0.07 and base year 2025" PSIN.init_optimization_container!(
+                container,
+                template,
+                p,
+            )
         end
     end
 end

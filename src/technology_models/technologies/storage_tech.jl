@@ -303,7 +303,7 @@ function add_to_expression!(
     T <: EnergyBalance,
     U <: Vector{D},
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
-    W <: NodalBalanceModel,
+    W <: AbstractNodalTransportAggregation,
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -443,7 +443,7 @@ function add_to_expression!(
     T <: FeasibilitySurplus,
     U <: Vector{D},
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
-    W <: NodalBalanceModel,
+    W <: AbstractNodalTransportAggregation,
 } where {D <: PSIP.StorageTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)

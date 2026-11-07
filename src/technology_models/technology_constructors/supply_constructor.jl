@@ -136,6 +136,13 @@ function construct_technologies!(
         devices,
         B(),
     )
+    add_constraints!(
+        container,
+        SingleUnitInvestmentConstraint(),
+        BuildCapacity(),
+        devices,
+        B(),
+    )
     return
 end
 

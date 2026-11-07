@@ -83,10 +83,30 @@ function _show_method(io::IO, template::InvestmentModelTemplate, backend::Symbol
         column_labels=column_labels,
         title="Technology Models",
         alignment=:l,
+        kwargs...,
     )
 
     println(io)
-    requirement_labels = ["Requirement Type", "Requirement Name", "Formulation"]
+    table = Matrix{String}(undef, length(template.branch_models), length(column_labels))
+    for (ix, model) in enumerate(keys(template.branch_models))
+        table[ix, 1] = string(get_technology_type(model))
+        table[ix, 2] = string(get_investment_formulation(model))
+        table[ix, 3] = string(get_operations_formulation(model))
+        table[ix, 4] = string(model.use_slacks)
+    end
+
+    PrettyTables.pretty_table(
+        io,
+        table;
+        backend=backend,
+        column_labels=column_labels,
+        title="Branch Models",
+        alignment=:l,
+        kwargs...,
+    )
+
+    println(io)
+    requirement_labels = ["Requirement Type", "Requirement Names", "Formulation"]
     table = Matrix{String}(
         undef,
         length(template.requirement_models),
@@ -94,7 +114,7 @@ function _show_method(io::IO, template::InvestmentModelTemplate, backend::Symbol
     )
     for (ix, model) in enumerate(keys(template.requirement_models))
         table[ix, 1] = string(get_requirement_type(model))
-        table[ix, 2] = only(template.requirement_models[model])
+        table[ix, 2] = join(template.requirement_models[model], ", ")
         table[ix, 3] = string(get_requirement_formulation(model))
     end
 
@@ -105,6 +125,7 @@ function _show_method(io::IO, template::InvestmentModelTemplate, backend::Symbol
         column_labels=requirement_labels,
         title="Requirement Models",
         alignment=:l,
+        kwargs...,
     )
     return
 end

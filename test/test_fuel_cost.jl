@@ -228,8 +228,11 @@ end
     m = _make_fuel_cost_model(
         FuelCurve(; value_curve=QuadraticCurve(0.01, 10.0, 0.0), fuel_cost=3.0),
     )
-    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+    @test build!(
+        m;
+        output_dir=mktempdir(; cleanup=true),
+        console_level=Logging.AboveMaxLevel,
+    ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end
 
 @testset "Unsupported cost curves fail at build" begin
@@ -237,6 +240,9 @@ end
     @test_throws ErrorException PSIN.throw_unsupported_curve(quadratic_cost_curve)
 
     m = _make_fuel_cost_model(quadratic_cost_curve)
-    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+    @test build!(
+        m;
+        output_dir=mktempdir(; cleanup=true),
+        console_level=Logging.AboveMaxLevel,
+    ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end
