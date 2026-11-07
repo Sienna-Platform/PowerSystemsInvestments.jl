@@ -18,7 +18,7 @@ function add_variable_cost!(
 ) where {
     T <: PSIP.SupplyTechnology,
     U <: ActivePowerVariable,
-    V <: Union{BasicDispatch, BasicDispatchWithBudget},
+    V <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
 }
     for d in devices
         op_cost_data = PSIP.get_operation_costs(d)
@@ -79,6 +79,29 @@ function add_variable_cost!(
 }
     for d in devices
         op_cost_data = get_operation_cost_data(d, U())
+        _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)
+    end
+    return
+end
+
+#########################################################
+#### Committed, start-up and shut-down capacity cost ####
+#########################################################
+
+function add_commitment_cost!(
+    container::SingleOptimizationContainer,
+    ::U,
+    devices::Vector{T},
+    ::V,
+    tech_model::String,
+) where {
+    T <: PSIP.SupplyTechnology,
+    U <:
+    Union{CommittedCapacityVariable, StartUpCapacityVariable, ShutDownCapacityVariable},
+    V <: ThermalCommitmentFormulation,
+}
+    for d in devices
+        op_cost_data = PSIP.get_operation_costs(d)
         _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)
     end
     return

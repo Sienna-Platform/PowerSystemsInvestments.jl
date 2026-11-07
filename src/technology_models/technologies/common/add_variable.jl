@@ -9,10 +9,7 @@ get_variable_integer(::InvestmentVariableType, ::PSIP.Technology, ::IntegerInves
 get_variable_multiplier(::InvestmentVariableType, ::PSIP.Technology, ::InvestmentTechnologyFormulation) = 1.0
 #! format: on
 
-"""
-Capacity added by one unit of a discrete investment variable. It must be positive, otherwise
-the investment would not add any capacity.
-"""
+# Capacity added by one unit of a discrete investment variable, which must be positive
 function get_unit_size(
     variable_type::InvestmentVariableType,
     d::PSIP.Technology,

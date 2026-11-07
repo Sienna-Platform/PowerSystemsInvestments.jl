@@ -181,7 +181,6 @@ function add_expression!(
 ) where {T <: PSIP.EnergyShareRequirements}
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
-    operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
     time_stamps = get_time_stamps(time_mapping)
 
@@ -198,7 +197,7 @@ function add_expression!(
         req_name = PSIP.get_name(req)
         demands = _contributing_demands(p, req)
         for op_ix in operational_indexes
-            weight = operational_weights[op_ix]
+            weight = get_time_step_weight(container, op_ix)
             time_slices = consecutive_slices[op_ix]
             demand_expr = JuMP.AffExpr(0.0)
             for d in demands

@@ -224,7 +224,6 @@ function add_expression!(
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
-    operational_weights = get_operational_weights(container)
     tech_model = string(S)
 
     out_var = get_variable(container, ActiveOutPowerVariable(), D, tech_model)
@@ -244,7 +243,7 @@ function add_expression!(
         out_mult = get_expression_multiplier(T(), ActiveOutPowerVariable(), d, S())
         in_mult = get_expression_multiplier(T(), ActiveInPowerVariable(), d, S())
         for op_ix in operational_indexes
-            weight = operational_weights[op_ix]
+            weight = get_time_step_weight(container, op_ix)
             expression[name, op_ix] = JuMP.@expression(
                 get_jump_model(container),
                 weight * sum(
@@ -619,14 +618,7 @@ function add_constraints!(
             first_operational_index = first(stage_operational_indexes)
             for op_ix in stage_operational_indexes
                 time_slices = consecutive_slices[op_ix]
-                if length(time_slices) == 1
-                    fraction_of_hour = 1.0
-                else
-                    tstamp_first = time_stamps[time_slices[1]]
-                    tstamp_second = time_stamps[time_slices[2]]
-                    fraction_of_hour =
-                        Dates.value(Dates.Millisecond(tstamp_second - tstamp_first)) / 3.6e6
-                end
+                time_step_length = get_time_step_length(time_mapping, op_ix)
                 for (ix, t) in enumerate(time_slices)
                     # First representative day and first time point
                     if first_operational_index == op_ix && ix == 1
@@ -637,7 +629,7 @@ function add_constraints!(
                             (
                                 efficiency_in * charge[name, t] -
                                 discharge[name, t] / efficiency_out
-                            ) * fraction_of_hour
+                            ) * time_step_length
                         )
                         # In Chronological Days, for each period/stage the state of charge is passed directly to the next representative day
                     else
@@ -648,7 +640,7 @@ function add_constraints!(
                             (
                                 efficiency_in * charge[name, t] -
                                 discharge[name, t] / efficiency_out
-                            ) * fraction_of_hour
+                            ) * time_step_length
                         )
                     end
                 end
@@ -697,38 +689,19 @@ function add_constraints!(
         efficiency_out = PSIP.get_efficiency(d).out
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
-            if length(time_slices) == 1
-                fraction_of_hour = 1.0
-            else
-                tstamp_first = time_stamps[time_slices[1]]
-                tstamp_second = time_stamps[time_slices[2]]
-                fraction_of_hour =
-                    Dates.value(Dates.Millisecond(tstamp_second - tstamp_first)) / 3.6e6
-            end
-            first_time = first(time_slices)
-            last_time = last(time_slices)
+            time_step_length = get_time_step_length(time_mapping, op_ix)
             for t in time_slices
-                if t == first_time
-                    con_soc[name, t] = JuMP.@constraint(
-                        get_jump_model(container),
-                        storage_state[name, t] ==
-                        storage_state[name, last_time] +
-                        (
-                            efficiency_in * charge[name, t] -
-                            discharge[name, t] / efficiency_out
-                        ) * fraction_of_hour
-                    )
-                else
-                    con_soc[name, t] = JuMP.@constraint(
-                        get_jump_model(container),
-                        storage_state[name, t] ==
-                        storage_state[name, t - 1] +
-                        (
-                            efficiency_in * charge[name, t] -
-                            discharge[name, t] / efficiency_out
-                        ) * fraction_of_hour
-                    )
-                end
+                # The state of charge of the first time step follows the last one
+                previous_t = get_previous_time_step(time_mapping, op_ix, t)
+                con_soc[name, t] = JuMP.@constraint(
+                    get_jump_model(container),
+                    storage_state[name, t] ==
+                    storage_state[name, previous_t] +
+                    (
+                        efficiency_in * charge[name, t] -
+                        discharge[name, t] / efficiency_out
+                    ) * time_step_length
+                )
             end
         end
     end
