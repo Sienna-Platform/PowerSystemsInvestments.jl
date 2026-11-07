@@ -35,6 +35,8 @@ Base.@kwdef mutable struct SingleOptimizationContainer <:
     infeasibility_conflict::Dict{Symbol, Array}
     optimizer_stats::ISOPT.OptimizerStats
     metadata::ISOPT.OptimizationContainerMetadata
+    # Restores the integrality removed to compute the duals of a MIP
+    unfix_discrete_variables::Union{Nothing, Function}
 end
 
 function SingleOptimizationContainer(
@@ -73,6 +75,7 @@ function SingleOptimizationContainer(
         Dict{Symbol, Array}(),
         ISOPT.OptimizerStats(),
         ISOPT.OptimizationContainerMetadata(),
+        nothing,
     )
 end
 
@@ -178,8 +181,6 @@ function get_time_step_weight(container::SingleOptimizationContainer, op_ix::Int
            get_time_step_length(get_time_mapping(container), op_ix)
 end
 
-# Weights are per year: the period length is applied when costs are discounted, so weights
-# that include it would count operation costs more than once.
 # The objective is discounted with the discount rate and base year of the portfolio
 function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Portfolio)
     discount_rate = PSIP.get_discount_rate(portfolio)
@@ -195,6 +196,8 @@ function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Po
     return
 end
 
+# Weights are per year: the period length is applied when costs are discounted, so weights
+# that include it would count operation costs more than once.
 function check_operational_weights(
     time_mapping::TimeMapping,
     operational_weights::Vector{Float64},
@@ -710,11 +713,64 @@ function calculate_aux_variables!(
     return RunStatus.SUCCESSFULLY_FINALIZED
 end
 
-function _calculate_dual_variables_discrete_model!(
+function _calculate_dual_variables_continous_model!(
     container::SingleOptimizationContainer,
     ::PSIP.Portfolio,
 )
-    return _process_duals(container, container.settings.optimizer)
+    constraints = get_constraints(container)
+    for key in collect(keys(get_duals(container)))
+        container.duals[key] = _dual_values(constraints[key])
+    end
+    return RunStatus.SUCCESSFULLY_FINALIZED
+end
+
+# Entries of a container without a constraint (e.g. time steps outside a requirement's
+# target period) get NaN
+function _dual_values(constraints::DenseAxisArray; available=true)
+    values = DenseAxisArray(fill(NaN, size(constraints)), axes(constraints)...)
+    available || return values
+    for i in eachindex(constraints.data)
+        if isassigned(constraints.data, i)
+            values.data[i] = JuMP.dual(constraints.data[i])
+        end
+    end
+    return values
+end
+
+# The duals of a MIP are those of the LP with its discrete variables fixed at their solution.
+# The model stays fixed, so the solution can still be read, until the next solve. If that LP
+# fails, the MIP is solved again from its solution and the duals are NaN.
+function _calculate_dual_variables_discrete_model!(
+    container::SingleOptimizationContainer,
+    port::PSIP.Portfolio,
+)
+    jump_model = get_jump_model(container)
+    variables = JuMP.all_variables(jump_model)
+    values = JuMP.value.(variables)
+    container.unfix_discrete_variables = JuMP.fix_discrete_variables(jump_model)
+    JuMP.optimize!(jump_model)
+    if JuMP.dual_status(jump_model) == MOI.FEASIBLE_POINT
+        return _calculate_dual_variables_continous_model!(container, port)
+    end
+    @warn "Duals not computed: the LP with fixed discrete variables returned $(JuMP.termination_status(jump_model))"
+    unfix_discrete_variables!(container)
+    JuMP.set_start_value.(variables, values)
+    JuMP.optimize!(jump_model)
+    constraints = get_constraints(container)
+    for key in collect(keys(get_duals(container)))
+        container.duals[key] = _dual_values(constraints[key]; available=false)
+    end
+    if JuMP.primal_status(jump_model) != MOI.FEASIBLE_POINT
+        return RunStatus.FAILED
+    end
+    return RunStatus.SUCCESSFULLY_FINALIZED
+end
+
+function unfix_discrete_variables!(container::SingleOptimizationContainer)
+    isnothing(container.unfix_discrete_variables) && return
+    container.unfix_discrete_variables()
+    container.unfix_discrete_variables = nothing
+    return
 end
 
 function calculate_dual_variables!(
@@ -724,11 +780,9 @@ function calculate_dual_variables!(
 )
     isempty(get_duals(container)) && return RunStatus.SUCCESSFULLY_FINALIZED
     if is_milp
-        status = _calculate_dual_variables_discrete_model!(container, port)
-    else
-        status = _calculate_dual_variables_continous_model!(container, port)
+        return _calculate_dual_variables_discrete_model!(container, port)
     end
-    return
+    return _calculate_dual_variables_continous_model!(container, port)
 end
 
 ##### Build Models #######
@@ -766,6 +820,8 @@ function build_model!(
         names_to_requirement_model_map(get_requirement_models(template))
     requirement_map =
         get_requirement_formulation_to_names_map(get_requirement_models(template), port)
+    # Requirements can have technologies and lines attached
+    requirement_technology_models = merge(names_to_model_map, br_names_to_model_map)
 
     # Only build the feasibility model if there are feasibility timesteps
     if is_feasibility_empty(get_time_mapping(container))
@@ -811,7 +867,7 @@ function build_model!(
         ArgumentConstructStage(),
         requirement_map,
         requirement_names_to_model_map,
-        names_to_model_map,
+        requirement_technology_models,
         transport_model,
     )
 
@@ -869,7 +925,7 @@ function build_model!(
         ModelConstructStage(),
         requirement_map,
         requirement_names_to_model_map,
-        names_to_model_map,
+        requirement_technology_models,
         transport_model,
     )
 
@@ -910,6 +966,7 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     optimizer_stats = get_optimizer_stats(container)
 
     jump_model = get_jump_model(container)
+    unfix_discrete_variables!(container)
 
     model_status = MOI.NO_SOLUTION::MOI.ResultStatusCode
 
@@ -934,10 +991,8 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     # Needs to be called here to avoid issues when getting duals from MILPs
     write_optimizer_stats!(container)
 
-    _, optimizer_stats.timed_calculate_dual_variables =
+    status, optimizer_stats.timed_calculate_dual_variables =
         @timed calculate_dual_variables!(container, port, is_milp(container))
-
-    status = RunStatus.SUCCESSFULLY_FINALIZED
 
     return status
 end

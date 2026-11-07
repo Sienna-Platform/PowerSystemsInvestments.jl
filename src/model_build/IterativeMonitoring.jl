@@ -142,7 +142,8 @@ function _add_corridors!(
         add_monitored_corridors!(container, transport_model, portfolio, names)
         return
     end
-    if is_milp(container)
+    # A MIP whose duals were computed is fixed until the next solve
+    if is_milp(container) || !isnothing(container.unfix_discrete_variables)
         # The current solution is the start of the next MIP solve
         variables = JuMP.all_variables(jump_model)
         # Values are read before any is set, since setting one discards the solution

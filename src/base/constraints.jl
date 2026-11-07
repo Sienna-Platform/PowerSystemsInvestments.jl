@@ -31,11 +31,17 @@ struct SingleRegionBalanceConstraint <: ISOPT.ConstraintType end
 struct MultiRegionBalanceConstraint <: ISOPT.ConstraintType end
 
 struct NodalBalanceConstraint <: ISOPT.ConstraintType end
+
 struct IslandBalanceConstraint <: ISOPT.ConstraintType end
+
 struct NetworkFlowConstraint <: ISOPT.ConstraintType end
+
 struct FlowRateConstraint <: ISOPT.ConstraintType end
+
 struct NewCorridorBuiltConstraint <: ISOPT.ConstraintType end
+
 struct VirtualTransactionLimitConstraint <: ISOPT.ConstraintType end
+
 struct UnitLineBuiltConstraint <: ISOPT.ConstraintType end
 
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end
@@ -81,3 +87,15 @@ struct CommittedCapacityTrackingConstraint <: OperationVariableLimitsConstraintT
 ### Requirement Constraints ###
 
 struct EnergyShareRequirementConstraint <: ISOPT.ConstraintType end
+
+struct CarbonCapConstraint <: ISOPT.ConstraintType end
+
+struct CapacityReserveMarginConstraint <: ISOPT.ConstraintType end
+
+struct CapacityRequirementConstraint <: ISOPT.ConstraintType end
+
+struct HourlyMatchingConstraint <: ISOPT.ConstraintType end
+
+# Duals are stored as operation entries
+is_operation_entry(::Type{<:ISOPT.ConstraintType}) = true
+is_investment_entry(::Type{<:ISOPT.ConstraintType}) = false

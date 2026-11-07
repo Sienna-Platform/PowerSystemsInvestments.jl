@@ -21,6 +21,30 @@ function construct_requirements!(
             names_to_model_map,
             requirement_model_vector,
         )
+        _add_requirement_duals!(
+            container,
+            stage,
+            req_type,
+            req_formulation,
+            requirement_model_vector,
+        )
     end
     return
 end
+
+_add_requirement_duals!(
+    ::SingleOptimizationContainer,
+    ::ArgumentConstructStage,
+    ::Type{<:PSIP.Requirement},
+    ::Type{<:RequirementFormulation},
+    ::Vector{<:RequirementModel},
+) = nothing
+
+_add_requirement_duals!(
+    container::SingleOptimizationContainer,
+    ::ModelConstructStage,
+    ::Type{T},
+    ::Type{B},
+    requirement_model_vector::Vector{<:RequirementModel},
+) where {T <: PSIP.Requirement, B <: RequirementFormulation} =
+    _add_requirement_duals!(container, T, B, requirement_model_vector)
