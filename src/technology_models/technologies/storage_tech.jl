@@ -20,8 +20,8 @@ get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::FeasibilityTechnologyFormulation) = -1.0
 
 # TODO: Defaulting to using discharge values for symmetric storage, but we need to be careful if we implement asymmetric storage investments
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d).max
-get_max_cap(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_limits_energy(d).max
+get_cumulative_limits(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d)
+get_cumulative_limits(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_limits_energy(d)
 
 #! format: on
 
@@ -781,7 +781,7 @@ function add_constraints!(
     return
 end
 
-# Maximum cumulative capacity
+# Minimum and maximum cumulative capacity
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -789,7 +789,7 @@ function add_constraints!(
     devices::U,
     formulation::S,
 ) where {
-    T <: Union{MaximumCumulativePowerCapacity, MaximumCumulativeEnergyCapacity},
+    T <: Union{CumulativePowerCapacityLimit, CumulativeEnergyCapacityLimit},
     U <: Vector{D},
     V <: Union{CumulativePowerCapacity, CumulativeEnergyCapacity},
     S <: InvestmentTechnologyFormulation,
@@ -799,7 +799,7 @@ function add_constraints!(
     tech_model = string(S)
 
     device_names = PSIP.get_name.(devices)
-    con_ub = add_constraints_container!(
+    con = add_constraints_container!(
         container,
         T(),
         D,
@@ -812,11 +812,12 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        max_capacity = get_max_cap(d, V())
+        limits = get_cumulative_limits(d, V())
+        _check_cumulative_limits(d, limits)
         for t in time_steps
-            con_ub[name, t] = JuMP.@constraint(
+            con[name, t] = JuMP.@constraint(
                 get_jump_model(container),
-                installed_cap[name, t] <= max_capacity
+                limits.min <= installed_cap[name, t] <= limits.max
             )
         end
     end

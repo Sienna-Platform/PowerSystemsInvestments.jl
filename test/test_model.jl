@@ -20,13 +20,13 @@
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -122,13 +122,13 @@
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -277,12 +277,12 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -357,13 +357,13 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -414,6 +414,11 @@ end
 
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        # The JuMP model is only written to the output directory when asked for
+        @test !isfile(joinpath(path, "jump_model.json"))
+        @test solve!(model; output_dir=path, export_optimization_problem=true) ==
+              PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        @test isfile(joinpath(path, "jump_model.json"))
 
         # Hydro is the only supply, so its daily budget of 0.5 × 24 hours of capacity must
         # cover the daily demand of 2400 MWh (2030) and 2880 MWh (2035)
@@ -457,13 +462,13 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -554,13 +559,13 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -646,7 +651,7 @@ end
     # to the contributing technologies (wind on the generation side, demand2 on the
     # demand side) via each technology's `requirements` field (PSIP PR #94 model).
     wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
-    demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand2")
+    demand2 = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p_5bus, "demand2")
 
     # Wind would supply about 130% of demand2 without the policies, so these targets bind
     fraction = 1.5
@@ -685,13 +690,13 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -810,7 +815,9 @@ end
         year="2030",
         rep_day=1,
     )
-    total_demand_2030 = sum(TimeSeries.values(d_2030.data))
+    # The demand series is normalized to the peak demand
+    total_demand_2030 =
+        sum(TimeSeries.values(d_2030.data)) * PSIP.get_peak_demand_mw(demand2)
 
     @test total_wind_2030 ≈ fraction * total_demand_2030 rtol = 1e-6
 
@@ -823,7 +830,10 @@ end
         year="2035",
         rep_day=2,
     )
-    @test total_wind_2035 ≈ fraction_2035 * sum(TimeSeries.values(d_2035.data)) rtol = 1e-6
+    @test total_wind_2035 ≈
+          fraction_2035 *
+          sum(TimeSeries.values(d_2035.data)) *
+          PSIP.get_peak_demand_mw(demand2) rtol = 1e-6
 
     # --- Weighted-energy expressions -------------------------------------------------
     # op_ix=1 (2030 representative day) carries the per-year weight 365.
@@ -875,12 +885,12 @@ function _build_thermal_investment_model(investment_formulation)
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
     set_technology_model!(
         template,
         ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -984,12 +994,12 @@ end
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
     set_technology_model!(
         template,
         ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,

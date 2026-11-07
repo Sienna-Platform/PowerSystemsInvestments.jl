@@ -5,8 +5,8 @@ const ControllableTransportTechnology =
 #! format: off
 _supported_investment_formulations(::Type{<:PSIP.TransmissionTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment)
 
-# New capacity is limited by the maximum cumulative capacity constraint, which accounts for
-# the existing capacity
+# New capacity is limited by the cumulative capacity limits, which account for the existing
+# capacity
 get_variable_upper_bound(::BuildCapacity, d::PSIP.TransmissionTechnology, ::InvestmentTechnologyFormulation) = nothing
 get_variable_lower_bound(::BuildCapacity, d::PSIP.TransmissionTechnology, ::InvestmentTechnologyFormulation) = 0.0
 
@@ -23,7 +23,7 @@ get_variable_upper_bound(::Union{FlowActivePowerFromToVariable, FlowActivePowerT
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = -PSIP.get_capacity_limits(d).max
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = PSIP.get_capacity_limits(d).max
 
-get_max_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
+get_cumulative_limits(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d)
 
 _arc(d::PSIP.AggregateTransportTechnology) = (PSIP.get_name(PSIP.get_start_region(d)), PSIP.get_name(PSIP.get_end_region(d)))
 _arc(d::PSIP.TransmissionTechnology) = (PSIP.get_name(PSIP.get_start_node(d)), PSIP.get_name(PSIP.get_end_node(d)))
@@ -288,48 +288,6 @@ function add_constraints!(
                     installed_cap[name, time_step_inv]
                 )
             end
-        end
-    end
-    return
-end
-
-# Maximum cumulative capacity
-function add_constraints!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::V,
-    devices::U,
-    formulation::S,
-) where {
-    T <: MaximumCumulativeCapacity,
-    S <: InvestmentTechnologyFormulation,
-    U <: Vector{D},
-    V <: CumulativeCapacity,
-} where {D <: PSIP.TransmissionTechnology}
-    time_mapping = get_time_mapping(container)
-    time_steps = get_investment_time_steps(time_mapping)
-    tech_model = string(S)
-
-    device_names = PSIP.get_name.(devices)
-    con_ub = add_constraints_container!(
-        container,
-        T(),
-        D,
-        device_names,
-        time_steps,
-        meta=tech_model,
-    )
-
-    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
-
-    for d in devices
-        name = PSIP.get_name(d)
-        max_capacity = get_max_cap(d, CumulativeCapacity())
-        for t in time_steps
-            con_ub[name, t] = JuMP.@constraint(
-                get_jump_model(container),
-                installed_cap[name, t] <= max_capacity
-            )
         end
     end
     return

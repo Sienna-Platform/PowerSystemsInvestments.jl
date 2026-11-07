@@ -135,7 +135,7 @@ function construct_technologies!(
     # Capacity constraints
     add_constraints!(
         container,
-        MaximumCumulativePowerCapacity(),
+        CumulativePowerCapacityLimit(),
         CumulativePowerCapacity(),
         devices,
         B(),
@@ -143,7 +143,7 @@ function construct_technologies!(
 
     add_constraints!(
         container,
-        MaximumCumulativeEnergyCapacity(),
+        CumulativeEnergyCapacityLimit(),
         CumulativeEnergyCapacity(),
         devices,
         B(),

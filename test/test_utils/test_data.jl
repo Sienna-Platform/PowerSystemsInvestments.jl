@@ -279,28 +279,35 @@ function test_2_zone_portfolio()
         end
     end
 
-    # Data added in MW
-    ts_demand_2030 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, ts_load_2030))
-    ts_demand_2035 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, ts_load_2035))
+    # Demand is normalized to its peak (MW)
+    peak_load = max(maximum(ts_load_2030), maximum(ts_load_2035))
+    ts_demand_2030 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2030_ops, ts_load_2030 ./ peak_load),
+    )
+    ts_demand_2035 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2035_ops, ts_load_2035 ./ peak_load),
+    )
 
-    t_demand1 = DemandRequirement{PowerLoad}(
+    t_demand1 = ProjectedDemand{PowerLoad}(
         name="demand1",
         id=1,
         available=true,
         power_systems_type="PowerLoad",
         region=[z1],
-        value_of_lost_load=0.0,
+        peak_demand_mw=peak_load,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
-    t_demand2 = DemandRequirement{PowerLoad}(
+    t_demand2 = ProjectedDemand{PowerLoad}(
         name="demand2",
         id=1,
         available=true,
         power_systems_type="PowerLoad",
         region=[z2],
-        value_of_lost_load=0.0,
+        peak_demand_mw=peak_load,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
     ###################################
@@ -510,18 +517,20 @@ function test_hydro_portfolio()
         financial_data=tech_financials(),
     )
 
+    # Demand is normalized to its peak (MW)
     ts_demand_2030 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0 / 120.0, 24)))
     ts_demand_2035 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(120.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(1.0, 24)))
 
-    t_demand = DemandRequirement{PowerLoad}(
+    t_demand = ProjectedDemand{PowerLoad}(
         name="demand",
         id=1,
         available=true,
         power_systems_type="PowerLoad",
         region=[z1],
-        value_of_lost_load=0.0,
+        peak_demand_mw=120.0,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
     p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
@@ -599,18 +608,20 @@ function test_hydro_basic_dispatch_portfolio()
         financial_data=tech_financials(),
     )
 
+    # Demand is normalized to its peak (MW)
     ts_demand_2030 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0 / 120.0, 24)))
     ts_demand_2035 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(120.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(1.0, 24)))
 
-    t_demand = DemandRequirement{PowerLoad}(
+    t_demand = ProjectedDemand{PowerLoad}(
         name="demand",
         id=1,
         available=true,
         power_systems_type="PowerLoad",
         region=[z1],
-        value_of_lost_load=0.0,
+        peak_demand_mw=120.0,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
     p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
@@ -708,18 +719,20 @@ function test_constrained_hydro_portfolio()
         financial_data=tech_financials(),
     )
 
+    # Demand is normalized to its peak (MW)
     ts_demand_2030 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(1.0, 24)))
     ts_demand_2035 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(100.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(1.0, 24)))
 
-    t_demand = DemandRequirement{PowerLoad}(
+    t_demand = ProjectedDemand{PowerLoad}(
         name="demand",
         id=1,
         available=true,
         power_systems_type="PowerLoad",
         region=[z1],
-        value_of_lost_load=0.0,
+        peak_demand_mw=100.0,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
     p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)

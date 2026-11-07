@@ -1,20 +1,21 @@
 ### Investment Constraints ###
 
-abstract type MaximumCumulativeInvestmentConstraint <: ISOPT.ConstraintType end
+# Minimum and maximum of a cumulative capacity in every investment period
+abstract type CumulativeInvestmentLimitConstraint <: ISOPT.ConstraintType end
 
-struct MaximumCumulativeCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativeCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
 struct SingleUnitInvestmentConstraint <: ISOPT.ConstraintType end
 
-struct MaximumCumulativePowerCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativePowerCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
-struct MaximumCumulativeEnergyCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativeEnergyCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
-struct MaximumCumulativeWindCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativeWindCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
-struct MaximumCumulativeSolarCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativeSolarCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
-struct MaximumCumulativeInverterCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativeInverterCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
 struct StorageDurationLowerBoundConstraint <: ISOPT.ConstraintType end
 
@@ -83,6 +84,14 @@ struct MinimumDownTimeConstraint <: OperationVariableLimitsConstraintType end
 struct RampRateConstraint <: OperationVariableLimitsConstraintType end
 
 struct CommittedCapacityTrackingConstraint <: OperationVariableLimitsConstraintType end
+
+struct DemandBacklogConstraint <: ISOPT.ConstraintType end
+
+struct DemandDelayConstraint <: ISOPT.ConstraintType end
+
+struct DemandAdvanceConstraint <: ISOPT.ConstraintType end
+
+struct DemandDeferralLimitConstraint <: ISOPT.ConstraintType end
 
 ### Requirement Constraints ###
 

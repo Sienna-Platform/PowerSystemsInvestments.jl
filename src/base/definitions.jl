@@ -11,7 +11,6 @@ const OBJECTIVE_FUNCTION_POSITIVE = 1.0
 const OBJECTIVE_FUNCTION_NEGATIVE = -1.0
 const SINGLE_REGION = "SingleRegion"
 const TECHNOLOGY_REGION_DELIMITER = "__"
-const BALANCE_SLACK_PENALTY = 1e8
 const REQUIREMENT_SLACK_PENALTY = 1e4
 # Per MW-year: well above the annualized cost of building capacity
 const CAPACITY_REQUIREMENT_SLACK_PENALTY = 1e7

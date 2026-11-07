@@ -1,9 +1,11 @@
 _is_resource(::PSIP.Technology) = false
 _is_resource(::PSIP.ResourceTechnology) = true
 _is_demand(::PSIP.Technology) = false
-_is_demand(::PSIP.DemandTechnology) = true
+_is_demand(::PSIP.ProjectedDemand) = true
 _is_line(::PSIP.Technology) = false
 _is_line(::PSIP.TransmissionTechnology) = true
+_is_end_use(::PSIP.Technology) = false
+_is_end_use(::PSIP.DemandSideTechnology) = true
 
 # Available technologies attached to a requirement, of the kind selected by `is_kind`
 _contributing(p::PSIP.Portfolio, requirement::PSIP.Requirement, is_kind) = [
@@ -16,15 +18,27 @@ _contributing_demands(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
     _contributing(p, requirement, _is_demand)
 _contributing_lines(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
     _contributing(p, requirement, _is_line)
+_contributing_end_uses(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
+    _contributing(p, requirement, _is_end_use)
 
+# With `end_use_demand`, end-use technologies count as demand, and with `end_use_capacity` as
+# resources (their capacity)
 function _check_contributors(
     p::PSIP.Portfolio,
     requirement::PSIP.Requirement;
     demands::Bool,
+    end_use_demand::Bool=false,
+    end_use_capacity::Bool=false,
 )
+    has_end_uses = !isempty(_contributing_end_uses(p, requirement))
     missing_kinds = String[]
-    isempty(_contributing_resources(p, requirement)) && push!(missing_kinds, "resources")
-    if demands && isempty(_contributing_demands(p, requirement))
+    if isempty(_contributing_resources(p, requirement)) &&
+       !(end_use_capacity && has_end_uses)
+        push!(missing_kinds, "resources")
+    end
+    if demands &&
+       isempty(_contributing_demands(p, requirement)) &&
+       !(end_use_demand && has_end_uses)
         push!(missing_kinds, "demand technologies")
     end
     if !isempty(missing_kinds)
@@ -160,6 +174,19 @@ function _contributor_model(
         )
     end
     return names_to_model_map[name]
+end
+
+# Operations formulation of a demand attached to a requirement. A demand without a model in
+# the template has a fixed demand.
+function _demand_formulation(
+    names_to_model_map::Dict{String, TechnologyModel},
+    d::PSIP.ProjectedDemand,
+)
+    name = PSIP.get_name(d)
+    if haskey(names_to_model_map, name)
+        return get_operations_formulation(names_to_model_map[name])()
+    end
+    return BasicDispatch()
 end
 
 # Weighted energy of a variable over the time steps of a representative period
@@ -302,30 +329,51 @@ function _add_eligible_generation!(
     return
 end
 
-# Weighted demand of the contributing demand technologies of a requirement, read from their
-# "ops_demand" time series, plus the losses of its contributing storage
+# Weighted demand of the contributing demand technologies of a requirement, plus the
+# consumption of its end-use technologies and the losses of its contributing storage. The
+# demand is gross, or with `served` net of unserved demand; demand shifted in time is counted
+# where it is served, so shifting losses count.
 function _add_demand_and_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
     p::PSIP.Portfolio,
     requirement::PSIP.Requirement,
     names_to_model_map::Dict{String, TechnologyModel},
-    op_ix::Int,
+    op_ix::Int;
+    served::Bool=false,
 )
-    time_mapping = get_time_mapping(container)
-    first_time_stamp =
-        get_time_stamps(time_mapping)[first(get_consecutive_slices(time_mapping)[op_ix])]
+    time_slices = get_consecutive_slices(get_time_mapping(container))[op_ix]
     weight = get_time_step_weight(container, op_ix)
+    demand = get_expression(container, DemandExpression(), PSIP.Portfolio)
     for d in _contributing_demands(p, requirement)
-        time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-        check_initial_timestamp(time_series, d, first_time_stamp, op_ix)
-        # Load data is in MW
-        JuMP.add_to_expression!(
-            expression,
-            weight * sum(TimeSeries.values(time_series.data)),
-        )
+        formulation = _demand_formulation(names_to_model_map, d)
+        for t in time_slices
+            JuMP.add_to_expression!(expression, weight, demand[PSIP.get_name(d), t])
+        end
+        _add_demand_shift!(_ -> expression, container, d, formulation, time_slices, weight)
+        if served
+            _add_unserved_demand!(
+                _ -> expression,
+                container,
+                d,
+                formulation,
+                time_slices,
+                -weight,
+            )
+        end
     end
     req_name = PSIP.get_name(requirement)
+    for d in _contributing_end_uses(p, requirement)
+        model = _contributor_model(names_to_model_map, req_name, d)
+        _add_end_use_consumption!(
+            _ -> expression,
+            container,
+            d,
+            get_operations_formulation(model)(),
+            time_slices,
+            weight,
+        )
+    end
     for resource in _contributing_resources(p, requirement)
         tech_model = _contributor_model(names_to_model_map, req_name, resource)
         _add_storage_losses!(

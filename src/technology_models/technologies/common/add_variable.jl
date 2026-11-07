@@ -235,3 +235,47 @@ add_constraints!(
     ::Vector{<:PSIP.Technology},
     ::InvestmentTechnologyFormulation,
 ) = nothing
+
+# Minimum and maximum cumulative capacity of transmission and end-use technologies; supply
+# technologies sum over their regions
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+) where {
+    T <: CumulativeCapacityLimit,
+    S <: InvestmentTechnologyFormulation,
+    U <: Vector{D},
+    V <: CumulativeCapacity,
+} where {D <: Union{PSIP.TransmissionTechnology, PSIP.DemandSideTechnology}}
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(S)
+
+    device_names = PSIP.get_name.(devices)
+    con = add_constraints_container!(
+        container,
+        T(),
+        D,
+        device_names,
+        time_steps,
+        meta=tech_model,
+    )
+
+    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
+
+    for d in devices
+        name = PSIP.get_name(d)
+        limits = get_cumulative_limits(d, CumulativeCapacity())
+        _check_cumulative_limits(d, limits)
+        for t in time_steps
+            con[name, t] = JuMP.@constraint(
+                get_jump_model(container),
+                limits.min <= installed_cap[name, t] <= limits.max
+            )
+        end
+    end
+    return
+end

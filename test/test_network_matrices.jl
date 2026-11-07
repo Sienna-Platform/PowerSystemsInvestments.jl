@@ -132,9 +132,9 @@ end
 @testset "PTDF of the AC lines in a portfolio" begin
     portfolio, _ = test_2_zone_portfolio()
     nodes = [
-        PSIP.Node(; name="n1", id=1, bus_type=PSY.ACBusTypes.REF),
-        PSIP.Node(; name="n2", id=2),
-        PSIP.Node(; name="n3", id=3),
+        PSIP.Node(; name="n1", id=101, bus_type=PSY.ACBusTypes.REF),
+        PSIP.Node(; name="n2", id=102),
+        PSIP.Node(; name="n3", id=103),
     ]
     for node in nodes
         PSIP.add_region!(portfolio, node)

@@ -270,6 +270,11 @@ function construct_requirement!(
     for name in names
         req = PSIP.get_requirement(T, p, name)
         _check_contributors(p, req; demands=true)
+        _warn_ignored_contributors(
+            _contributing_end_uses(p, req),
+            req,
+            "Demand side technologies",
+        )
         _monitor_boundary_corridors!(transport_model, _boundary_lines(p, req; warn=true))
     end
     return
@@ -319,11 +324,11 @@ function add_constraints!(
 ) where {T <: PSIP.CapacityReserveMargin, X <: RequirementModel}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     map_to_op = get_investment_map_to_operational_slices(time_mapping)
     jump_model = get_jump_model(container)
     store_names = get_store_variable_names(get_settings(container))
+    demand_expression = get_expression(container, DemandExpression(), PSIP.Portfolio)
 
     con = add_constraints_container!(
         container,
@@ -385,13 +390,31 @@ function add_constraints!(
                 )
             end
         end
-        for d in _contributing_demands(p, req), op_ix in op_indexes
-            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-            time_slices = consecutive_slices[op_ix]
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
-            for (t, value) in zip(time_slices, TimeSeries.values(time_series.data))
-                demand[t] += value
+        for d in _contributing_demands(p, req)
+            for t in keys(demand)
+                demand[t] += JuMP.constant(demand_expression[PSIP.get_name(d), t])
             end
+            # Curtailment and the net demand shifted out of a time step count as capacity;
+            # involuntary shedding does not. The shift is credited in full until requirements
+            # have a derating.
+            formulation = _demand_formulation(names_to_model_map, d)
+            _add_unserved_demand!(
+                t -> reserve[t],
+                container,
+                d,
+                formulation,
+                keys(reserve),
+                1.0;
+                credited=true,
+            )
+            _add_demand_shift!(
+                t -> reserve[t],
+                container,
+                d,
+                formulation,
+                keys(reserve),
+                -1.0,
+            )
         end
 
         if req_name in slack_names

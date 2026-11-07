@@ -2,8 +2,8 @@ const PTDF_TECHNOLOGIES = (
     (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal", ContinuousInvestment),
     (PSIP.SupplyTechnology{PSY.ThermalStandard}, "expensive_thermal", ContinuousInvestment),
     (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind", ContinuousInvestment),
-    (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1", StaticLoadInvestment),
-    (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2", StaticLoadInvestment),
+    (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand1", StaticLoadInvestment),
+    (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand2", StaticLoadInvestment),
 )
 
 const PTDF_LINE_TYPE = PSIP.NodalACTransportTechnology{PSY.Line}
@@ -46,13 +46,17 @@ end
 # the base system); lines without an existing line are candidates of up to 1000 MW.
 # `discrete_lines` are (name, from, to, reactance, formulation, unit size, capacity limit),
 # and `hvdc_lines` are (name, from, to, operations formulation, line loss).
+_operations_formulation(::Type{<:PSIP.Technology}, demand_formulation) = BasicDispatch
+_operations_formulation(::Type{<:PSIP.ProjectedDemand}, demand_formulation) =
+    demand_formulation
+
 function _nodal_test_model(
     transport;
     nodes,
     placement,
     lines,
     ratings=Dict{String, Float64}(),
-    use_slacks=false,
+    demand_formulation=BasicDispatch,
     candidate_cost=5000.0,
     candidate_costs=Dict{String, Float64}(),
     discrete_lines=[],
@@ -75,12 +79,12 @@ function _nodal_test_model(
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(transport; use_slacks=use_slacks, attributes=attributes),
+        TransportModel(transport; attributes=attributes),
     )
     regions = Dict(
         n => PSIP.Node(;
             name=n,
-            id=i,
+            id=100 + i,
             bus_type=(i == 1 ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ),
         ) for (i, n) in enumerate(nodes)
     )
@@ -97,7 +101,7 @@ function _nodal_test_model(
             [name],
             type,
             investment,
-            BasicDispatch,
+            _operations_formulation(type, demand_formulation),
             BasicDispatchFeasibility,
         )
     end
@@ -139,7 +143,7 @@ function _nodal_test_model(
         PSIP.add_supplemental_attribute!(
             p_5bus,
             line,
-            PSIP.ExistingDevices(; existing_devices=[device]),
+            PSIP.ExistingDevices(; id=1, existing_devices=[device]),
         )
     end
     set_technology_model!(
@@ -274,7 +278,7 @@ function _ptdf_network_data(lines; tol=0.0)
     nodes = Dict(
         n => PSIP.Node(;
             name=n,
-            id=i,
+            id=100 + i,
             bus_type=(n == "A" ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ),
         ) for (i, n) in enumerate(("A", "B", "C", "D"))
     )
@@ -289,7 +293,7 @@ function _ptdf_network_data(lines; tol=0.0)
             PSIP.add_supplemental_attribute!(
                 portfolio,
                 line,
-                PSIP.ExistingDevices(; existing_devices=["1"]),
+                PSIP.ExistingDevices(; id=1, existing_devices=["1"]),
             )
         end
         push!(get!(names_by_formulation, formulation, String[]), name)
@@ -368,7 +372,8 @@ end
     @test_throws ErrorException _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (max_capacity=1e8,)),
     ])
-    @test_throws ErrorException _ptdf_network_data([
+    # PSIP rejects a non-positive unit size when the line is added
+    @test_logs (:error, r"unit size") match_mode = :any @test_throws IS.InvalidValue _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (unit_size=0.0,)),
     ])
     @test_logs (:warn, r"susceptance per MW") match_mode = :any _ptdf_network_data([
@@ -474,7 +479,7 @@ function _triangle_model(
         ),
         lines=TRIANGLE_LINES,
         ratings=Dict("1" => 100.0),
-        use_slacks=true,
+        demand_formulation=UnservedDemandDispatch,
         attributes=attributes,
         algorithm=algorithm,
     )
@@ -524,11 +529,13 @@ end
     balance = PSIN.get_constraint(container, IslandBalanceConstraint(), PSIP.Portfolio)
     @test axes(balance, 1) == ["n1"]
 
-    for slack in (PSIN.BalanceSlackUp(), PSIN.BalanceSlackDown())
-        @test all(
-            JuMP.value.(PSIN.get_variable(container, slack, PSIP.Portfolio).data) .<= 1e-6,
-        )
-    end
+    unserved = PSIN.get_variable(
+        container,
+        UnservedDemandVariable(),
+        PSIP.ProjectedDemand{PSY.PowerLoad},
+        "UnservedDemandDispatch",
+    )
+    @test all(JuMP.value.(unserved.data) .<= 1e-6)
 
     # The transport model ignores KVL, so it is cheaper
     nodal_objective = _solved_objective(_triangle_model(NodalBalanceModel))
@@ -571,7 +578,7 @@ function _ring_model(
         ),
         lines=lines,
         ratings=Dict("1" => 100.0, "2" => 2000.0, "4" => 2000.0, "5" => 2000.0),
-        use_slacks=true,
+        demand_formulation=UnservedDemandDispatch,
         candidate_cost=candidate_cost,
         candidate_costs=candidate_costs,
         discrete_lines=discrete_lines,
@@ -1113,7 +1120,7 @@ end
         ),
         lines=TRIANGLE_LINES,
         ratings=Dict("1" => 100.0),
-        use_slacks=true,
+        demand_formulation=UnservedDemandDispatch,
         attributes=Dict{String, Any}("monitored" => String[]),
     )
     p = PSIN.get_portfolio(m)
@@ -1126,7 +1133,7 @@ end
     )
     PSIP.add_requirement!(p, requirement)
     thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
-    demand_type = PSIP.DemandRequirement{PSY.PowerLoad}
+    demand_type = PSIP.ProjectedDemand{PSY.PowerLoad}
     for (type, name) in (
         (thermal_type, "cheap_thermal"),
         (demand_type, "demand2"),
@@ -1170,15 +1177,17 @@ end
                 "ContinuousInvestment",
             ),
         )
-    demand = TimeSeries.values(
-        IS.get_time_series(
-            IS.SingleTimeSeries,
-            PSIP.get_technology(demand_type, p, "demand2"),
-            "ops_demand";
-            year="2030",
-            rep_day=1,
-        ).data,
-    )
+    demand2 = PSIP.get_technology(demand_type, p, "demand2")
+    demand =
+        TimeSeries.values(
+            IS.get_time_series(
+                IS.SingleTimeSeries,
+                demand2,
+                "ops_demand";
+                year="2030",
+                rep_day=1,
+            ).data,
+        ) .* PSIP.get_peak_demand_mw(demand2)
     for t in 1:24
         constraint = JuMP.constraint_object(constraints["reserve_margin", t])
         surplus = JuMP.value(constraint.func) - MOI.constant(constraint.set)

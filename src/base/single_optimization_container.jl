@@ -795,6 +795,7 @@ function build_model!(
     transport_model = get_transport_model(template)
     initialize_system_expressions!(container, transport_model, port)
     initialize_network!(transport_model, template, port)
+    initialize_demands!(container, port)
 
     tech_names = [
         collect(values(template.technology_models))
