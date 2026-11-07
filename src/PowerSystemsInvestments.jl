@@ -14,6 +14,9 @@ export SingleInstanceSolve
 ### Technology Models ###
 export TechnologyModel
 
+### Requirement Models ###
+export RequirementModel
+
 ### Capital Model ###
 export DiscountedCashFlow
 
@@ -29,18 +32,27 @@ export RepresentativePeriods
 export StaticLoadInvestment
 export ContinuousInvestment
 export IntegerInvestment
+export BinaryInvestment
 
 ### Operation Formulations ###
 export BasicDispatch
+export BasicDispatchWithBudget
 export BasicDispatchFeasibility
 export ChronologicalStorageDispatch
 export CyclicalStorageDispatch
 export ChronologicalColocatedDispatch
 export CyclicalColocatedDispatch
 
+### Requirement Formulations ###
+export RequirementEnergyShare
+
 ### Transport Formulations ###
 export SingleRegionBalanceModel
 export MultiRegionBalanceModel
+export NodalBalanceModel
+export NodalBalanceConstraint
+export EnergyShareRequirementConstraint
+export HydroEnergyBudgetConstraint
 
 ### Variables ###
 export BuildCapacity
@@ -71,15 +83,21 @@ export CumulativeEnergyCapacity
 export CumulativeSolarCapacity
 export CumulativeWindCapacity
 export CumulativeInverterCapacity
+export WeightedEnergyGeneration
+export WeightedEnergyDemand
+export WeightedEnergyShareGeneration
+export WeightedEnergyShareDemand
 
 ### Functions ###
 # methods
 export build!
 # Template exports
 export set_technology_model!
+export set_requirement_model!
 # Model Exports
 export solve!
 export get_initial_conditions
+export get_infeasibility_conflict
 export serialize_problem
 export serialize_results
 #Results interfaces
@@ -100,7 +118,6 @@ import PowerSystemsInvestmentsPortfolios
 import Dates
 import PowerModels
 import DataStructures
-import PowerNetworkMatrices
 import PrettyTables
 import TimeSeries
 import Logging
@@ -114,7 +131,6 @@ const PSY = PowerSystems
 const MOI = MathOptInterface
 const PSIP = PowerSystemsInvestmentsPortfolios
 const PM = PowerModels
-const PNM = PowerNetworkMatrices
 const MOPFM = MOI.FileFormats.Model
 
 using DocStringExtensions
@@ -182,6 +198,8 @@ import InfrastructureSystems.Optimization:
 import InfrastructureSystems.Optimization:
     OptimizationProblemResults, OptimizationProblemResultsExport, OptimizerStats
 import InfrastructureSystems.Optimization:
+    list_variable_names, list_aux_variable_names, list_dual_names, list_expression_names
+import InfrastructureSystems.Optimization:
     read_optimizer_stats,
     get_optimizer_stats,
     export_results,
@@ -214,6 +232,8 @@ include("base/expressions.jl")
 include("base/settings.jl")
 include("base/solution_algorithms.jl")
 include("base/technology_model.jl")
+include("requirement_models/requirement_formulations.jl")
+include("base/requirement_model.jl")
 include("base/investment_model_template.jl")
 include("base/time_mapping.jl")
 include("base/objective_function.jl")
@@ -228,9 +248,14 @@ include("base/serialization.jl")
 # Solve Instance #
 include("model_build/SingleInstanceSolve.jl")
 # Utils #
-include("utils/printing.jl")
+@static if pkgversion(PrettyTables).major == 2
+    include("utils/printing_pt_v2.jl")
+else
+    include("utils/printing_pt_v3.jl")
+end
 include("utils/logging.jl")
 include("utils/psip_utils.jl")
+include("utils/technology_region_utils.jl")
 # Technology Models #
 include("technology_models/technologies/common/add_variable.jl")
 include("technology_models/technologies/common/add_to_expression.jl")
@@ -242,6 +267,7 @@ include("technology_models/technologies/branch_tech.jl")
 # Network #
 include("network_models/singleregion_model.jl")
 include("network_models/multiregion_model.jl")
+include("network_models/nodal_model.jl")
 include("network_models/transport_constructor.jl")
 # Constructors #
 include("technology_models/technology_constructors/supply_constructor.jl")
@@ -250,6 +276,10 @@ include("technology_models/technology_constructors/storage_constructor.jl")
 include("technology_models/technology_constructors/colocated_constructor.jl")
 include("technology_models/technology_constructors/branch_constructor.jl")
 include("technology_models/technology_constructors/constructor_validations.jl")
+# Requirement Models #
+include("requirement_models/requirement_constructor.jl")
+include("requirement_models/requirement_utils.jl")
+include("requirement_models/energy_share_requirement.jl")
 # Objective Function #
 include("technology_models/technologies/common/objective_function/common_financial.jl")
 include("technology_models/technologies/common/objective_function/common_capital.jl")

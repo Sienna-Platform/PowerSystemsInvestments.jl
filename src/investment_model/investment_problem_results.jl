@@ -15,7 +15,7 @@ function OptimizationProblemResults(model::InvestmentModel)
         Dict(x => read_aux_variable(model, x) for x in list_aux_variable_keys(model))
     variable_values = Dict(x => read_variable(model, x) for x in list_variable_keys(model))
     dual_values = Dict(x => read_dual(model, x) for x in list_dual_keys(model))
-    parameter_values = Dict()
+    parameter_values = Dict{ParameterKey, DataFrames.DataFrame}()
     expression_values =
         Dict(x => read_expression(model, x) for x in list_expression_keys(model))
 
@@ -33,21 +33,7 @@ function OptimizationProblemResults(model::InvestmentModel)
         optimizer_stats,
         get_metadata(get_optimization_container(model)),
         IS.strip_module_name(typeof(model)),
-        get_output_dir(model),
         mkpath(joinpath(get_output_dir(model), "results")),
+        get_output_dir(model),
     )
 end
-
-list_variable_keys(res::OptimizationProblemResults) = keys(res.variable_values)
-list_aux_variable_keys(res::OptimizationProblemResults) = keys(res.aux_variable_values)
-list_dual_keys(res::OptimizationProblemResults) = keys(res.dual_values)
-list_expression_keys(res::OptimizationProblemResults) = keys(res.expression_values)
-
-list_variable_names(res::OptimizationProblemResults) =
-    encode_keys_as_strings(list_variable_keys(res))
-list_aux_variable_names(res::OptimizationProblemResults) =
-    encode_keys_as_strings(list_aux_variable_keys(res))
-list_dual_names(res::OptimizationProblemResults) =
-    encode_keys_as_strings(list_dual_keys(res))
-list_expression_names(res::OptimizationProblemResults) =
-    encode_keys_as_strings(list_expression_keys(res))

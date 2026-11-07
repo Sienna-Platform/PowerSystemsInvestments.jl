@@ -83,6 +83,18 @@ Struct to dispatch the creation of bidirectional Active Power Flow Variables
 """
 struct FlowActivePowerVariable <: OperationsVariableType end
 
+"""
+Unserved-energy slack on a system power-balance constraint (deficit: injection < 0).
+Only created when the TransportModel is built with `use_slacks = true`.
+"""
+struct BalanceSlackUp <: OperationsVariableType end
+
+"""
+Over-supply slack on a system power-balance constraint (surplus: injection > 0).
+Only created when the TransportModel is built with `use_slacks = true`.
+"""
+struct BalanceSlackDown <: OperationsVariableType end
+
 is_operation_entry(::Type{<:ISOPT.VariableType}) = error()
 is_operation_entry(::Type{<:OperationsVariableType}) = true
 is_operation_entry(::Type{<:InvestmentVariableType}) = false
