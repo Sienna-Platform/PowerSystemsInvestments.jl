@@ -1,5 +1,5 @@
 #! format: off
-_supported_investment_formulations(::Type{<:PSIP.SupplyTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment)
+_supported_investment_formulations(::Type{<:PSIP.SupplyTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment, RetrofitInvestment)
 
 get_variable_lower_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = 0.0
 get_variable_upper_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = nothing
@@ -47,7 +47,7 @@ function add_expression!(
 ) where {
     T <: CumulativeCapacity,
     U <: Vector{D},
-    V <: ContinuousInvestment,
+    V <: Union{ContinuousInvestment, RetrofitInvestment},
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -950,6 +950,10 @@ function add_constraints!(
     )
 
     installed_cap = get_expression(container, V(), D, tech_model)
+    # Capacity converted by retrofits counts toward the limits of its source
+    retrofit_capacity = if has_container_key(container, RetrofitCapacity, PSIP.Portfolio)
+        get_expression(container, RetrofitCapacity(), PSIP.Portfolio)
+    end
 
     for d in devices
         name = PSIP.get_name(d)
@@ -957,12 +961,16 @@ function add_constraints!(
         variable_names = get_variable_names(d)
         limits = get_cumulative_limits(d, V())
         _check_cumulative_limits(d, limits)
+        retrofitted = !isnothing(retrofit_capacity) && name in axes(retrofit_capacity, 1)
         for t in time_steps
+            capacity =
+                sum(installed_cap[variable_name, t] for variable_name in variable_names)
+            if retrofitted
+                capacity += retrofit_capacity[name, t]
+            end
             con[name, t] = JuMP.@constraint(
                 get_jump_model(container),
-                limits.min <=
-                sum(installed_cap[variable_name, t] for variable_name in variable_names) <=
-                limits.max
+                limits.min <= capacity <= limits.max
             )
         end
     end

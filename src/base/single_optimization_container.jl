@@ -861,6 +861,9 @@ function build_model!(
         end
     end
 
+    # Retrofit options take their capacity from their sources, before anything reads it
+    link_retrofits!(container, port, names_to_model_map)
+
     # Requirements (policies spanning multiple technologies/regions) — argument stage
     construct_requirements!(
         container,
