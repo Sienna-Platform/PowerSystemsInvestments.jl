@@ -8,8 +8,13 @@ end
 _is_fuel_curve(::PSY.ProductionVariableCostCurve) = false
 _is_fuel_curve(::PSY.FuelCurve) = true
 
+# Operating costs of a supply technology with any fuel curve in MMBtu, the fuel of heat rates
+# and carbon intensities (tCO2/MMBtu)
+get_supply_operation_costs(d::PSIP.SupplyTechnology) =
+    PSIP.get_operation_costs(d, PSIP.MMBtu)
+
 has_fuel_curve(d::PSIP.SupplyTechnology) =
-    _is_fuel_curve(PSY.get_variable_operation_cost(PSIP.get_operation_costs(d, IS.NU)))
+    _is_fuel_curve(PSY.get_variable_operation_cost(get_supply_operation_costs(d)))
 
 # Fuel consumed per MWh generated
 get_heat_rate(fuel_curve::PSY.FuelCurve{PSY.LinearCurve}) =

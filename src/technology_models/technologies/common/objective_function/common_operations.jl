@@ -21,7 +21,7 @@ function add_variable_cost!(
     V <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
 }
     for d in devices
-        op_cost_data = PSIP.get_operation_costs(d, IS.NU)
+        op_cost_data = get_supply_operation_costs(d)
         _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)
     end
     return
@@ -101,7 +101,7 @@ function add_commitment_cost!(
     V <: ThermalCommitmentFormulation,
 }
     for d in devices
-        op_cost_data = PSIP.get_operation_costs(d, IS.NU)
+        op_cost_data = get_supply_operation_costs(d)
         _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)
     end
     return

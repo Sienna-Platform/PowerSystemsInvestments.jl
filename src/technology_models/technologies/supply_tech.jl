@@ -233,9 +233,8 @@ function add_expression!(
     )
 
     for d in fuel_devices
-        heat_rate = get_heat_rate(
-            PSY.get_variable_operation_cost(PSIP.get_operation_costs(d, IS.NU)),
-        )
+        heat_rate =
+            get_heat_rate(PSY.get_variable_operation_cost(get_supply_operation_costs(d)))
         for op_ix in get_all_indexes(time_mapping)
             fuel_per_mw = heat_rate * get_time_step_length(time_mapping, op_ix)
             for name in get_variable_names(d), t in consecutive_slices[op_ix]
@@ -270,7 +269,7 @@ function add_to_expression!(
     committed_cap = get_variable(container, CommittedCapacityVariable(), D, tech_model)
     expression = get_expression(container, expression_type, D, tech_model)
     for d in fuel_devices
-        fuel_curve = PSY.get_variable_operation_cost(PSIP.get_operation_costs(d, IS.NU))
+        fuel_curve = PSY.get_variable_operation_cost(get_supply_operation_costs(d))
         start_up_fuel = get_commitment_fuel(StartUpCapacityVariable(), fuel_curve)
         no_load_fuel = get_commitment_fuel(CommittedCapacityVariable(), fuel_curve)
         for op_ix in get_all_indexes(time_mapping)

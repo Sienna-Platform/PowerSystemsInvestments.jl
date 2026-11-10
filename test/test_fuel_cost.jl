@@ -125,6 +125,42 @@ end
     @test PSIN.has_fuel_curve(thermal)
 end
 
+@testset "Fuel curves in GJ are read in MMBtu" begin
+    gj_per_mmbtu = ustrip(uconvert(u"GJ", 1.0 * PSIP.MMBtu))
+    m_mmbtu = _build_fuel_cost_model(
+        FuelCurve(; fuel_units=PSIP.MMBtu, value_curve=LinearCurve(10.0), fuel_cost=3.0),
+    )
+    m_gj = _build_fuel_cost_model(
+        FuelCurve(;
+            fuel_units=u"GJ",
+            value_curve=LinearCurve(10.0 * gj_per_mmbtu),
+            fuel_cost=3.0 / gj_per_mmbtu,
+        ),
+    )
+    # The same heat rate and fuel price, stated in GJ, give the same fuel use in MMBtu
+    for m in (m_mmbtu, m_gj)
+        container = PSIN.get_optimization_container(m)
+        consumption = PSIN.get_expression(
+            container,
+            FuelConsumptionExpression(),
+            FUEL_TEST_THERMAL_TYPE,
+            "BasicDispatch",
+        )
+        dispatch = PSIN.get_variable(
+            container,
+            PSIN.ActivePowerVariable(),
+            FUEL_TEST_THERMAL_TYPE,
+            "BasicDispatch",
+        )
+        @test JuMP.coefficient(
+            consumption["expensive_thermal", 1],
+            dispatch["expensive_thermal", 1],
+        ) ≈ 10.0
+    end
+    @test _dispatch_cost_coefficient(m_gj, "expensive_thermal", 1) ≈
+          _dispatch_cost_coefficient(m_mmbtu, "expensive_thermal", 1)
+end
+
 @testset "Fuel cost in the objective function" begin
     cost_per_mwh = _thermal_variable_cost("expensive_thermal")
     heat_rate = 10.0
