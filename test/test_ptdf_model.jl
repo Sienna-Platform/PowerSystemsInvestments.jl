@@ -1181,7 +1181,7 @@ end
                 "ops_demand";
                 features=Dict("year" => "2030", "rep_day" => 1),
             ).data,
-        ) .* PSIP.get_peak_demand_mw(demand2, IS.NU)
+        ) .* PSIP.get_peak_demand_mw(demand2, u"NU")
     for t in 1:24
         constraint = JuMP.constraint_object(constraints["reserve_margin", t])
         surplus = JuMP.value(constraint.func) - MOI.constant(constraint.set)

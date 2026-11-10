@@ -19,7 +19,7 @@ _technology(portfolio::PSIP.Portfolio, line::LineKey) =
     PSIP.get_technology(line.type, portfolio, line.name)
 
 _max_capacity(portfolio::PSIP.Portfolio, line::LineKey) =
-    PSIP.get_capacity_limits(_technology(portfolio, line), IS.NU).max
+    PSIP.get_capacity_limits(_technology(portfolio, line), u"NU").max
 
 _max_flow(corridor::MergedCorridor, portfolio::PSIP.Portfolio) =
     corridor.fixed_capacity +

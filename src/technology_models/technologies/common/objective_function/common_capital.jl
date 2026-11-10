@@ -16,8 +16,8 @@ function add_capital_cost!(
 }
     for d in devices
         capital_costs = PSIP.get_capital_costs(d)
-        value_curve = PSIP.get_capital_cost(capital_costs)
-        interconnection_cost = PSIP.get_interconnection_cost(capital_costs)
+        value_curve = PSIP.get_capital_cost(capital_costs, u"NU")
+        interconnection_cost = PSIP.get_interconnection_cost(capital_costs, u"NU")
         _add_cost_to_objective!(
             container,
             U(),
@@ -64,7 +64,7 @@ function add_fixed_om_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        fixed_cost_data = PSIP.get_operation_costs(d, IS.NU)
+        fixed_cost_data = PSIP.get_operation_costs(d, u"NU")
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
@@ -83,7 +83,7 @@ function add_fixed_om_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        fixed_cost_data = PSIP.get_operation_costs(d, IS.NU)
+        fixed_cost_data = PSIP.get_operation_costs(d, u"NU")
         _add_cost_to_objective!(container, U(), d, fixed_cost_data, V(), tech_model)
     end
     return
@@ -123,7 +123,7 @@ function add_capital_cost!(
 }
     for d in devices
         storage_capital_costs = PSIP.get_capital_costs(d)
-        value_curve = PSIP.get_energy_capital_cost(storage_capital_costs)
+        value_curve = PSIP.get_energy_capital_cost(storage_capital_costs, u"NU")
         _add_cost_to_objective!(container, U(), d, value_curve, V(), tech_model)
     end
     return
@@ -138,13 +138,13 @@ function get_power_capital_cost(
     technology::PSIP.Technology,
     capital_costs::PSIP.StorageCapitalCost,
 )
-    if PSIP.get_charge_capital_cost(capital_costs) != PSY.LinearCurve(0.0)
+    if PSIP.get_charge_capital_cost(capital_costs, u"NU") != PSY.LinearCurve(0.0)
         error(
             "Technology $(PSIP.get_name(technology)) has a charge capital cost, which is " *
             "not supported: storage power capacity is priced with the discharge capital cost.",
         )
     end
-    return PSIP.get_discharge_capital_cost(capital_costs)
+    return PSIP.get_discharge_capital_cost(capital_costs, u"NU")
 end
 
 function add_capital_cost!(
@@ -161,7 +161,7 @@ function add_capital_cost!(
     for d in devices
         storage_capital_costs = PSIP.get_capital_costs(d)
         value_curve = get_power_capital_cost(d, storage_capital_costs)
-        interconnection_cost = PSIP.get_interconnection_cost(storage_capital_costs)
+        interconnection_cost = PSIP.get_interconnection_cost(storage_capital_costs, u"NU")
         _add_cost_to_objective!(
             container,
             U(),

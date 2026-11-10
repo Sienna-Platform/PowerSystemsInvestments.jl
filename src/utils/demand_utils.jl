@@ -31,14 +31,14 @@ function initialize_demands!(container::SingleOptimizationContainer, p::PSIP.Por
                     "or NON_CONFORMING.",
                 )
             end
-            if PSIP.get_peak_demand_mw(d, IS.NU) <= 0.0
+            if PSIP.get_peak_demand_mw(d, u"NU") <= 0.0
                 error("New demand $name needs a positive peak_demand_mw.")
             end
             if PSIP.get_construction_year(d) > last_year
                 @warn "Demand $name is built in $(PSIP.get_construction_year(d)), after " *
                       "the last modeled year ($last_year), so it is never active."
             end
-        elseif PSIP.get_peak_demand_mw(d, IS.NU) != 0.0
+        elseif PSIP.get_peak_demand_mw(d, u"NU") != 0.0
             @warn "Demand $name has existing loads, so its peak_demand_mw is ignored and " *
                   "its peak comes from the base system."
         end

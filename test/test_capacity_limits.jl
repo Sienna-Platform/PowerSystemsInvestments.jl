@@ -63,7 +63,7 @@ end
     # Supply: the build variable is only non-negative
     p, op_days = test_2_zone_portfolio()
     thermal = PSIP.get_technology(LIMIT_THERMAL, p, "cheap_thermal")
-    PSIP.set_capacity_limits!(thermal, (min=50.0, max=400.0), IS.NU)
+    PSIP.set_capacity_limits!(thermal, (min=50.0u"MW", max=400.0u"MW"))
     container = _limit_container(p, op_days, LIMIT_THERMAL, ["cheap_thermal"])
     @test _cumulative_limits(
         container,
@@ -80,8 +80,8 @@ end
     p, op_days = test_2_zone_portfolio()
     storage_type = PSIP.StorageTechnology{PSY.EnergyReservoirStorage}
     storage = PSIP.get_technology(storage_type, p, "test_storage")
-    PSIP.set_capacity_limits_discharge!(storage, (min=20.0, max=300.0), IS.NU)
-    PSIP.set_capacity_limits_energy!(storage, (min=80.0, max=1000.0), IS.NU)
+    PSIP.set_capacity_limits_discharge!(storage, (min=20.0u"MW", max=300.0u"MW"))
+    PSIP.set_capacity_limits_energy!(storage, (min=80.0u"MWh", max=1000.0u"MWh"))
     container = _limit_container(p, op_days, storage_type, ["test_storage"])
     @test _cumulative_limits(
         container,
@@ -102,7 +102,7 @@ end
     p, op_days = test_2_zone_portfolio()
     line_type = PSIP.AggregateTransportTechnology{PSY.ACBranch}
     line = PSIP.get_technology(line_type, p, "test_branch")
-    PSIP.set_capacity_limits!(line, (min=100.0, max=1000.0), IS.NU)
+    PSIP.set_capacity_limits!(line, (min=100.0u"MW", max=1000.0u"MW"))
     container = _limit_container(p, op_days, line_type, ["test_branch"])
     @test _cumulative_limits(
         container,
@@ -114,7 +114,7 @@ end
     # A minimum above the maximum is an error
     p, op_days = test_2_zone_portfolio()
     thermal = PSIP.get_technology(LIMIT_THERMAL, p, "cheap_thermal")
-    PSIP.set_capacity_limits!(thermal, (min=500.0, max=400.0), IS.NU)
+    PSIP.set_capacity_limits!(thermal, (min=500.0u"MW", max=400.0u"MW"))
     @test_throws r"above its maximum" _limit_container(
         p,
         op_days,
@@ -140,7 +140,7 @@ function _limit_model(limits; existing=false)
     PSY.set_name!(generator, "existing_gas")
     PSY.set_bus!(generator, bus)
     add_component!(sys, generator)
-    PSY.set_active_power_limits!(generator, (min=0.0 * u"MW", max=200.0 * u"MW"))
+    PSY.set_active_power_limits!(generator, (min=0.0u"MW", max=200.0u"MW"))
 
     portfolio =
         Portfolio(sys; financial_data=PortfolioFinancialData(2025, 0.07, 0.02, 0.04))

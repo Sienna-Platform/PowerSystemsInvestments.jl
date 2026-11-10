@@ -5,9 +5,9 @@ get_variable_lower_bound(::VariableType, d::PSIP.DemandSideTechnology, ::Abstrac
 get_variable_upper_bound(::VariableType, d::PSIP.DemandSideTechnology, ::AbstractTechnologyFormulation) = nothing
 
 # Capacity (MW) added by one unit of the build variable
-get_variable_multiplier(::BuildCapacity, d::PSIP.DemandSideTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = PSIP.get_unit_size(d, IS.NU)
+get_variable_multiplier(::BuildCapacity, d::PSIP.DemandSideTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = PSIP.get_unit_size(d, u"NU")
 
-get_cumulative_limits(d::PSIP.DemandSideTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, IS.NU)
+get_cumulative_limits(d::PSIP.DemandSideTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, u"NU")
 
 get_expression_multiplier(::EnergyBalance, ::ActiveInPowerVariable, ::PSIP.DemandSideTechnology, ::OperationsTechnologyFormulation) = -1.0
 #! format: on
@@ -35,9 +35,9 @@ function check_end_use(d::PSIP.DemandSideTechnology)
             "min_power of $name is a fraction of its capacity and must be between 0 and 1.",
         )
     end
-    if _product_price(PSIP.get_price_per_unit(d, IS.NU)) > 0.0 &&
-       PSIP.get_capacity_limits(d, IS.NU).max >= 1e8
-        @warn "$name earns $(PSIP.get_price_per_unit(d, IS.NU)) per unit of product and has no " *
+    if _product_price(PSIP.get_price_per_unit(d, u"NU")) > 0.0 &&
+       PSIP.get_capacity_limits(d, u"NU").max >= 1e8
+        @warn "$name earns $(PSIP.get_price_per_unit(d, u"NU")) per unit of product and has no " *
               "maximum capacity, so its build is only limited by what it can sell. Set " *
               "capacity_limits."
     end
@@ -319,7 +319,7 @@ function add_variable_cost!(
             container,
             U(),
             d,
-            PSIP.get_operation_costs(d, IS.NU),
+            PSIP.get_operation_costs(d, u"NU"),
             V(),
             tech_model,
         )
@@ -338,7 +338,7 @@ function add_product_revenue!(
 ) where {T <: PSIP.DemandSideTechnology, U <: ActiveInPowerVariable, V <: EndUseDispatch}
     for d in devices
         value =
-            _product_price(PSIP.get_price_per_unit(d, IS.NU)) /
+            _product_price(PSIP.get_price_per_unit(d, u"NU")) /
             PSIP.get_technology_efficiency(d)
         iszero(value) && continue
         _add_linearcurve_cost!(
@@ -346,7 +346,7 @@ function add_product_revenue!(
             U(),
             ProductRevenue(),
             d,
-            PSIP.get_operation_costs(d, IS.NU),
+            PSIP.get_operation_costs(d, u"NU"),
             -value,
             tech_model,
         )

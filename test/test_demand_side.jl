@@ -53,7 +53,7 @@ function _end_use_model(;
     PSY.set_name!(load, "existing_electrolyzer")
     PSY.set_bus!(load, bus)
     add_component!(sys, load)
-    PSY.set_max_active_power!(load, 25.0 * u"MW")
+    PSY.set_max_active_power!(load, 25.0u"MW")
 
     portfolio =
         Portfolio(sys; financial_data=PortfolioFinancialData(2025, 0.07, 0.02, 0.04))

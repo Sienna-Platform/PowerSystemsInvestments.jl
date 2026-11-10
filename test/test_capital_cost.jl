@@ -112,9 +112,10 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
 
         cheap = PSIP.get_technology(tech_type, p, "cheap_thermal")
         expensive = PSIP.get_technology(tech_type, p, "expensive_thermal")
-        slope_cheap = _curve_slope(PSIP.get_capital_cost(PSIP.get_capital_costs(cheap)))
+        slope_cheap =
+            _curve_slope(PSIP.get_capital_cost(PSIP.get_capital_costs(cheap), u"NU"))
         slope_expensive =
-            _curve_slope(PSIP.get_capital_cost(PSIP.get_capital_costs(expensive)))
+            _curve_slope(PSIP.get_capital_cost(PSIP.get_capital_costs(expensive), u"NU"))
 
         coef_cheap = _capital_coefficients(
             container,
@@ -167,7 +168,7 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
 
         # Same capital curve, but now with a nonzero interconnection cost ($/MW).
         cheap = PSIP.get_technology(tech_type, p, "cheap_thermal")
-        curve = PSIP.get_capital_cost(PSIP.get_capital_costs(cheap))
+        curve = PSIP.get_capital_cost(PSIP.get_capital_costs(cheap), u"NU")
         slope = _curve_slope(curve)
         interconnection = 0.25 * slope
         PSIP.set_capital_costs!(cheap, PSIP.CapitalCost(curve, interconnection))
@@ -227,14 +228,14 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
 
         stor = PSIP.get_technology(storage_type, p, "test_storage")
         scost = PSIP.get_capital_costs(stor)
-        discharge_slope = _curve_slope(PSIP.get_discharge_capital_cost(scost))
+        discharge_slope = _curve_slope(PSIP.get_discharge_capital_cost(scost, u"NU"))
         interconnection = 0.5 * discharge_slope
         PSIP.set_capital_costs!(
             stor,
             PSIP.StorageCapitalCost(
-                charge_capital_cost=PSIP.get_charge_capital_cost(scost),
-                discharge_capital_cost=PSIP.get_discharge_capital_cost(scost),
-                energy_capital_cost=PSIP.get_energy_capital_cost(scost),
+                charge_capital_cost=PSIP.get_charge_capital_cost(scost, u"NU"),
+                discharge_capital_cost=PSIP.get_discharge_capital_cost(scost, u"NU"),
+                energy_capital_cost=PSIP.get_energy_capital_cost(scost, u"NU"),
                 interconnection_cost=interconnection,
             ),
         )
@@ -282,7 +283,7 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
         )
 
         cheap = PSIP.get_technology(tech_type, p, "cheap_thermal")
-        slope = _curve_slope(PSIP.get_capital_cost(PSIP.get_capital_costs(cheap)))
+        slope = _curve_slope(PSIP.get_capital_cost(PSIP.get_capital_costs(cheap), u"NU"))
 
         # Without interconnection: amortized/discounted term is driven by the curve slope.
         container =
@@ -302,7 +303,7 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
         PSIP.set_capital_costs!(
             cheap,
             PSIP.CapitalCost(
-                PSIP.get_capital_cost(PSIP.get_capital_costs(cheap)),
+                PSIP.get_capital_cost(PSIP.get_capital_costs(cheap), u"NU"),
                 interconnection,
             ),
         )
@@ -377,8 +378,8 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
             stor,
             PSIP.StorageCapitalCost(;
                 charge_capital_cost=LinearCurve(1000.0),
-                discharge_capital_cost=PSIP.get_discharge_capital_cost(scost),
-                energy_capital_cost=PSIP.get_energy_capital_cost(scost),
+                discharge_capital_cost=PSIP.get_discharge_capital_cost(scost, u"NU"),
+                energy_capital_cost=PSIP.get_energy_capital_cost(scost, u"NU"),
                 interconnection_cost=0.0,
             ),
         )

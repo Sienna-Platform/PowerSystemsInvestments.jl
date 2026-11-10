@@ -5,13 +5,13 @@ get_variable_lower_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTec
 get_variable_upper_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = nothing
 # The capacity limits apply to cumulative capacity (CumulativeCapacityLimit), not to the
 # capacity built in a period
-get_cumulative_limits(d::PSIP.SupplyTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, IS.NU)
+get_cumulative_limits(d::PSIP.SupplyTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, u"NU")
 
 get_variable_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 get_expression_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 
 # Capacity (MW) added by one unit of the build variable
-get_variable_multiplier(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = PSIP.get_unit_size(d, IS.NU)
+get_variable_multiplier(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = PSIP.get_unit_size(d, u"NU")
 
 #! format: on
 

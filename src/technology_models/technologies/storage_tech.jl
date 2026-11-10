@@ -9,8 +9,8 @@ get_variable_upper_bound(::VariableType, d::PSIP.StorageTechnology, ::AbstractTe
 get_variable_multiplier(::ActiveInPowerVariable, ::Type{<:PSIP.StorageTechnology}) = 1.0
 get_variable_multiplier(::ActiveOutPowerVariable, ::Type{<:PSIP.StorageTechnology}) = 1.0
 # Capacity added by one unit of the build variables
-get_variable_multiplier(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::IntegerInvestment) = PSIP.get_unit_size_discharge(d, IS.NU)
-get_variable_multiplier(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::IntegerInvestment) = PSIP.get_unit_size_energy(d, IS.NU)
+get_variable_multiplier(::BuildPowerCapacity, d::PSIP.StorageTechnology, ::IntegerInvestment) = PSIP.get_unit_size_discharge(d, u"NU")
+get_variable_multiplier(::BuildEnergyCapacity, d::PSIP.StorageTechnology, ::IntegerInvestment) = PSIP.get_unit_size_energy(d, u"NU")
 
 get_expression_multiplier(::EnergyBalance, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::EnergyBalance, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
@@ -20,8 +20,8 @@ get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP
 get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::FeasibilityTechnologyFormulation) = -1.0
 
 # TODO: Defaulting to using discharge values for symmetric storage, but we need to be careful if we implement asymmetric storage investments
-get_cumulative_limits(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d, IS.NU)
-get_cumulative_limits(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_limits_energy(d, IS.NU)
+get_cumulative_limits(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d, u"NU")
+get_cumulative_limits(d::PSIP.StorageTechnology, ::CumulativeEnergyCapacity) = PSIP.get_capacity_limits_energy(d, u"NU")
 
 #! format: on
 

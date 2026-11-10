@@ -143,7 +143,7 @@ function construct_requirement!(
         req = PSIP.get_requirement(T, p, name)
         op_indexes = map_to_op[_target_investment_period(time_mapping, req)]
         cost =
-            PSIP.get_tax_dollars_per_ton(req, IS.NU) *
+            PSIP.get_tax_dollars_per_ton(req, u"NU") *
             _target_period_cost_factor(container, req)
         add_to_objective_operations_expression!(
             container,
@@ -214,7 +214,7 @@ function _add_carbon_limit!(
     ::Dict{String, TechnologyModel},
     ::Vector{Int},
 )
-    JuMP.add_to_expression!(limit, 1e6 * PSIP.get_max_mtons(requirement, IS.NU))
+    JuMP.add_to_expression!(limit, 1e6 * PSIP.get_max_mtons(requirement, u"NU"))
     return
 end
 
@@ -239,7 +239,7 @@ function _add_carbon_limit!(
             served=true,
         )
     end
-    JuMP.add_to_expression!(limit, 1e6 * PSIP.get_max_tons_mwh(requirement, IS.NU), demand)
+    JuMP.add_to_expression!(limit, 1e6 * PSIP.get_max_tons_mwh(requirement, u"NU"), demand)
     return
 end
 
@@ -265,7 +265,7 @@ function _add_carbon_limit!(
     end
     JuMP.add_to_expression!(
         limit,
-        1e6 * PSIP.get_max_tons_mwh(requirement, IS.NU),
+        1e6 * PSIP.get_max_tons_mwh(requirement, u"NU"),
         generation,
     )
     return

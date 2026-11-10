@@ -44,7 +44,7 @@ function _aggregate_line_model(formulation; operation=BasicDispatch)
     template, p_5bus = _transmission_template(MultiRegionBalanceModel)
     line_type = PSIP.AggregateTransportTechnology{PSY.ACBranch}
     line = PSIP.get_technology(line_type, p_5bus, "test_branch")
-    PSIP.set_unit_size!(line, TRANSMISSION_UNIT_SIZE, IS.NU)
+    PSIP.set_unit_size!(line, TRANSMISSION_UNIT_SIZE * u"MW")
     set_technology_model!(
         template,
         ["test_branch"],

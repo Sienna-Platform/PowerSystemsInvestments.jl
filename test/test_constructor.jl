@@ -135,7 +135,7 @@ end
         PSIN.BasicDispatchFeasibility,
     )
     storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
-    PSIP.set_duration_limits!(storage, (min=2.0, max=4.0), u"hr")
+    PSIP.set_duration_limits!(storage, (min=2.0u"hr", max=4.0u"hr"))
 
     # Argument Stage
 

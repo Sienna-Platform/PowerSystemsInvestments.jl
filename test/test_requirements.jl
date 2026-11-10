@@ -119,7 +119,7 @@ function _demand_2030(demand2)
             "ops_demand";
             features=Dict("year" => "2030", "rep_day" => 1),
         ).data
-    return 365 * sum(TimeSeries.values(data)) * PSIP.get_peak_demand_mw(demand2, IS.NU)
+    return 365 * sum(TimeSeries.values(data)) * PSIP.get_peak_demand_mw(demand2, u"NU")
 end
 
 const ESR_KEY =
@@ -275,7 +275,6 @@ function _policy_model(
                 start_up=0.0,
                 shut_down=0.0,
             ),
-            IS.NU,
         )
         PSIP.add_supplemental_attribute!(
             p_5bus,
@@ -561,7 +560,7 @@ function _reserve_surplus(m, fraction)
     capacity_factor =
         series(PSIP.get_technology(wind_type, p, "wind"), "ops_variable_cap_factor")
     # Demand series are normalized to the peak demand
-    demand_mw(d) = series(d, "ops_demand") .* PSIP.get_peak_demand_mw(d, IS.NU)
+    demand_mw(d) = series(d, "ops_demand") .* PSIP.get_peak_demand_mw(d, u"NU")
     demand = sum(
         demand_mw(PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p, name)) for
         name in ("demand1", "demand2")
@@ -700,7 +699,7 @@ _constraint_surplus(constraint) =
             series(PSIP.get_technology(wind_type, p, "wind"), "ops_variable_cap_factor")
         demand2 = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p, "demand2")
         # Demand series are normalized to the peak demand
-        demand = series(demand2, "ops_demand") .* PSIP.get_peak_demand_mw(demand2, IS.NU)
+        demand = series(demand2, "ops_demand") .* PSIP.get_peak_demand_mw(demand2, u"NU")
         for t in 1:24
             expected =
                 thermal["cheap_thermal", 1] +
@@ -855,7 +854,7 @@ end
                         ).data,
                     ) for (year, day) in (("2030", 1), ("2035", 2))
                 ]...,
-            ) .* PSIP.get_peak_demand_mw(demand2, IS.NU)
+            ) .* PSIP.get_peak_demand_mw(demand2, u"NU")
         return [
             demand[t] - wind["wind", t] - discharge["test_storage", t] +
             charge["test_storage", t] for t in 1:48

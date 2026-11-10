@@ -11,7 +11,7 @@ get_variable_upper_bound(::BuildCapacity, d::PSIP.TransmissionTechnology, ::Inve
 get_variable_lower_bound(::BuildCapacity, d::PSIP.TransmissionTechnology, ::InvestmentTechnologyFormulation) = 0.0
 
 # Capacity (MW) added by one unit of the build variable
-get_variable_multiplier(::BuildCapacity, d::PSIP.TransmissionTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = PSIP.get_unit_size(d, IS.NU)
+get_variable_multiplier(::BuildCapacity, d::PSIP.TransmissionTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = PSIP.get_unit_size(d, u"NU")
 
 # Controllable flows are only limited by the cumulative capacity constraints
 get_variable_lower_bound(::FlowActivePowerVariable, d::ControllableTransportTechnology, ::OperationsTechnologyFormulation) = nothing
@@ -20,10 +20,10 @@ get_variable_lower_bound(::Union{FlowActivePowerFromToVariable, FlowActivePowerT
 get_variable_upper_bound(::Union{FlowActivePowerFromToVariable, FlowActivePowerToFromVariable}, d::ControllableTransportTechnology, ::BasicDispatchWithLosses) = nothing
 
 # Operations variable bounds: bidirectional flow with magnitude <= capacity
-get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = -PSIP.get_capacity_limits(d, IS.NU).max
-get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = PSIP.get_capacity_limits(d, IS.NU).max
+get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = -PSIP.get_capacity_limits(d, u"NU").max
+get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = PSIP.get_capacity_limits(d, u"NU").max
 
-get_cumulative_limits(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, IS.NU)
+get_cumulative_limits(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d, u"NU")
 
 _arc(d::PSIP.AggregateTransportTechnology) = (PSY.get_name(PSIP.get_start_region(d)), PSY.get_name(PSIP.get_end_region(d)))
 _arc(d::PSIP.TransmissionTechnology) = (PSY.get_name(PSIP.get_start_node(d)), PSY.get_name(PSIP.get_end_node(d)))

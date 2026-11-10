@@ -53,7 +53,7 @@ function _retrofit_model(;
         PSY.set_name!(unit, name)
         PSY.set_bus!(unit, bus)
         add_component!(sys, unit)
-        PSY.set_active_power_limits!(unit, (min=0.0 * u"MW", max=capacity * u"MW"))
+        PSY.set_active_power_limits!(unit, (min=0.0u"MW", max=capacity * u"MW"))
     end
 
     portfolio =

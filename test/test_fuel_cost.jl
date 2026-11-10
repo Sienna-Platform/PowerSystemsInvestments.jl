@@ -14,7 +14,6 @@ function _make_fuel_cost_model(variable_cost=nothing)
                 start_up=0.0,
                 shut_down=0.0,
             ),
-            IS.NU,
         )
     end
 
@@ -81,7 +80,7 @@ function _thermal_variable_cost(name::String)
     thermal = PSIP.get_technology(FUEL_TEST_THERMAL_TYPE, p_5bus, name)
     return PSY.get_proportional_term(
         PSY.get_value_curve(
-            PSY.get_variable_operation_cost(PSIP.get_operation_costs(thermal, IS.NU)),
+            PSY.get_variable_operation_cost(PSIP.get_operation_costs(thermal, u"NU")),
         ),
     )
 end
@@ -120,7 +119,6 @@ end
             start_up=0.0,
             shut_down=0.0,
         ),
-        IS.NU,
     )
     @test PSIN.has_fuel_curve(thermal)
 end

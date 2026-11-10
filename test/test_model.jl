@@ -795,7 +795,7 @@ end
     )
     # The demand series is normalized to the peak demand
     total_demand_2030 =
-        sum(TimeSeries.values(d_2030.data)) * PSIP.get_peak_demand_mw(demand2, IS.NU)
+        sum(TimeSeries.values(d_2030.data)) * PSIP.get_peak_demand_mw(demand2, u"NU")
 
     @test total_wind_2030 ≈ fraction * total_demand_2030 rtol = 1e-6
 
@@ -810,7 +810,7 @@ end
     @test total_wind_2035 ≈
           fraction_2035 *
           sum(TimeSeries.values(d_2035.data)) *
-          PSIP.get_peak_demand_mw(demand2, IS.NU) rtol = 1e-6
+          PSIP.get_peak_demand_mw(demand2, u"NU") rtol = 1e-6
 
     # --- Weighted-energy expressions -------------------------------------------------
     # op_ix=1 (2030 representative day) carries the per-year weight 365.
@@ -922,7 +922,7 @@ end
         container = PSIN.get_optimization_container(m)
         unit_size = PSIP.get_unit_size(
             PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal"),
-            IS.NU,
+            u"NU",
         )
         meta = string(formulation)
 
@@ -954,7 +954,7 @@ end
 
     # A discrete investment needs a positive unit size.
     thermal = PSIP.get_technology(thermal_type, test_2_zone_portfolio()[1], "cheap_thermal")
-    PSIP.set_unit_size!(thermal, 0.0, IS.NU)
+    PSIP.set_unit_size!(thermal, 0.0u"MW")
     @test_throws ErrorException PSIN.get_unit_size(
         PSIN.BuildCapacity(),
         thermal,
@@ -1018,12 +1018,12 @@ end
         (
             PSIN.BuildPowerCapacity,
             PSIN.CumulativePowerCapacity,
-            PSIP.get_unit_size_discharge(storage, IS.NU),
+            PSIP.get_unit_size_discharge(storage, u"NU"),
         ),
         (
             PSIN.BuildEnergyCapacity,
             PSIN.CumulativeEnergyCapacity,
-            PSIP.get_unit_size_energy(storage, IS.NU),
+            PSIP.get_unit_size_energy(storage, u"NU"),
         ),
     )
         build =

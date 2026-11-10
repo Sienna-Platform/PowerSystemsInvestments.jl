@@ -84,7 +84,7 @@ function _unit_count(
     unit_size = get_unit_size(BuildCapacity(), technology, F())
     count = floor(
         Int,
-        (PSIP.get_capacity_limits(technology, IS.NU).max - existing) / unit_size + 1e-9,
+        (PSIP.get_capacity_limits(technology, u"NU").max - existing) / unit_size + 1e-9,
     )
     return _limit_units(technology, max(count, 0), F)
 end
@@ -108,7 +108,7 @@ function _limit_units(
 end
 
 function _check_susceptance_per_mw(corridor_name, technologies)
-    per_mw = [_susceptance(t) / PSIP.get_unit_size(t, IS.NU) for t in technologies]
+    per_mw = [_susceptance(t) / PSIP.get_unit_size(t, u"NU") for t in technologies]
     if length(per_mw) > 1 &&
        maximum(per_mw) > (1 + SUSCEPTANCE_PER_MW_TOLERANCE) * minimum(per_mw)
         @warn "Lines on corridor $corridor_name have different susceptance per MW; the corridor limit overstates what they can carry together" lines =
@@ -139,7 +139,7 @@ function PTDFNetworkData(
         existing = [PSIP.get_existing_capacity_mw(portfolio, t) for t in technologies]
         continuous = [_is_continuous(line.formulation) for line in lines]
         expandable = [
-            c && PSIP.get_capacity_limits(t, IS.NU).max > mw for
+            c && PSIP.get_capacity_limits(t, u"NU").max > mw for
             (t, mw, c) in zip(technologies, existing, continuous)
         ]
         if any(>(0.0), existing)
@@ -193,7 +193,7 @@ function PTDFNetworkData(
                         "$(line.name)_unit_$(unit)",
                         _arc(technology),
                         _susceptance(technology),
-                        PSIP.get_unit_size(technology, IS.NU),
+                        PSIP.get_unit_size(technology, u"NU"),
                         unit,
                         line,
                     ),

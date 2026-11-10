@@ -114,8 +114,8 @@ end
 
 # Per unit on a 1 MVA base, from ohms and kV
 function _susceptance(line::PSIP.NodalACTransportTechnology)
-    x = PSIP.get_reactance(line, IS.NU)
-    voltage = PSIP.get_voltage(line, IS.NU)
+    x = PSIP.get_reactance(line, u"NU")
+    voltage = PSIP.get_voltage(line, u"NU")
     (iszero(x) || iszero(voltage)) &&
         error("Line $(PSIP.get_name(line)) has zero reactance or voltage")
     return voltage^2 / x

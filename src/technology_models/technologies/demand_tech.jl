@@ -73,8 +73,8 @@ function _unserved_tiers(d::PSIP.ProjectedDemand)
             "demand and must be between 0 and 1. Got $(max_curtailment).",
         )
     end
-    tiers = _curtailment_tiers(PSIP.get_curtailment_cost(d, IS.NU), max_curtailment)
-    push!(tiers, (1.0 - max_curtailment, PSIP.get_value_of_lost_load(d, IS.NU)))
+    tiers = _curtailment_tiers(PSIP.get_curtailment_cost(d, u"NU"), max_curtailment)
+    push!(tiers, (1.0 - max_curtailment, PSIP.get_value_of_lost_load(d, u"NU")))
     if any(<(0.0), last.(tiers))
         error(
             "The unserved demand prices of demand $(PSIP.get_name(d)) must be non-negative.",
@@ -118,7 +118,7 @@ function add_variable!(
         # A piecewise curtailment cost needs a positive max_demand_curtailment, so a demand
         # without curtailment has a linear cost here
         if max_curtailment == 0.0 &&
-           IS.get_proportional_term(PSIP.get_curtailment_cost(d, IS.NU)) != 0.0
+           IS.get_proportional_term(PSIP.get_curtailment_cost(d, u"NU")) != 0.0
             @warn "Demand $(PSIP.get_name(d)) has a curtailment_cost but its " *
                   "max_demand_curtailment is 0, so it is never curtailed."
         elseif max_curtailment > 0.0 && all(iszero, last.(tiers[1:(end - 1)]))
@@ -253,7 +253,7 @@ function check_flexible_demand(d::PSIP.ProjectedDemand)
        PSIP.get_max_demand_advance(d, u"hr") < 0.0
         error("The shifting windows of demand $name must be non-negative.")
     end
-    if _shift_price(PSIP.get_shift_cost(d, IS.NU)) < 0.0
+    if _shift_price(PSIP.get_shift_cost(d, u"NU")) < 0.0
         error("The shift cost of demand $name must be non-negative.")
     end
     if flexible_fraction == 0.0 ||
@@ -533,7 +533,7 @@ function add_shift_cost!(
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     deferred = get_variable(container, V(), D, string(S))
     for d in devices
-        price = _shift_price(PSIP.get_shift_cost(d, IS.NU))
+        price = _shift_price(PSIP.get_shift_cost(d, u"NU"))
         price == 0.0 && continue
         name = PSIP.get_name(d)
         for op_ix in get_operational_indexes(time_mapping)

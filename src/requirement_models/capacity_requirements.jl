@@ -70,9 +70,9 @@ function _add_requirement_capacity!(
 end
 
 _capacity_limit(requirement::PSIP.MinimumCapacityRequirements) =
-    PSIP.get_min_capacity_mw(requirement, IS.NU)
+    PSIP.get_min_capacity_mw(requirement, u"NU")
 _capacity_limit(requirement::PSIP.MaximumCapacityRequirements) =
-    PSIP.get_max_capacity_mw(requirement, IS.NU)
+    PSIP.get_max_capacity_mw(requirement, u"NU")
 
 _capacity_constraint(
     jump_model::JuMP.Model,

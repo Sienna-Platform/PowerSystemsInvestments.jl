@@ -20,11 +20,11 @@ get_cumulative_limits(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWind
 get_cumulative_limits(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity) = PSIP.get_capacity_limits_solar(d)
 get_cumulative_limits(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = (min=PSIP.get_min_inverter_capacity(d), max=PSIP.get_max_inverter_capacity(d))
 
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCapacity) = (get_power_capital_cost(d, PSIP.get_capital_costs_storage(d)), PSIP.get_interconnection_cost(PSIP.get_capital_costs_storage(d)))
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = (PSIP.get_energy_capital_cost(PSIP.get_capital_costs_storage(d)), 0.0)
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildWindCapacity) = (PSIP.get_capital_cost(PSIP.get_capital_costs_wind(d)), PSIP.get_interconnection_cost(PSIP.get_capital_costs_wind(d)))
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildSolarCapacity) = (PSIP.get_capital_cost(PSIP.get_capital_costs_solar(d)), PSIP.get_interconnection_cost(PSIP.get_capital_costs_solar(d)))
-get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildInverterCapacity) = (PSIP.get_capital_cost(PSIP.get_capital_costs_inverter(d)), PSIP.get_interconnection_cost(PSIP.get_capital_costs_inverter(d)))
+get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildPowerCapacity) = (get_power_capital_cost(d, PSIP.get_capital_costs_storage(d)), PSIP.get_interconnection_cost(PSIP.get_capital_costs_storage(d), u"NU"))
+get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildEnergyCapacity) = (PSIP.get_energy_capital_cost(PSIP.get_capital_costs_storage(d), u"NU"), 0.0)
+get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildWindCapacity) = (PSIP.get_capital_cost(PSIP.get_capital_costs_wind(d), u"NU"), PSIP.get_interconnection_cost(PSIP.get_capital_costs_wind(d), u"NU"))
+get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildSolarCapacity) = (PSIP.get_capital_cost(PSIP.get_capital_costs_solar(d), u"NU"), PSIP.get_interconnection_cost(PSIP.get_capital_costs_solar(d), u"NU"))
+get_capital_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::BuildInverterCapacity) = (PSIP.get_capital_cost(PSIP.get_capital_costs_inverter(d), u"NU"), PSIP.get_interconnection_cost(PSIP.get_capital_costs_inverter(d), u"NU"))
 
 get_capex_time_series_name(::BuildWindCapacity, ::PSIP.ColocatedSupplyStorageTechnology) = "inv_wind_capex"
 get_capex_time_series_name(::BuildSolarCapacity, ::PSIP.ColocatedSupplyStorageTechnology) = "inv_solar_capex"
@@ -32,7 +32,7 @@ get_capex_time_series_name(::BuildSolarCapacity, ::PSIP.ColocatedSupplyStorageTe
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativePowerCapacity) = PSIP.get_operation_costs_storage(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeWindCapacity) = PSIP.get_operation_costs_wind(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeSolarCapacity) = PSIP.get_operation_costs_solar(d)
-get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = PSIP.get_operation_costs_inverter(d, IS.NU)
+get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::CumulativeInverterCapacity) = PSIP.get_operation_costs_inverter(d, u"NU")
 
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerChargeVariable) = PSIP.get_operation_costs_storage(d)
 get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerDischargeVariable) = PSIP.get_operation_costs_storage(d)

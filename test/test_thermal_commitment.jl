@@ -3,8 +3,8 @@
     p_5bus, op_days = test_2_zone_portfolio()
     name = "expensive_thermal"
     thermal = PSIP.get_technology(thermal_type, p_5bus, name)
-    PSIP.set_time_limits!(thermal, (up=3.0, down=2.0), u"hr")
-    PSIP.set_ramp_limits!(thermal, (up=0.3, down=0.4), u"MW/hr")
+    PSIP.set_time_limits!(thermal, (up=3.0u"hr", down=2.0u"hr"))
+    PSIP.set_ramp_limits!(thermal, (up=0.3u"MW/hr", down=0.4u"MW/hr"))
     PSIP.set_min_generation_fraction!(thermal, 0.35)
     forced_outage = PSIP.get_outage_factor(thermal).forced
     @test forced_outage > 0.0
@@ -165,9 +165,9 @@ function _ramp_test_solution(ramp_limits, start_up_cost)
     p_5bus, op_days = test_2_zone_portfolio()
     for name in ("cheap_thermal", "expensive_thermal")
         thermal = PSIP.get_technology(thermal_type, p_5bus, name)
-        PSIP.set_ramp_limits!(thermal, ramp_limits, u"MW/hr")
+        PSIP.set_ramp_limits!(thermal, map(x -> x * u"MW/hr", ramp_limits))
         PSIP.set_min_generation_fraction!(thermal, 0.35)
-        cost = PSIP.get_operation_costs(thermal, IS.NU)
+        cost = PSIP.get_operation_costs(thermal, u"NU")
         PSIP.set_operation_costs!(
             thermal,
             ThermalGenerationCost(;
@@ -176,7 +176,6 @@ function _ramp_test_solution(ramp_limits, start_up_cost)
                 start_up=start_up_cost,
                 shut_down=0.0,
             ),
-            IS.NU,
         )
     end
     periods = [
@@ -269,8 +268,8 @@ function _commitment_cost_test_model(operation_cost)
     thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
     p_5bus, op_days = test_2_zone_portfolio()
     thermal = PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal")
-    PSIP.set_operation_costs!(thermal, operation_cost, IS.NU)
-    PSIP.set_time_limits!(thermal, (up=3.0, down=2.0), u"hr")
+    PSIP.set_operation_costs!(thermal, operation_cost)
+    PSIP.set_time_limits!(thermal, (up=3.0u"hr", down=2.0u"hr"))
     PSIP.set_min_generation_fraction!(thermal, 0.35)
 
     periods = [

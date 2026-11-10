@@ -179,6 +179,8 @@ import DataFrames
 import LinearAlgebra
 import SparseArrays
 using Unitful: @u_str
+# `u"NU"` (natural units) only resolves with the unit module that defines it bound here
+import PowerSystems: PerUnit
 
 const IS = InfrastructureSystems
 const ISOPT = InfrastructureSystems.Optimization

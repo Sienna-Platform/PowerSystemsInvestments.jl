@@ -70,7 +70,7 @@ function link_retrofits!(
         if length(PSIP.get_region(option)) != 1
             error("Retrofit option $name must be in one region.")
         end
-        if PSIP.get_capacity_limits(source, IS.NU).min > 0.0
+        if PSIP.get_capacity_limits(source, u"NU").min > 0.0
             error(
                 "Source $source_name of retrofit option $name has a minimum capacity, which " *
                 "is not supported with retrofits.",
