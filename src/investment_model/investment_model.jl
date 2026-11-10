@@ -10,7 +10,7 @@ end
 
 function InvestmentModel(
     template::AbstractInvestmentModelTemplate,
-    M::Type{SingleInstanceSolve},
+    M::Type{<:SolutionAlgorithm},
     portfolio::PSIP.Portfolio,
     settings::Settings,
     jump_model::Union{Nothing, JuMP.Model}=nothing;
@@ -31,7 +31,7 @@ end
 
 function InvestmentModel(
     template::AbstractInvestmentModelTemplate,
-    alg::Type{SingleInstanceSolve},
+    alg::Type{<:SolutionAlgorithm},
     portfolio::PSIP.Portfolio,
     jump_model::Union{Nothing, JuMP.Model}=nothing;
     name=nothing,
@@ -156,7 +156,7 @@ function write_results!(
     update_timestamp::Dates.Date;
     exports=nothing,
 )
-    if exports !== nothing
+    if !isnothing(exports)
         export_params = Dict{Symbol, Any}(
             :exports => exports,
             :exports_path => joinpath(exports.path, string(get_name(model))),
@@ -184,7 +184,7 @@ function write_model_dual_results!(
 ) where {T <: InvestmentModel}
     container = get_optimization_container(model)
     model_name = get_name(model)
-    if export_params !== nothing
+    if !isnothing(export_params)
         exports_path = joinpath(export_params[:exports_path], "duals")
         mkpath(exports_path)
     end
@@ -194,7 +194,7 @@ function write_model_dual_results!(
         data = jump_value.(constraint)
         write_result!(store, model_name, key, index, update_timestamp, data)
 
-        if export_params !== nothing &&
+        if !isnothing(export_params) &&
            should_export_dual(export_params[:exports], index, model_name, key)
             horizon_count = export_params[:horizon_count]
             resolution = export_params[:resolution]
@@ -217,7 +217,7 @@ function write_model_variable_results!(
 ) where {T <: InvestmentModel}
     container = get_optimization_container(model)
     model_name = get_name(model)
-    if export_params !== nothing
+    if !isnothing(export_params)
         exports_path = joinpath(export_params[:exports_path], "variables")
         mkpath(exports_path)
     end
@@ -232,7 +232,7 @@ function write_model_variable_results!(
         !should_write_resulting_value(get_entry_type(key)) && continue
         data = jump_value.(variable)
         write_result!(store, model_name, key, index, update_timestamp, data)
-        if export_params !== nothing &&
+        if !isnothing(export_params) &&
            should_export_variable(export_params[:exports], index, model_name, key)
             horizon_count = export_params[:horizon_count]
             resolution = export_params[:resolution]
@@ -255,7 +255,7 @@ function write_model_aux_variable_results!(
 ) where {T <: InvestmentModel}
     container = get_optimization_container(model)
     model_name = get_name(model)
-    if export_params !== nothing
+    if !isnothing(export_params)
         exports_path = joinpath(export_params[:exports_path], "aux_variables")
         mkpath(exports_path)
     end
@@ -265,7 +265,7 @@ function write_model_aux_variable_results!(
         data = jump_value.(variable)
         write_result!(store, model_name, key, index, update_timestamp, data)
 
-        if export_params !== nothing &&
+        if !isnothing(export_params) &&
            should_export_aux_variable(export_params[:exports], index, model_name, key)
             horizon_count = export_params[:horizon_count]
             resolution = export_params[:resolution]
@@ -288,7 +288,7 @@ function write_model_expression_results!(
 ) where {T <: InvestmentModel}
     container = get_optimization_container(model)
     model_name = get_name(model)
-    if export_params !== nothing
+    if !isnothing(export_params)
         exports_path = joinpath(export_params[:exports_path], "expressions")
         mkpath(exports_path)
     end
@@ -304,7 +304,7 @@ function write_model_expression_results!(
         data = jump_value.(expression)
         write_result!(store, model_name, key, index, update_timestamp, data)
 
-        if export_params !== nothing &&
+        if !isnothing(export_params) &&
            should_export_expression(export_params[:exports], index, model_name, key)
             horizon_count = export_params[:horizon_count]
             resolution = export_params[:resolution]
@@ -418,7 +418,7 @@ function solve!(
     console_level=Logging.Error,
     file_level=Logging.Info,
     disable_timer_outputs=false,
-    export_optimization_problem=true,
+    export_optimization_problem=false,
     kwargs...,
 )
     build_if_not_already_built!(
@@ -439,15 +439,16 @@ function solve!(
     try
         Logging.with_logger(logger) do
             try
-                initialize_storage!(
-                    get_store(model),
-                    get_optimization_container(model),
-                    get_store_params(model),
-                )
                 TimerOutputs.@timeit RUN_OPERATION_MODEL_TIMER "Solve" begin
                     @warn "todo: add pre-solve model check back in"
                     #_pre_solve_model_checks(model, optimizer)
                     solve_impl!(model)
+                    # After solve_impl!, which can add to the model
+                    initialize_storage!(
+                        get_store(model),
+                        get_optimization_container(model),
+                        get_store_params(model),
+                    )
                     container = get_optimization_container(model)
                     time_mapping = get_time_mapping(container)
                     current_time = get_base_date(time_mapping)
@@ -488,23 +489,31 @@ end
 function solve_impl!(model::InvestmentModel)
     container = get_optimization_container(model)
     status = solve_model!(container, get_portfolio(model))
-    set_run_status!(model, status)
-    if status != RunStatus.SUCCESSFULLY_FINALIZED
-        model_name = get_name(model)
-        output_dir = get_output_dir(model)
-        infeasible_opt_path = joinpath(output_dir, "infeasible_$(model_name).json")
-        @error("Serializing Infeasible Problem at $(infeasible_opt_path)")
-        serialize_optimization_model(container, infeasible_opt_path)
-        error("Solving model $(model_name) failed")
+    if status == RunStatus.SUCCESSFULLY_FINALIZED
+        calculate_network_values!(
+            container,
+            get_transport_model(get_template(model)),
+            get_portfolio(model),
+        )
     end
+    set_run_status!(model, status)
+    status == RunStatus.SUCCESSFULLY_FINALIZED || _solve_failed(model)
     return
+end
+
+function _solve_failed(model::InvestmentModel)
+    model_name = get_name(model)
+    infeasible_opt_path = joinpath(get_output_dir(model), "infeasible_$(model_name).json")
+    @error("Serializing Infeasible Problem at $(infeasible_opt_path)")
+    serialize_optimization_model(get_optimization_container(model), infeasible_opt_path)
+    error("Solving model $(model_name) failed")
 end
 
 set_console_level!(model::InvestmentModel, val) =
     IOM.set_console_level!(get_internal(model), val)
 set_file_level!(model::InvestmentModel, val) = IOM.set_file_level!(get_internal(model), val)
 
-function set_status!(model::InvestmentModel, status::ISOPT.ModelBuildStatus)
+function set_status!(model::InvestmentModel, status::ISOPT.ModelBuildStatus.Value)
     IOM.set_status!(get_internal(model), status)
     return
 end
@@ -526,14 +535,18 @@ function _read_col_name(axes)
     # Currently, variables that don't have timestamps have a dummy axes to keep
     # two axes in the Store (HDF or Memory). This if-else is used to decide if a
     # dummy axes is being used or not.
-    if typeof(axes[2]) <: UnitRange{Int}
-        return axes[1]
-    elseif typeof(axes[2]) <: Vector{String}
-        IS.@assert_op length(axes[1]) == 1
-        return axes[2]
-    else
-        error("Second axes in store is not allowed to be $(typeof(axes[2]))")
-    end
+    return _select_col_names(axes[1], axes[2])
+end
+
+_select_col_names(first_axis, ::UnitRange{Int}) = first_axis
+
+function _select_col_names(first_axis, second_axis::Vector{String})
+    IS.@assert_op length(first_axis) == 1
+    return second_axis
+end
+
+function _select_col_names(first_axis, second_axis)
+    error("Second axes in store is not allowed to be $(typeof(second_axis))")
 end
 
 function _read_results(model::InvestmentModel, key::OptimizationContainerKey)

@@ -5,8 +5,25 @@ using Statistics
 using InfrastructureSystems
 using TimeSeries
 using Dates
+using Unitful
 const PSIP = PowerSystemsInvestmentsPortfolios
 const IS = InfrastructureSystems
+const PSY = PowerSystems
+
+# Zones and nodes are PowerSystems topology in the portfolio's base system
+test_zone(name) = PSY.Area(; input_basis=u"CU", name=name, base_power=100.0)
+
+test_node(name, number; bus_type=PSY.ACBusTypes.PQ) = PSY.ACBus(;
+    input_basis=u"CU",
+    number=number,
+    name=name,
+    available=true,
+    bustype=bus_type,
+    angle=0.0,
+    magnitude=1.0,
+    voltage_limits=(min=0.9, max=1.1),
+    base_voltage=230.0,
+)
 
 function test_2_zone_portfolio()
     ########################
@@ -25,9 +42,9 @@ function test_2_zone_portfolio()
     ###### Zones ######
     ###################
 
-    z1 = Zone(name="Zone_1")
+    z1 = test_zone("Zone_1")
 
-    z2 = Zone(name="Zone_2")
+    z2 = test_zone("Zone_2")
 
     ###################
     ### Time Series ###
@@ -66,7 +83,7 @@ function test_2_zone_portfolio()
     )
 
     thermals = collect(get_components(ThermalStandard, sys))
-    var_cost = PSY.get_variable.((get_operation_cost.((thermals))))
+    var_cost = PSY.get_variable_operation_cost.((get_operation_cost.((thermals))))
     op_cost = PSY.get_proportional_term.(get_value_curve.(var_cost))
 
     cheap_th_ixs = 2:4
@@ -74,8 +91,8 @@ function test_2_zone_portfolio()
     cheap_th_var_cost = mean(op_cost[cheap_th_ixs])
     exp_th_var_cost = mean(op_cost[exp_th_ixs])
 
-    initial_cap_cheap = sum(get_max_active_power.(thermals[cheap_th_ixs], Ref(IS.NU)))
-    initial_cap_exp = sum(get_max_active_power.(thermals[exp_th_ixs], Ref(IS.NU)))
+    initial_cap_cheap = sum(get_max_active_power.(thermals[cheap_th_ixs], Ref(u"MW")))
+    initial_cap_exp = sum(get_max_active_power.(thermals[exp_th_ixs], Ref(u"MW")))
 
     # From Conservative 2024-ABT CAPEX: year 2030
     coal_igcc_capex = 6937.377 # $/kW
@@ -86,28 +103,28 @@ function test_2_zone_portfolio()
 
     ts_th_cheap_inv_capex = SingleTimeSeries(
         "inv_capex",
-        TimeArray(tstamp_inv, [1.0, coal_igcc_capex / coal_igcc_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, coal_igcc_capex_2035 / coal_igcc_capex]),
     )
     ts_th_exp_inv_capex = SingleTimeSeries(
         "inv_capex",
-        TimeArray(tstamp_inv, [1.0, coal_new_capex / coal_new_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, coal_new_capex_2035 / coal_new_capex]),
     )
 
     t_th = SupplyTechnology{ThermalStandard}(;
         prime_mover_type=PrimeMovers.ST,
-        capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(coal_igcc_capex * 1000.0), 0.0),
         available=true,
         name="cheap_thermal",
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(cheap_th_var_cost)),
+            variable_operation_cost=CostCurve(LinearCurve(cheap_th_var_cost)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
         ),#LinearCurve(0.0),
-        capacity_limits=(0.0, 1e8),
-        outage_factor=0.92,
+        capacity_limits=(min=0.0, max=1e8),
+        outage_factor=(planned=0.0, forced=0.08),
         region=[z1],
         unit_size=250.0,
         financial_data=tech_financials(),
@@ -115,19 +132,19 @@ function test_2_zone_portfolio()
 
     t_th_mid = SupplyTechnology{ThermalStandard}(;
         prime_mover_type=PrimeMovers.ST,
-        capital_costs=LinearCurve(coal_igcc_capex * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(coal_igcc_capex * 1000.0), 0.0),
         available=true,
         name="mid_thermal",
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(cheap_th_var_cost)),
+            variable_operation_cost=CostCurve(LinearCurve(cheap_th_var_cost)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
         ),#LinearCurve(0.0),
-        capacity_limits=(0.0, 1e8),
-        outage_factor=0.92,
+        capacity_limits=(min=0.0, max=1e8),
+        outage_factor=(planned=0.0, forced=0.08),
         region=[z2],
         unit_size=250.0,
         financial_data=tech_financials(),
@@ -135,19 +152,19 @@ function test_2_zone_portfolio()
 
     t_th_exp = SupplyTechnology{ThermalStandard}(;
         prime_mover_type=PrimeMovers.ST,
-        capital_costs=LinearCurve(coal_new_capex * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(coal_new_capex * 1000.0), 0.0),
         available=true,
         name="expensive_thermal",
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(exp_th_var_cost)),
+            variable_operation_cost=CostCurve(LinearCurve(exp_th_var_cost)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
         ),
-        capacity_limits=(0.0, 1e8),
-        outage_factor=0.95,
+        capacity_limits=(min=0.0, max=1e8),
+        outage_factor=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=75.0,
         financial_data=tech_financials(),
@@ -160,10 +177,12 @@ function test_2_zone_portfolio()
     renewables = collect(get_components(RenewableDispatch, sys))
     wind_op_costs =
         get_proportional_term.(
-            get_value_curve.(PSY.get_variable.((get_operation_cost.((renewables)))))
+            get_value_curve.(
+                PSY.get_variable_operation_cost.((get_operation_cost.((renewables))))
+            )
         )
     wind_op_cost = mean(wind_op_costs)
-    initial_cap_wind = sum(get_max_active_power.(renewables, Ref(IS.NU)))
+    initial_cap_wind = sum(get_max_active_power.(renewables, Ref(u"MW")))
 
     # From Conservative 2024-ABT CAPEX: year 2030 for Wind Class 4 Technology 1
     wind_capex = 1577.392 # $/kW
@@ -176,9 +195,9 @@ function test_2_zone_portfolio()
         for (date, data) in ts.data
             for (ix, val) in enumerate(data)
                 if date == DateTime("2024-01-01T00:00:00")
-                    ts_wind_2030[ix] += val * get_max_active_power(gen, IS.NU)
+                    ts_wind_2030[ix] += val * get_max_active_power(gen, u"MW")
                 else
-                    ts_wind_2035[ix] += val * get_max_active_power(gen, IS.NU)
+                    ts_wind_2035[ix] += val * get_max_active_power(gen, u"MW")
                 end
             end
         end
@@ -198,24 +217,24 @@ function test_2_zone_portfolio()
 
     ts_wind_inv_capex = SingleTimeSeries(
         "inv_capex",
-        TimeArray(tstamp_inv, [1.0, wind_capex / wind_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, wind_capex_2035 / wind_capex]),
     )
 
     t_re = SupplyTechnology{RenewableDispatch}(;
         prime_mover_type=PrimeMovers.WT,
-        capital_costs=LinearCurve(wind_capex * 1000.0), # to $/MW
+        capital_costs=PSIP.CapitalCost(LinearCurve(wind_capex * 1000.0), 0.0), # to $/MW
         available=true,
         name="wind",
         fuel=[ThermalFuels.OTHER],
         power_systems_type="RenewableDispatch",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(0.0)),
+            variable_operation_cost=CostCurve(LinearCurve(0.0)),
             fixed=wind_op_cost,
             start_up=0.0,
             shut_down=0.0,
         ),
-        capacity_limits=(0.0, 1e8),
-        outage_factor=0.92,
+        capacity_limits=(min=0.0, max=1e8),
+        outage_factor=(planned=0.0, forced=0.08),
         region=[z2],
         financial_data=tech_financials(),
     )
@@ -235,8 +254,12 @@ function test_2_zone_portfolio()
         power_systems_type="EnergyReservoirStorage",
         prime_mover_type=PrimeMovers.BT,
         available=true,
-        capital_costs_discharge=LinearCurve(stor_kw_capex * 1000),
-        capital_costs_energy=LinearCurve(stor_kwh_capex * 1000),
+        capital_costs=PSIP.StorageCapitalCost(
+            charge_capital_cost=LinearCurve(0.0),
+            discharge_capital_cost=LinearCurve(stor_kw_capex * 1000),
+            energy_capital_cost=LinearCurve(stor_kwh_capex * 1000),
+            interconnection_cost=0.0,
+        ),
         operation_costs=StorageCost(
             charge_variable_cost=CostCurve(LinearCurve(0.0)),
             discharge_variable_cost=CostCurve(LinearCurve(0.0)),
@@ -252,7 +275,7 @@ function test_2_zone_portfolio()
     #####################
 
     loads = collect(get_components(PowerLoad, sys))
-    peak_load = sum(get_active_power.(loads, Ref(IS.NU)))
+    peak_load = sum(get_active_power.(loads, Ref(u"MW")))
 
     ts_load_2030 = zeros(length(tstamp_2030_ops))
     ts_load_2035 = zeros(length(tstamp_2030_ops))
@@ -261,34 +284,41 @@ function test_2_zone_portfolio()
         for (date, data) in ts.data
             for (ix, val) in enumerate(data)
                 if date == DateTime("2024-01-01T00:00:00")
-                    ts_load_2030[ix] += val * get_max_active_power(load, IS.NU)
+                    ts_load_2030[ix] += val * get_max_active_power(load, u"MW")
                 else
-                    ts_load_2035[ix] += val * get_max_active_power(load, IS.NU) * 1.5
+                    ts_load_2035[ix] += val * get_max_active_power(load, u"MW") * 1.5
                 end
             end
         end
     end
 
-    # Data added in MW
-    ts_demand_2030 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, ts_load_2030))
-    ts_demand_2035 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, ts_load_2035))
+    # Demand is normalized to its peak (MW)
+    peak_load = max(maximum(ts_load_2030), maximum(ts_load_2035))
+    ts_demand_2030 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2030_ops, ts_load_2030 ./ peak_load),
+    )
+    ts_demand_2035 = SingleTimeSeries(
+        "ops_demand",
+        TimeArray(tstamp_2035_ops, ts_load_2035 ./ peak_load),
+    )
 
-    t_demand1 = DemandRequirement{PowerLoad}(
+    t_demand1 = ProjectedDemand{PowerLoad}(
         name="demand1",
         available=true,
         power_systems_type="PowerLoad",
         region=[z1],
-        value_of_lost_load=0.0,
+        peak_demand_mw=peak_load,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
-    t_demand2 = DemandRequirement{PowerLoad}(
+    t_demand2 = ProjectedDemand{PowerLoad}(
         name="demand2",
         available=true,
         power_systems_type="PowerLoad",
         region=[z2],
-        value_of_lost_load=0.0,
+        peak_demand_mw=peak_load,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
     ###################################
@@ -322,7 +352,7 @@ function test_2_zone_portfolio()
 
     ts_col_wind_inv_capex = SingleTimeSeries(
         "inv_wind_capex",
-        TimeArray(tstamp_inv, [1.0, wind_capex / wind_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, wind_capex_2035 / wind_capex]),
     )
 
     ts_col_solar_2030 = SingleTimeSeries(;
@@ -336,46 +366,11 @@ function test_2_zone_portfolio()
 
     ts_col_solar_inv_capex = SingleTimeSeries(
         "inv_solar_capex",
-        TimeArray(tstamp_inv, [1.0, pv_capex / pv_capex_2035]),
+        TimeArray(tstamp_inv, [1.0, pv_capex_2035 / pv_capex]),
     )
 
-    inverter_capex = 1e4 # No data for now. Cheap to install inverter.
-
-    colocated_unit = ColocatedSupplyStorageTechnology{RenewableDispatch}(;
-        name="colocated_test",
-        available=true,
-        power_systems_type="EnergyReservoirStorage",
-        region=[z1],
-        financial_data=tech_financials(),
-        # Solar #
-        operation_costs_solar=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
-        capital_costs_solar=LinearCurve(pv_capex * 1000.0), # to $/MW
-        capacity_limits_solar=(min=0.0, max=1e8),
-        # Wind # 
-        operation_costs_wind=RenewableGenerationCost(CostCurve(LinearCurve(0.0))),
-        capital_costs_wind=LinearCurve(wind_capex * 1000.0), # to $/MW
-        capacity_limits_wind=(min=0.0, max=1e8),
-        # Storage #
-        efficiency_storage=(in=0.93, out=0.93),
-        operation_costs_power=StorageCost(
-            charge_variable_cost=CostCurve(LinearCurve(0.0)),
-            discharge_variable_cost=CostCurve(LinearCurve(0.0)),
-            fixed=0.0,
-        ),
-        operation_costs_energy=StorageCost(
-            charge_variable_cost=CostCurve(LinearCurve(0.0)),
-            discharge_variable_cost=CostCurve(LinearCurve(0.0)),
-            fixed=0.0,
-        ),
-        capital_costs_power=LinearCurve(stor_kw_capex * 1000 / 50.0), # cheaper
-        capital_costs_energy=LinearCurve(stor_kwh_capex * 1000 / 50.0), # cheaper
-        # Inverter #
-        max_inverter_capacity=1e8,
-        inverter_supply_ratio=1.0,
-        operation_costs_inverter=CostCurve(LinearCurve(0.0)),
-        capital_costs_inverter=LinearCurve(inverter_capex),
-        inverter_efficiency=1.0,
-    )
+    # TODO: co-located technologies own a supply and a storage technology in psy6; add the
+    # co-located unit back once its formulations are ported.
 
     ####################
     ##### Transmission #####
@@ -387,7 +382,7 @@ function test_2_zone_portfolio()
         end_region=z2,
         capacity_limits=(min=0, max=1000),
         line_loss=0.05,
-        capital_costs=LinearCurve(5000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(5000.0), 0.0),
         available=true,
         power_systems_type="TransportTechnology",
         financial_data=tech_financials(),
@@ -404,8 +399,8 @@ function test_2_zone_portfolio()
     )
     PSIP.set_name!(p_5bus, "test")
 
-    add_region!(p_5bus, z1)
-    add_region!(p_5bus, z2)
+    add_topology!(p_5bus, z1)
+    add_topology!(p_5bus, z2)
     add_technology!(p_5bus, t_th)
     add_technology!(p_5bus, t_re)
     add_technology!(p_5bus, t_th_exp)
@@ -413,27 +408,49 @@ function test_2_zone_portfolio()
     add_technology!(p_5bus, t_demand2)
     add_technology!(p_5bus, t_stor)
     add_technology!(p_5bus, t_th_mid)
-    add_technology!(p_5bus, colocated_unit)
     add_technology!(p_5bus, line)
 
     PSIP.add_time_series!(p_5bus, t_th, ts_th_cheap_inv_capex)
     PSIP.add_time_series!(p_5bus, t_th_exp, ts_th_exp_inv_capex)
 
-    PSIP.add_time_series!(p_5bus, t_re, ts_wind_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, t_re, ts_wind_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(
+        p_5bus,
+        t_re,
+        ts_wind_2030;
+        features=Dict("year" => "2030", "rep_day" => 1),
+    )
+    PSIP.add_time_series!(
+        p_5bus,
+        t_re,
+        ts_wind_2035;
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
     PSIP.add_time_series!(p_5bus, t_re, ts_wind_inv_capex)
 
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_wind_inv_capex)
-    PSIP.add_time_series!(p_5bus, colocated_unit, ts_col_solar_inv_capex)
-
-    PSIP.add_time_series!(p_5bus, t_demand1, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, t_demand1, ts_demand_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p_5bus, t_demand2, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(
+        p_5bus,
+        t_demand1,
+        ts_demand_2030;
+        features=Dict("year" => "2030", "rep_day" => 1),
+    )
+    PSIP.add_time_series!(
+        p_5bus,
+        t_demand1,
+        ts_demand_2035;
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
+    PSIP.add_time_series!(
+        p_5bus,
+        t_demand2,
+        ts_demand_2030;
+        features=Dict("year" => "2030", "rep_day" => 1),
+    )
+    PSIP.add_time_series!(
+        p_5bus,
+        t_demand2,
+        ts_demand_2035;
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
     return p_5bus, [tstamp_2030_ops, tstamp_2035_ops]
 end
 
@@ -464,7 +481,7 @@ function test_hydro_portfolio()
         ),
     )
 
-    z1 = Zone(name="Zone_1")
+    z1 = test_zone("Zone_1")
 
     hydro_budget_vals = fill(0.5, 24)
     ts_hydro_budget_2030 = SingleTimeSeries(;
@@ -478,47 +495,69 @@ function test_hydro_portfolio()
 
     t_hydro = SupplyTechnology{HydroDispatch}(;
         prime_mover_type=PrimeMovers.HY,
-        capital_costs=LinearCurve(2000.0 * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(2000.0 * 1000.0), 0.0),
         available=true,
         name="hydro",
         fuel=[ThermalFuels.OTHER],
         power_systems_type="HydroDispatch",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(0.0)),
+            variable_operation_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
         ),
-        capacity_limits=(0.0, 500.0),
-        outage_factor=0.95,
+        capacity_limits=(min=0.0, max=500.0),
+        outage_factor=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=50.0,
         financial_data=tech_financials(),
     )
 
+    # Demand is normalized to its peak (MW)
     ts_demand_2030 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0 / 120.0, 24)))
     ts_demand_2035 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(120.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(1.0, 24)))
 
-    t_demand = DemandRequirement{PowerLoad}(
+    t_demand = ProjectedDemand{PowerLoad}(
         name="demand",
         available=true,
         power_systems_type="PowerLoad",
         region=[z1],
-        value_of_lost_load=0.0,
+        peak_demand_mw=120.0,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
     p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
     PSIP.set_name!(p, "hydro_test")
-    add_region!(p, z1)
+    add_topology!(p, z1)
     add_technology!(p, t_hydro)
     add_technology!(p, t_demand)
 
-    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(
+        p,
+        t_hydro,
+        ts_hydro_budget_2030;
+        features=Dict("year" => "2030", "rep_day" => 1),
+    )
+    PSIP.add_time_series!(
+        p,
+        t_hydro,
+        ts_hydro_budget_2035;
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
+    PSIP.add_time_series!(
+        p,
+        t_demand,
+        ts_demand_2030;
+        features=Dict("year" => "2030", "rep_day" => 1),
+    )
+    PSIP.add_time_series!(
+        p,
+        t_demand,
+        ts_demand_2035;
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
 
     return p, [tstamp_2030_ops, tstamp_2035_ops]
 end
@@ -550,7 +589,7 @@ function test_hydro_basic_dispatch_portfolio()
         ),
     )
 
-    z1 = Zone(name="Zone_1")
+    z1 = test_zone("Zone_1")
 
     # Flat 80% cap factor — well within capacity limits so model is always feasible
     cap_factor_vals = fill(0.8, 24)
@@ -565,47 +604,69 @@ function test_hydro_basic_dispatch_portfolio()
 
     t_hydro = SupplyTechnology{HydroDispatch}(;
         prime_mover_type=PrimeMovers.HY,
-        capital_costs=LinearCurve(2000.0 * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(2000.0 * 1000.0), 0.0),
         available=true,
         name="hydro",
         fuel=[ThermalFuels.OTHER],
         power_systems_type="HydroDispatch",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(0.0)),
+            variable_operation_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
         ),
-        capacity_limits=(0.0, 500.0),
-        outage_factor=0.95,
+        capacity_limits=(min=0.0, max=500.0),
+        outage_factor=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=50.0,
         financial_data=tech_financials(),
     )
 
+    # Demand is normalized to its peak (MW)
     ts_demand_2030 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0 / 120.0, 24)))
     ts_demand_2035 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(120.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(1.0, 24)))
 
-    t_demand = DemandRequirement{PowerLoad}(
+    t_demand = ProjectedDemand{PowerLoad}(
         name="demand",
         available=true,
         power_systems_type="PowerLoad",
         region=[z1],
-        value_of_lost_load=0.0,
+        peak_demand_mw=120.0,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
     p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
     PSIP.set_name!(p, "hydro_basic_dispatch_test")
-    add_region!(p, z1)
+    add_topology!(p, z1)
     add_technology!(p, t_hydro)
     add_technology!(p, t_demand)
 
-    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_hydro, ts_cap_factor_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(
+        p,
+        t_hydro,
+        ts_cap_factor_2030;
+        features=Dict("year" => "2030", "rep_day" => 1),
+    )
+    PSIP.add_time_series!(
+        p,
+        t_hydro,
+        ts_cap_factor_2035;
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
+    PSIP.add_time_series!(
+        p,
+        t_demand,
+        ts_demand_2030;
+        features=Dict("year" => "2030", "rep_day" => 1),
+    )
+    PSIP.add_time_series!(
+        p,
+        t_demand,
+        ts_demand_2035;
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
 
     return p, [tstamp_2030_ops, tstamp_2035_ops]
 end
@@ -637,7 +698,7 @@ function test_constrained_hydro_portfolio()
         ),
     )
 
-    z1 = Zone(name="Zone_1")
+    z1 = test_zone("Zone_1")
 
     hydro_budget_vals = fill(0.05, 24)
     ts_hydro_budget_2030 = SingleTimeSeries(;
@@ -651,19 +712,19 @@ function test_constrained_hydro_portfolio()
 
     t_hydro = SupplyTechnology{HydroDispatch}(;
         prime_mover_type=PrimeMovers.HY,
-        capital_costs=LinearCurve(2000.0 * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(2000.0 * 1000.0), 0.0),
         available=true,
         name="hydro",
         fuel=[ThermalFuels.OTHER],
         power_systems_type="HydroDispatch",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(0.0)),
+            variable_operation_cost=CostCurve(LinearCurve(0.0)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
         ),
-        capacity_limits=(0.0, 500.0),
-        outage_factor=0.95,
+        capacity_limits=(min=0.0, max=500.0),
+        outage_factor=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=50.0,
         financial_data=tech_financials(),
@@ -671,48 +732,70 @@ function test_constrained_hydro_portfolio()
 
     t_thermal = SupplyTechnology{ThermalStandard}(;
         prime_mover_type=PrimeMovers.ST,
-        capital_costs=LinearCurve(3000.0 * 1000.0),
+        capital_costs=PSIP.CapitalCost(LinearCurve(3000.0 * 1000.0), 0.0),
         available=true,
         name="backup_thermal",
         fuel=[ThermalFuels.COAL],
         power_systems_type="ThermalStandard",
         operation_costs=ThermalGenerationCost(
-            variable=CostCurve(LinearCurve(50.0)),
+            variable_operation_cost=CostCurve(LinearCurve(50.0)),
             fixed=0.0,
             start_up=0.0,
             shut_down=0.0,
         ),
-        capacity_limits=(0.0, 1e8),
-        outage_factor=0.95,
+        capacity_limits=(min=0.0, max=1e8),
+        outage_factor=(planned=0.0, forced=0.05),
         region=[z1],
         unit_size=100.0,
         financial_data=tech_financials(),
     )
 
+    # Demand is normalized to its peak (MW)
     ts_demand_2030 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(100.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2030_ops, fill(1.0, 24)))
     ts_demand_2035 =
-        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(100.0, 24)))
+        SingleTimeSeries("ops_demand", TimeArray(tstamp_2035_ops, fill(1.0, 24)))
 
-    t_demand = DemandRequirement{PowerLoad}(
+    t_demand = ProjectedDemand{PowerLoad}(
         name="demand",
         available=true,
         power_systems_type="PowerLoad",
         region=[z1],
-        value_of_lost_load=0.0,
+        peak_demand_mw=100.0,
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
     p = Portfolio(2025, discount_rate, inflation_rate, interest_rate)
     PSIP.set_name!(p, "hydro_constrained_test")
-    add_region!(p, z1)
+    add_topology!(p, z1)
     add_technology!(p, t_hydro)
     add_technology!(p, t_thermal)
     add_technology!(p, t_demand)
 
-    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_hydro, ts_hydro_budget_2035; year="2035", rep_day=2)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2030; year="2030", rep_day=1)
-    PSIP.add_time_series!(p, t_demand, ts_demand_2035; year="2035", rep_day=2)
+    PSIP.add_time_series!(
+        p,
+        t_hydro,
+        ts_hydro_budget_2030;
+        features=Dict("year" => "2030", "rep_day" => 1),
+    )
+    PSIP.add_time_series!(
+        p,
+        t_hydro,
+        ts_hydro_budget_2035;
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
+    PSIP.add_time_series!(
+        p,
+        t_demand,
+        ts_demand_2030;
+        features=Dict("year" => "2030", "rep_day" => 1),
+    )
+    PSIP.add_time_series!(
+        p,
+        t_demand,
+        ts_demand_2035;
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
 
     return p, [tstamp_2030_ops, tstamp_2035_ops]
 end

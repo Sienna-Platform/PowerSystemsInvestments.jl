@@ -43,6 +43,49 @@ function _show_method(io::IO, template::InvestmentModelTemplate, backend::Symbol
         header=header,
         title="Technology Models",
         alignment=:l,
+        kwargs...,
+    )
+
+    println(io)
+    table = Matrix{String}(undef, length(template.branch_models), length(header))
+    for (ix, model) in enumerate(keys(template.branch_models))
+        table[ix, 1] = string(get_technology_type(model))
+        table[ix, 2] = string(get_investment_formulation(model))
+        table[ix, 3] = string(get_operations_formulation(model))
+        table[ix, 4] = string(model.use_slacks)
+    end
+
+    PrettyTables.pretty_table(
+        io,
+        table;
+        backend=Val(backend),
+        header=header,
+        title="Branch Models",
+        alignment=:l,
+        kwargs...,
+    )
+
+    println(io)
+    requirement_header = ["Requirement Type", "Requirement Names", "Formulation"]
+    table = Matrix{String}(
+        undef,
+        length(template.requirement_models),
+        length(requirement_header),
+    )
+    for (ix, model) in enumerate(keys(template.requirement_models))
+        table[ix, 1] = string(get_requirement_type(model))
+        table[ix, 2] = join(template.requirement_models[model], ", ")
+        table[ix, 3] = string(get_requirement_formulation(model))
+    end
+
+    PrettyTables.pretty_table(
+        io,
+        table;
+        backend=Val(backend),
+        header=requirement_header,
+        title="Requirement Models",
+        alignment=:l,
+        kwargs...,
     )
     return
 end
@@ -80,7 +123,11 @@ function _show_method(
         name = "PowerSystemsInvestments"
     end
 
-    extra = backend == :auto ? (; display_size=(-1, -1)) : (;)
+    if backend == :auto
+        extra = (; display_size=(-1, -1))
+    else
+        extra = (;)
+    end
     for (k, val) in values
         if !isempty(val)
             println(io)
@@ -96,4 +143,9 @@ function _show_method(
             )
         end
     end
+end
+
+function _print_conflict_table(io::IO, key, conflict_indices::Vector)
+    PrettyTables.pretty_table(io, conflict_indices; header=[string(key)], crop=:none)
+    return
 end

@@ -7,6 +7,9 @@ abstract type CumulativeInvestmentExpressionType <: InvestmentExpressionType end
 struct SupplyTotal <: OperationsExpressionType end
 struct DemandTotal <: OperationsExpressionType end
 struct EnergyBalance <: OperationsExpressionType end
+# Demand of each ProjectedDemand (MW), a constant at every time step
+struct DemandExpression <: OperationsExpressionType end
+struct PTDFBranchFlow <: OperationsExpressionType end
 
 # Weighted (representative-day) energy expressions. Always created (where
 # applicable) so users can inspect them in the results and requirement models can
@@ -15,6 +18,10 @@ struct WeightedEnergyGeneration <: OperationsExpressionType end
 struct WeightedEnergyDemand <: OperationsExpressionType end
 struct WeightedEnergyShareGeneration <: OperationsExpressionType end
 struct WeightedEnergyShareDemand <: OperationsExpressionType end
+"""
+Yearly emissions (tCO2) of a carbon requirement's technologies in each representative period
+"""
+struct WeightedCarbonEmissions <: OperationsExpressionType end
 
 struct CumulativeCapacity <: CumulativeInvestmentExpressionType end
 
@@ -28,8 +35,20 @@ struct CapitalCost <: InvestmentExpressionType end
 struct FixedOperationModelCost <: InvestmentExpressionType end
 
 struct TotalCapitalCost <: ISOPT.ExpressionType end
+# Source capacity converted by retrofits up to each investment period (MW of source)
+struct RetrofitCapacity <: ISOPT.ExpressionType end
 
 struct VariableOMCost <: OperationsExpressionType end
+# Value of the product of an end-use technology, a negative operating cost
+struct ProductRevenue <: OperationsExpressionType end
+
+struct FuelConsumptionExpression <: OperationsExpressionType end
+
+struct FuelCost <: OperationsExpressionType end
+
+struct StartUpCost <: OperationsExpressionType end
+
+struct ShutDownCost <: OperationsExpressionType end
 
 struct FeasibilitySurplus <: FeasibilityExpressionType end
 
@@ -44,6 +63,12 @@ should_write_resulting_value(::Type{WeightedEnergyGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyDemand}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareDemand}) = true
+should_write_resulting_value(::Type{WeightedCarbonEmissions}) = true
+
+should_write_resulting_value(::Type{FuelConsumptionExpression}) = true
+should_write_resulting_value(::Type{FuelCost}) = true
+should_write_resulting_value(::Type{StartUpCost}) = true
+should_write_resulting_value(::Type{ShutDownCost}) = true
 
 is_operation_entry(::Type{<:OperationsExpressionType}) = true
 is_operation_entry(::Type{<:InvestmentExpressionType}) = false

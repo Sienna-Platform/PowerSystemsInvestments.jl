@@ -1,7 +1,7 @@
 @testset "Build and solve 2 Zone Portfolio" begin
     p_5bus, op_days = test_2_zone_portfolio()
-    # 2 representative days (24-hours for 5 years each)
-    weights = [365 * 5, 365 * 5]
+    # 2 representative days (24 hours each), one per period, with per-year weights
+    weights = [365, 365]
     # 2 periods: 2030-2035, 2035-2040
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
@@ -20,13 +20,13 @@
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -68,14 +68,7 @@
         BasicDispatchFeasibility,
     )
 
-    set_technology_model!(
-        template,
-        ["colocated_test"],
-        ColocatedSupplyStorageTechnology{RenewableDispatch},
-        ContinuousInvestment,
-        CyclicalColocatedDispatch,
-        BasicDispatchFeasibility,
-    )
+    # TODO: add the co-located unit back once its psy6 formulations are ported
 
     m = InvestmentModel(
         template,
@@ -87,11 +80,34 @@
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IS.Optimization.ModelBuildStatus.BUILT
+
+    # Storage charge and discharge must appear in the balance of the region it is in.
+    container = PSIN.get_optimization_container(m)
+    balance = PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio)
+    storage_type = PSIP.StorageTechnology{EnergyReservoirStorage}
+    storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
+    storage_region = PSY.get_name(only(PSIP.get_region(storage)))
+    for (var_type, coefficient) in
+        ((PSIN.ActiveOutPowerVariable, 1.0), (PSIN.ActiveInPowerVariable, -1.0))
+        variable = PSIN.get_variable(
+            container,
+            var_type(),
+            storage_type,
+            "CyclicalStorageDispatch",
+        )
+        for t in PSIN.get_time_steps(PSIN.get_time_mapping(container))
+            @test JuMP.coefficient(
+                balance[storage_region, t],
+                variable["test_storage", t],
+            ) == coefficient
+        end
+    end
+
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemOutputs(m)
-    @test length(IOM.list_variable_names(res)) == 23
+    @test length(IOM.list_variable_names(res)) == 11
     @test length(IOM.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 
@@ -99,13 +115,13 @@
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -147,14 +163,7 @@
         BasicDispatchFeasibility,
     )
 
-    set_technology_model!(
-        template,
-        ["colocated_test"],
-        ColocatedSupplyStorageTechnology{RenewableDispatch},
-        ContinuousInvestment,
-        ChronologicalColocatedDispatch,
-        BasicDispatchFeasibility,
-    )
+    # TODO: add the co-located unit back once its psy6 formulations are ported
 
     m = InvestmentModel(
         template,
@@ -166,11 +175,11 @@
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IS.Optimization.ModelBuildStatus.BUILT
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     res = OptimizationProblemOutputs(m)
-    @test length(IOM.list_variable_names(res)) == 23
+    @test length(IOM.list_variable_names(res)) == 11
     @test length(IOM.list_dual_names(res)) == 0
     @test length(PSIN.get_timestamps(res)) == 48
 
@@ -187,11 +196,6 @@
         WeightedEnergyGeneration,
         PSIP.StorageTechnology{EnergyReservoirStorage},
         "ChronologicalStorageDispatch",
-    ) in expr_keys
-    @test PSIN.ExpressionKey(
-        WeightedEnergyGeneration,
-        ColocatedSupplyStorageTechnology{RenewableDispatch},
-        "ChronologicalColocatedDispatch",
     ) in expr_keys
     # The aggregation expressions are policy-specific, so they must NOT exist here.
     @test !any(
@@ -241,7 +245,7 @@ end
 
 @testset "InvestmentModel calculate_conflict=true detects infeasibility" begin
     p_5bus, op_days = test_2_zone_portfolio()
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -254,12 +258,12 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -292,7 +296,7 @@ end
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IS.Optimization.ModelBuildStatus.BUILT
 
     # Force infeasibility by setting the RHS of a registered balance constraint to an
     # impossibly large demand value, so the constraint is captured in the IIS conflict dict.
@@ -305,13 +309,23 @@ end
     balance_con = PSIN.get_constraints(container)[balance_key]
     JuMP.set_normalized_rhs(first(balance_con), 1e18)
 
-    @test solve!(m; export_optimization_problem=false) == PSIN.RunStatus.FAILED
-    @test !isempty(get_infeasibility_conflict(container))
+    @test solve!(
+        m;
+        export_optimization_problem=false,
+        console_level=Logging.AboveMaxLevel,
+    ) == PSIN.RunStatus.FAILED
+    conflict = get_infeasibility_conflict(container)
+    @test !isempty(conflict)
+
+    # The conflict table must print with the installed PrettyTables version.
+    key, indices = first(conflict)
+    table = sprint(PSIN._print_conflict_table, key, indices)
+    @test occursin(string(key), table)
 end
 
 @testset "Build and solve hydro portfolio with BasicDispatchWithBudget" begin
     p_hydro, op_days = test_hydro_portfolio()
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -324,13 +338,13 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -351,12 +365,13 @@ end
         p_hydro,
         nothing;
         optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
         store_variable_names=true,
     )
 
     mktempdir() do path
         status = build!(model; output_dir=path)
-        @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+        @test status == IS.Optimization.ModelBuildStatus.BUILT
 
         container = PSIN.get_optimization_container(model)
 
@@ -380,12 +395,42 @@ end
 
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        # The JuMP model is only written to the output directory when asked for
+        @test !isfile(joinpath(path, "jump_model.json"))
+        @test solve!(model; output_dir=path, export_optimization_problem=true) ==
+              PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        @test isfile(joinpath(path, "jump_model.json"))
+
+        # Hydro is the only supply, so its daily budget of 0.5 × 24 hours of capacity must
+        # cover the daily demand of 2400 MWh (2030) and 2880 MWh (2035)
+        capacity = read_expression(
+            model,
+            PSIN.ExpressionKey(
+                CumulativeCapacity,
+                PSIP.SupplyTechnology{PSY.HydroDispatch},
+                "ContinuousInvestment",
+            ),
+        )
+        @test sort(capacity, :time_index).value ≈ [200.0, 240.0]
+        dispatch = read_variable(
+            model,
+            PSIN.VariableKey(
+                ActivePowerVariable,
+                PSIP.SupplyTechnology{PSY.HydroDispatch},
+                "BasicDispatchWithBudget",
+            ),
+        )
+        @test sum(dispatch[dispatch.time_index .<= 24, :value]) ≈ 2400.0
+        @test sum(dispatch[dispatch.time_index .> 24, :value]) ≈ 2880.0
     end
 end
 
 @testset "Hydro budget constraint satisfied with 0.05 factor" begin
     p_tight, op_days = test_constrained_hydro_portfolio()
-    weights = [365 * 5, 365 * 5]
+    # Free hydro is built to its 500 MW limit, so its energy is limited by the budget
+    hydro = PSIP.get_technology(PSIP.SupplyTechnology{PSY.HydroDispatch}, p_tight, "hydro")
+    PSIP.set_capital_costs!(hydro, PSIP.CapitalCost(LinearCurve(0.0), 0.0))
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -398,13 +443,13 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -434,6 +479,7 @@ end
         p_tight,
         nothing;
         optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
         store_variable_names=true,
     )
 
@@ -469,17 +515,19 @@ end
 
         dispatch_p1 = sum(filter(r -> r.time_index in 1:24, hydro_rows).value)
         cap_p1 = only(filter(r -> r.time_index == 1, cap_rows)).value
-        @test dispatch_p1 <= cap_p1 * budget_factor * hours_per_period + tol
+        @test cap_p1 ≈ 500.0
+        @test dispatch_p1 ≈ cap_p1 * budget_factor * hours_per_period atol = tol
 
         dispatch_p2 = sum(filter(r -> r.time_index in 25:48, hydro_rows).value)
         cap_p2 = only(filter(r -> r.time_index == 2, cap_rows)).value
-        @test dispatch_p2 <= cap_p2 * budget_factor * hours_per_period + tol
+        @test cap_p2 ≈ 500.0
+        @test dispatch_p2 ≈ cap_p2 * budget_factor * hours_per_period atol = tol
     end
 end
 
 @testset "Build and solve hydro portfolio with BasicDispatch" begin
     p_hydro, op_days = test_hydro_basic_dispatch_portfolio()
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -492,13 +540,13 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -519,12 +567,13 @@ end
         p_hydro,
         nothing;
         optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
         store_variable_names=true,
     )
 
     mktempdir() do path
         status = build!(model; output_dir=path)
-        @test status == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+        @test status == IS.Optimization.ModelBuildStatus.BUILT
 
         container = PSIN.get_optimization_container(model)
 
@@ -540,8 +589,9 @@ end
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
-        # Verify cap factor constraint is respected: P[t] <= 0.8 * capacity
-        cap_factor = 0.8
+        # Dispatch is limited to the 0.8 capacity factor times the 0.95 availability (5%
+        # forced outage) of the capacity
+        cap_factor = 0.8 * 0.95
         hydro_df = read_variable(
             model,
             PSIN.VariableKey(
@@ -564,36 +614,49 @@ end
 
         cap_p1 = only(filter(r -> r.time_index == 1, cap_rows)).value
         dispatch_p1_max = maximum(filter(r -> r.time_index in 1:24, hydro_rows).value)
-        @test dispatch_p1_max <= cap_factor * cap_p1 + tol
+        @test cap_p1 ≈ 100.0 / cap_factor
+        @test dispatch_p1_max ≈ cap_factor * cap_p1 atol = tol
 
         cap_p2 = only(filter(r -> r.time_index == 2, cap_rows)).value
         dispatch_p2_max = maximum(filter(r -> r.time_index in 25:48, hydro_rows).value)
-        @test dispatch_p2_max <= cap_factor * cap_p2 + tol
+        @test cap_p2 ≈ 120.0 / cap_factor
+        @test dispatch_p2_max ≈ cap_factor * cap_p2 atol = tol
     end
 end
 
 @testset "Build and solve 2 Zone Portfolio with EnergyShareRequirement" begin
     p_5bus, op_days = test_2_zone_portfolio()
 
-    # Attach an energy-share policy to the existing portfolio: wind must supply at
-    # least 30% of demand2 over the operational horizon. The requirement is attached
+    # Attach energy-share policies to the existing portfolio: wind must supply at
+    # least 150% (2030) and 160% (2035) of demand2. The requirement is attached
     # to the contributing technologies (wind on the generation side, demand2 on the
     # demand side) via each technology's `requirements` field (PSIP PR #94 model).
     wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
-    demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand2")
+    demand2 = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p_5bus, "demand2")
 
-    fraction = 0.3
+    # Wind would supply about 130% of demand2 without the policies, so these targets bind
+    fraction = 1.5
+    fraction_2035 = 1.6
     esr = PSIP.EnergyShareRequirements(;
         name="wind_share",
         available=true,
         target_year=2030,
         generation_fraction_requirement=fraction,
     )
+    # A second policy of the same type, registered through its own
+    # `set_requirement_model!` call below.
+    esr_2035 = PSIP.EnergyShareRequirements(;
+        name="wind_share_2035",
+        available=true,
+        target_year=2035,
+        generation_fraction_requirement=fraction_2035,
+    )
     PSIP.add_requirement!(p_5bus, esr)
-    PSIP.set_requirements!(wind, [esr])
-    PSIP.set_requirements!(demand2, [esr])
+    PSIP.add_requirement!(p_5bus, esr_2035)
+    PSIP.set_requirements!(wind, [esr, esr_2035])
+    PSIP.set_requirements!(demand2, [esr, esr_2035])
 
-    weights = [365 * 5, 365 * 5]
+    weights = [365, 365]
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -606,13 +669,13 @@ end
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -642,13 +705,49 @@ end
         BasicDispatchFeasibility,
     )
 
-    # NEW: register the requirement model
+    # Register the requirement models. Models of the same type and formulation are merged
+    # at build time.
     set_requirement_model!(
         template,
         ["wind_share"],
         PSIP.EnergyShareRequirements,
         RequirementEnergyShare,
     )
+    set_requirement_model!(
+        template,
+        ["wind_share_2035"],
+        PSIP.EnergyShareRequirements,
+        RequirementEnergyShare,
+    )
+    requirement_map = PSIN.get_requirement_formulation_to_names_map(
+        PSIN.get_requirement_models(template),
+        p_5bus,
+    )
+    @test sort(requirement_map[(PSIP.EnergyShareRequirements, RequirementEnergyShare)]) ==
+          ["wind_share", "wind_share_2035"]
+
+    # A requirement can only belong to one requirement model.
+    duplicated_template = deepcopy(template)
+    set_requirement_model!(
+        duplicated_template,
+        ["wind_share"],
+        PSIP.EnergyShareRequirements,
+        RequirementEnergyShare,
+    )
+    @test_throws ErrorException PSIN.names_to_requirement_model_map(
+        PSIN.get_requirement_models(duplicated_template),
+    )
+
+    # Each requirement keeps the model it was registered with.
+    requirement_models =
+        PSIN.names_to_requirement_model_map(PSIN.get_requirement_models(template))
+    model_vector = PSIN.names_to_requirement_model_vector(
+        requirement_models,
+        ["wind_share", "wind_share_2035"],
+    )
+    @test model_vector[1] !== model_vector[2]
+    @test model_vector ==
+          [requirement_models["wind_share"], requirement_models["wind_share_2035"]]
 
     m = InvestmentModel(
         template,
@@ -660,7 +759,7 @@ end
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+          IS.Optimization.ModelBuildStatus.BUILT
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
     container = PSIN.get_optimization_container(m)
@@ -692,17 +791,30 @@ end
         IS.SingleTimeSeries,
         demand2,
         "ops_demand";
-        year="2030",
-        rep_day=1,
+        features=Dict("year" => "2030", "rep_day" => 1),
     )
-    total_demand_2030 = sum(TimeSeries.values(d_2030.data))
+    # The demand series is normalized to the peak demand
+    total_demand_2030 =
+        sum(TimeSeries.values(d_2030.data)) * PSIP.get_peak_demand_mw(demand2, IS.NU)
 
-    tol = 1e-4
-    @test total_wind_2030 >= fraction * total_demand_2030 - tol
+    @test total_wind_2030 ≈ fraction * total_demand_2030 rtol = 1e-6
+
+    # The 2035 policy applies to the second investment period (time steps 25:48)
+    total_wind_2035 = sum(filter(r -> r.time_index in 25:48, wind_rows).value)
+    d_2035 = IS.get_time_series(
+        IS.SingleTimeSeries,
+        demand2,
+        "ops_demand";
+        features=Dict("year" => "2035", "rep_day" => 2),
+    )
+    @test total_wind_2035 ≈
+          fraction_2035 *
+          sum(TimeSeries.values(d_2035.data)) *
+          PSIP.get_peak_demand_mw(demand2, IS.NU) rtol = 1e-6
 
     # --- Weighted-energy expressions -------------------------------------------------
-    # op_ix=1 (2030 representative day) carries weight 365*5.
-    weight_1 = 365 * 5
+    # op_ix=1 (2030 representative day) carries the per-year weight 365.
+    weight_1 = 365
 
     # WeightedEnergyGeneration[wind, op_ix=1] == weight * Σ_t P[wind, t in 1:24].
     weg_df = read_expression(
@@ -738,4 +850,194 @@ end
     )
     wesd_1 = only(filter(r -> r.name == "wind_share" && r.time_index == 1, wesd_df)).value
     @test isapprox(wesd_1, weight_1 * total_demand_2030; atol=1e-2)
+end
+
+function _build_thermal_investment_model(investment_formulation)
+    p_5bus, op_days = test_2_zone_portfolio()
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{Dates}}()),
+        TransportModel(SingleRegionBalanceModel),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.ProjectedDemand{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal"],
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["expensive_thermal"],
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        investment_formulation,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatus.BUILT
+    return m, p_5bus
+end
+
+@testset "Supply technology with discrete investment" begin
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    m_continuous, _ = _build_thermal_investment_model(ContinuousInvestment)
+    continuous_container = PSIN.get_optimization_container(m_continuous)
+    continuous_build = PSIN.get_variable(
+        continuous_container,
+        PSIN.BuildCapacity(),
+        thermal_type,
+        "ContinuousInvestment",
+    )
+    mw_cost = JuMP.coefficient(
+        JuMP.objective_function(PSIN.get_jump_model(continuous_container)),
+        continuous_build["expensive_thermal", 1],
+    )
+
+    for (formulation, is_discrete) in
+        ((BinaryInvestment, JuMP.is_binary), (IntegerInvestment, JuMP.is_integer))
+        m, p_5bus = _build_thermal_investment_model(formulation)
+        container = PSIN.get_optimization_container(m)
+        unit_size = PSIP.get_unit_size(
+            PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal"),
+            IS.NU,
+        )
+        meta = string(formulation)
+
+        build = PSIN.get_variable(container, PSIN.BuildCapacity(), thermal_type, meta)
+        capacity =
+            PSIN.get_expression(container, PSIN.CumulativeCapacity(), thermal_type, meta)
+        for t in PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+            @test is_discrete(build["expensive_thermal", t])
+            # Each unit built adds unit_size MW of capacity.
+            @test JuMP.coefficient(
+                capacity["expensive_thermal", t],
+                build["expensive_thermal", 1],
+            ) == unit_size
+        end
+
+        # The cost of building one unit is the per-MW cost of the continuous formulation
+        # times the unit size.
+        unit_cost = JuMP.coefficient(
+            JuMP.objective_function(PSIN.get_jump_model(container)),
+            build["expensive_thermal", 1],
+        )
+        @test unit_cost ≈ unit_size * mw_cost
+
+        @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        if formulation == BinaryInvestment
+            @test sum(JuMP.value.(build["expensive_thermal", :])) <= 1.0 + 1e-6
+        end
+    end
+
+    # A discrete investment needs a positive unit size.
+    thermal = PSIP.get_technology(thermal_type, test_2_zone_portfolio()[1], "cheap_thermal")
+    PSIP.set_unit_size!(thermal, 0.0, IS.NU)
+    @test_throws ErrorException PSIN.get_unit_size(
+        PSIN.BuildCapacity(),
+        thermal,
+        IntegerInvestment(),
+    )
+end
+
+@testset "Storage technology with IntegerInvestment" begin
+    p_5bus, op_days = test_2_zone_portfolio()
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{Dates}}()),
+        TransportModel(SingleRegionBalanceModel),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.ProjectedDemand{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal"],
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    storage_type = PSIP.StorageTechnology{EnergyReservoirStorage}
+    set_technology_model!(
+        template,
+        ["test_storage"],
+        storage_type,
+        IntegerInvestment,
+        CyclicalStorageDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
+    # Power capacity is built in units of the discharge size and energy capacity in units of
+    # the energy size.
+    for (variable_type, expression_type, unit_size) in (
+        (
+            PSIN.BuildPowerCapacity,
+            PSIN.CumulativePowerCapacity,
+            PSIP.get_unit_size_discharge(storage, IS.NU),
+        ),
+        (
+            PSIN.BuildEnergyCapacity,
+            PSIN.CumulativeEnergyCapacity,
+            PSIP.get_unit_size_energy(storage, IS.NU),
+        ),
+    )
+        build =
+            PSIN.get_variable(container, variable_type(), storage_type, "IntegerInvestment")
+        capacity = PSIN.get_expression(
+            container,
+            expression_type(),
+            storage_type,
+            "IntegerInvestment",
+        )
+        @test JuMP.is_integer(build["test_storage", 1])
+        @test JuMP.coefficient(capacity["test_storage", 1], build["test_storage", 1]) ==
+              unit_size
+    end
+
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 end

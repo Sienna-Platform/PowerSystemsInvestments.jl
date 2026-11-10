@@ -161,13 +161,10 @@ function construct_technologies!(
     # Capital Component of objective function
     objective_function!(container, devices, B())
 
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
-
     # Capacity constraints
     add_constraints!(
         container,
-        MaximumCumulativePowerCapacity(),
+        CumulativePowerCapacityLimit(),
         CumulativePowerCapacity(),
         devices,
         B(),
@@ -175,7 +172,7 @@ function construct_technologies!(
 
     add_constraints!(
         container,
-        MaximumCumulativeEnergyCapacity(),
+        CumulativeEnergyCapacityLimit(),
         CumulativeEnergyCapacity(),
         devices,
         B(),
@@ -183,24 +180,24 @@ function construct_technologies!(
 
     add_constraints!(
         container,
-        MaximumCumulativeWindCapacity(),
-        CumulativePowerCapacity(),
+        CumulativeWindCapacityLimit(),
+        CumulativeWindCapacity(),
         devices,
         B(),
     )
 
     add_constraints!(
         container,
-        MaximumCumulativeSolarCapacity(),
-        CumulativeEnergyCapacity(),
+        CumulativeSolarCapacityLimit(),
+        CumulativeSolarCapacity(),
         devices,
         B(),
     )
 
     add_constraints!(
         container,
-        MaximumCumulativeInverterCapacity(),
-        CumulativeEnergyCapacity(),
+        CumulativeInverterCapacityLimit(),
+        CumulativeInverterCapacity(),
         devices,
         B(),
     )
@@ -228,9 +225,6 @@ function construct_technologies!(
 
     # Operations Component of objective function
     objective_function!(container, devices, C())
-
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
 
     # Dispatch input power constraint
     add_constraints!(

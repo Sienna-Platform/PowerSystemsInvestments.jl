@@ -10,6 +10,16 @@ const MAX_START_STAGES = 3
 const OBJECTIVE_FUNCTION_POSITIVE = 1.0
 const OBJECTIVE_FUNCTION_NEGATIVE = -1.0
 const SINGLE_REGION = "SingleRegion"
+const TECHNOLOGY_REGION_DELIMITER = "__"
+const REQUIREMENT_SLACK_PENALTY = 1e4
+# Per MW-year: well above the annualized cost of building capacity
+const CAPACITY_REQUIREMENT_SLACK_PENALTY = 1e7
+const HOURS_PER_YEAR = 8760.0
+const OPERATIONAL_WEIGHTS_TOLERANCE = 0.02
+const TIME_STEP_COUNT_TOLERANCE = 1e-9
+const LODF_ENTRY_TOLERANCE = 1e-6
+const MAX_UNIT_LINES = 50
+const SUSCEPTANCE_PER_MW_TOLERANCE = 0.1
 
 # Timers
 const BUILD_PROBLEMS_TIMER = TimerOutputs.TimerOutput()
@@ -26,5 +36,3 @@ const PROBLEM_LOG_FILENAME = "investment_problem.log"
 # Enums
 const ModelBuildStatus = ISOPT.ModelBuildStatus
 const RunStatus = IS.Simulation.RunStatus
-
-const MAX_OPTIMIZE_TRIES = 10

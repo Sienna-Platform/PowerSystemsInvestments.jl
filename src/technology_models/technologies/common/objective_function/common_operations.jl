@@ -1,6 +1,7 @@
 #! format: off
 
 objective_function_multiplier(::ISOPT.VariableType, ::AbstractTechnologyFormulation)=OBJECTIVE_FUNCTION_POSITIVE
+objective_function_multiplier(::ISOPT.ExpressionType, ::AbstractTechnologyFormulation)=OBJECTIVE_FUNCTION_POSITIVE
 
 #! format: on
 
@@ -17,7 +18,7 @@ function add_variable_cost!(
 ) where {
     T <: PSIP.SupplyTechnology,
     U <: ActivePowerVariable,
-    V <: Union{BasicDispatch, BasicDispatchWithBudget},
+    V <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
 }
     for d in devices
         op_cost_data = PSIP.get_operation_costs(d, IS.NU)
@@ -34,9 +35,11 @@ function _add_proportional_term!(
     time_period::Int,
     tech_model::String,
 ) where {T <: OperationsVariableType, U <: PSIP.Technology}
-    technology_name = PSIP.get_name(technology)
-    variable = get_variable(container, T(), U, tech_model)[technology_name, time_period]
-    lin_cost = variable * linear_term
+    variable = get_variable(container, T(), U, tech_model)
+    lin_cost = JuMP.AffExpr(0.0)
+    for name in get_variable_names(technology)
+        JuMP.add_to_expression!(lin_cost, linear_term, variable[name, time_period])
+    end
     add_to_objective_operations_expression!(container, lin_cost)
     return lin_cost
 end
@@ -76,6 +79,29 @@ function add_variable_cost!(
 }
     for d in devices
         op_cost_data = get_operation_cost_data(d, U())
+        _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)
+    end
+    return
+end
+
+#########################################################
+#### Committed, start-up and shut-down capacity cost ####
+#########################################################
+
+function add_commitment_cost!(
+    container::SingleOptimizationContainer,
+    ::U,
+    devices::Vector{T},
+    ::V,
+    tech_model::String,
+) where {
+    T <: PSIP.SupplyTechnology,
+    U <:
+    Union{CommittedCapacityVariable, StartUpCapacityVariable, ShutDownCapacityVariable},
+    V <: ThermalCommitmentFormulation,
+}
+    for d in devices
+        op_cost_data = PSIP.get_operation_costs(d, IS.NU)
         _add_cost_to_objective!(container, U(), d, op_cost_data, V(), tech_model)
     end
     return

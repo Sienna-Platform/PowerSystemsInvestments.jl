@@ -9,7 +9,7 @@ function add_to_expression!(
     time_period::Int,
     tech_model::String,
 ) where {S <: OperationsExpressionType, T <: PSIP.Technology}
-    if has_container_key(container, S, T)
+    if has_container_key(container, S, T, tech_model)
         device_cost_expression = get_expression(container, S(), T, tech_model)
         component_name = PSY.get_name(technology)
         JuMP.add_to_expression!(

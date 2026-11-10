@@ -35,13 +35,15 @@ Base.@kwdef mutable struct SingleOptimizationContainer <:
     infeasibility_conflict::Dict{Symbol, Array}
     optimizer_stats::IOM.OptimizerStats
     metadata::IOM.OptimizationContainerMetadata
+    # Restores the integrality removed to compute the duals of a MIP
+    unfix_discrete_variables::Union{Nothing, Function}
 end
 
 function SingleOptimizationContainer(
     settings::Settings,
     jump_model::Union{Nothing, JuMP.Model},
 )
-    if jump_model !== nothing && get_direct_mode_optimizer(settings)
+    if !isnothing(jump_model) && get_direct_mode_optimizer(settings)
         throw(
             IS.ConflictingInputsError(
                 "Externally provided JuMP models are not compatible with the direct model keyword argument. Use JuMP.direct_model before passing the custom model",
@@ -49,8 +51,12 @@ function SingleOptimizationContainer(
         )
     end
 
+    if isnothing(jump_model)
+        jump_model = JuMP.Model()
+    end
+
     return SingleOptimizationContainer(
-        jump_model === nothing ? JuMP.Model() : jump_model,
+        jump_model,
         TimeMapping(nothing),
         settings,
         copy_for_serialization(settings),
@@ -69,6 +75,7 @@ function SingleOptimizationContainer(
         Dict{Symbol, Array}(),
         IOM.OptimizerStats(),
         IOM.OptimizationContainerMetadata(),
+        nothing,
     )
 end
 
@@ -128,12 +135,9 @@ get_constraints(container::SingleOptimizationContainer) = container.constraints
 
 function is_milp(container::SingleOptimizationContainer)::Bool
     !supports_milp(container) && return false
-    if !isempty(
-        JuMP.all_constraints(get_jump_model(container), JuMP.VariableRef, JuMP.MOI.ZeroOne),
-    )
-        return true
-    end
-    return false
+    jump_model = get_jump_model(container)
+    return !isempty(JuMP.all_constraints(jump_model, JuMP.VariableRef, JuMP.MOI.ZeroOne)) ||
+           !isempty(JuMP.all_constraints(jump_model, JuMP.VariableRef, JuMP.MOI.Integer))
 end
 
 function supports_milp(container::SingleOptimizationContainer)
@@ -147,7 +151,7 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
     if get_direct_mode_optimizer(settings)
         optimizer = () -> MOI.instantiate(get_optimizer(settings))
         container.JuMPmodel = JuMP.direct_model(optimizer())
-    elseif get_optimizer(settings) === nothing
+    elseif isnothing(get_optimizer(settings))
         @debug "The optimization model has no optimizer attached" _group =
             LOG_GROUP_OPTIMIZATION_CONTAINER
     else
@@ -167,6 +171,58 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
     else
         JuMP.set_silent(JuMPmodel)
         @debug "optimizer set to silent" _group = LOG_GROUP_OPTIMIZATION_CONTAINER
+    end
+    return
+end
+
+# Hours of a year that each time step of the representative period stands for
+function get_time_step_weight(container::SingleOptimizationContainer, op_ix::Int)
+    return get_operational_weights(container)[op_ix] *
+           get_time_step_length(get_time_mapping(container), op_ix)
+end
+
+# The objective is discounted with the discount rate and base year of the portfolio
+function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Portfolio)
+    discount_rate = PSIP.get_discount_rate(portfolio)
+    base_year = PSIP.get_base_year(portfolio)
+    if !isapprox(capital_model.discount_rate, discount_rate) ||
+       Dates.value(capital_model.base_year) != base_year
+        error(
+            "DiscountedCashFlow has discount rate $(capital_model.discount_rate) and base " *
+            "year $(Dates.value(capital_model.base_year)), but the portfolio has discount " *
+            "rate $discount_rate and base year $base_year.",
+        )
+    end
+    return
+end
+
+# Weights are per year: the period length is applied when costs are discounted, so weights
+# that include it would count operation costs more than once.
+function check_operational_weights(
+    time_mapping::TimeMapping,
+    operational_weights::Vector{Float64},
+)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    investment_time_stamps = get_investment_time_stamps(time_mapping)
+    investment_to_operational_ixs = get_investment_map_to_operational_slices(time_mapping)
+    for stage in get_investment_time_steps(time_mapping)
+        stage_operational_indexes = investment_to_operational_ixs[stage]
+        isempty(stage_operational_indexes) && continue
+        represented_hours = 0.0
+        for op_ix in stage_operational_indexes
+            represented_hours +=
+                operational_weights[op_ix] *
+                length(consecutive_slices[op_ix]) *
+                get_time_step_length(time_mapping, op_ix)
+        end
+        represented_years = represented_hours / HOURS_PER_YEAR
+        if abs(represented_years - 1.0) > OPERATIONAL_WEIGHTS_TOLERANCE
+            @warn "The operational weights of investment period $(investment_time_stamps[stage]) " *
+                  "represent $(round(represented_years; digits=3)) years of operation. " *
+                  "Weights must be per-year: the weighted duration of the representative " *
+                  "slices of each investment period should add up to one year. The length " *
+                  "of the period is applied separately when costs are discounted."
+        end
     end
     return
 end
@@ -193,6 +249,8 @@ function init_optimization_container!(
 
     set_time_mapping!(container, time_map)
     set_operational_weights!(container, operation_model.series_weights)
+    check_operational_weights(time_map, operation_model.series_weights)
+    check_discounting(capital_model, portfolio)
     # Set Financial Data in Container from Portfolio
     set_base_year!(container, PSIP.get_base_year(portfolio))
     set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
@@ -330,7 +388,7 @@ end
 
 function get_variable(container::SingleOptimizationContainer, key::VariableKey)
     var = get(container.variables, key, nothing)
-    if var === nothing
+    if isnothing(var)
         name = IOM.encode_key(key)
         keys = IOM.encode_key.(get_variable_keys(container))
         throw(IS.InvalidValue("variable $name is not stored. $keys"))
@@ -381,7 +439,7 @@ end
 
 function get_constraint(container::SingleOptimizationContainer, key::ConstraintKey)
     var = get(container.constraints, key, nothing)
-    if var === nothing
+    if isnothing(var)
         name = IOM.encode_key(key)
         keys = IOM.encode_key.(get_constraint_keys(container))
         throw(IS.InvalidValue("constraint $name is not stored. $keys"))
@@ -478,7 +536,7 @@ end
 
 function get_expression(container::SingleOptimizationContainer, key::ExpressionKey)
     var = get(container.expressions, key, nothing)
-    if var === nothing
+    if isnothing(var)
         throw(
             IS.InvalidValue(
                 "constraint $key is not stored. $(collect(keys(container.expressions)))",
@@ -516,16 +574,29 @@ function update_objective_function!(container::SingleOptimizationContainer)
     return
 end
 
+# Adding a quadratic cost to affine terms needs a new expression. Any other combination is
+# added in place.
+function _add_to_objective_terms!(
+    terms::JuMP.GenericAffExpr,
+    cost_expr::JuMP.GenericQuadExpr,
+)
+    return terms + cost_expr
+end
+
+function _add_to_objective_terms!(
+    terms::JuMP.AbstractJuMPScalar,
+    cost_expr::JuMP.AbstractJuMPScalar,
+)
+    JuMP.add_to_expression!(terms, cost_expr)
+    return terms
+end
+
 function add_to_objective_operations_expression!(
     container::SingleOptimizationContainer,
     cost_expr::T,
 ) where {T <: JuMP.AbstractJuMPScalar}
-    T_cf = typeof(container.objective_function.operation_terms)
-    if T_cf <: JuMP.GenericAffExpr && T <: JuMP.GenericQuadExpr
-        container.objective_function.operation_terms += cost_expr
-    else
-        JuMP.add_to_expression!(container.objective_function.operation_terms, cost_expr)
-    end
+    container.objective_function.operation_terms =
+        _add_to_objective_terms!(container.objective_function.operation_terms, cost_expr)
     return
 end
 
@@ -533,12 +604,8 @@ function add_to_objective_investment_expression!(
     container::SingleOptimizationContainer,
     cost_expr::T,
 ) where {T <: JuMP.AbstractJuMPScalar}
-    T_cf = typeof(container.objective_function.capital_terms)
-    if T_cf <: JuMP.GenericAffExpr && T <: JuMP.GenericQuadExpr
-        container.objective_function.capital_terms += cost_expr
-    else
-        JuMP.add_to_expression!(container.objective_function.capital_terms, cost_expr)
-    end
+    container.objective_function.capital_terms =
+        _add_to_objective_terms!(container.objective_function.capital_terms, cost_expr)
     return
 end
 
@@ -571,7 +638,7 @@ function _make_system_expressions!(
     ::Type{MultiRegionBalanceModel},
     port::PSIP.Portfolio,
 )
-    regions = PSIP.get_name.(PSIP.get_regions(PSIP.Zone, port))
+    regions = PSY.get_name.(get_model_topologies(port, PSY.AggregationTopology))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
@@ -588,10 +655,10 @@ end
 
 function _make_system_expressions!(
     container::SingleOptimizationContainer,
-    ::Type{NodalBalanceModel},
+    ::Type{<:AbstractNodalTransportAggregation},
     port::PSIP.Portfolio,
 )
-    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    nodes = PSY.get_name.(get_model_topologies(port, PSY.ACBus))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
@@ -628,7 +695,7 @@ function initialize_system_expressions!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel{T},
     port::PSIP.Portfolio,
-) where {T <: NodalBalanceModel}
+) where {T <: AbstractNodalTransportAggregation}
     _make_system_expressions!(container, T, port)
     return
 end
@@ -646,11 +713,64 @@ function calculate_aux_variables!(
     return RunStatus.SUCCESSFULLY_FINALIZED
 end
 
-function _calculate_dual_variables_discrete_model!(
+function _calculate_dual_variables_continous_model!(
     container::SingleOptimizationContainer,
     ::PSIP.Portfolio,
 )
-    return _process_duals(container, container.settings.optimizer)
+    constraints = get_constraints(container)
+    for key in collect(keys(get_duals(container)))
+        container.duals[key] = _dual_values(constraints[key])
+    end
+    return RunStatus.SUCCESSFULLY_FINALIZED
+end
+
+# Entries of a container without a constraint (e.g. time steps outside a requirement's
+# target period) get NaN
+function _dual_values(constraints::DenseAxisArray; available=true)
+    values = DenseAxisArray(fill(NaN, size(constraints)), axes(constraints)...)
+    available || return values
+    for i in eachindex(constraints.data)
+        if isassigned(constraints.data, i)
+            values.data[i] = JuMP.dual(constraints.data[i])
+        end
+    end
+    return values
+end
+
+# The duals of a MIP are those of the LP with its discrete variables fixed at their solution.
+# The model stays fixed, so the solution can still be read, until the next solve. If that LP
+# fails, the MIP is solved again from its solution and the duals are NaN.
+function _calculate_dual_variables_discrete_model!(
+    container::SingleOptimizationContainer,
+    port::PSIP.Portfolio,
+)
+    jump_model = get_jump_model(container)
+    variables = JuMP.all_variables(jump_model)
+    values = JuMP.value.(variables)
+    container.unfix_discrete_variables = JuMP.fix_discrete_variables(jump_model)
+    JuMP.optimize!(jump_model)
+    if JuMP.dual_status(jump_model) == MOI.FEASIBLE_POINT
+        return _calculate_dual_variables_continous_model!(container, port)
+    end
+    @warn "Duals not computed: the LP with fixed discrete variables returned $(JuMP.termination_status(jump_model))"
+    unfix_discrete_variables!(container)
+    JuMP.set_start_value.(variables, values)
+    JuMP.optimize!(jump_model)
+    constraints = get_constraints(container)
+    for key in collect(keys(get_duals(container)))
+        container.duals[key] = _dual_values(constraints[key]; available=false)
+    end
+    if JuMP.primal_status(jump_model) != MOI.FEASIBLE_POINT
+        return RunStatus.FAILED
+    end
+    return RunStatus.SUCCESSFULLY_FINALIZED
+end
+
+function unfix_discrete_variables!(container::SingleOptimizationContainer)
+    isnothing(container.unfix_discrete_variables) && return
+    container.unfix_discrete_variables()
+    container.unfix_discrete_variables = nothing
+    return
 end
 
 function calculate_dual_variables!(
@@ -660,11 +780,9 @@ function calculate_dual_variables!(
 )
     isempty(get_duals(container)) && return RunStatus.SUCCESSFULLY_FINALIZED
     if is_milp
-        status = _calculate_dual_variables_discrete_model!(container, port)
-    else
-        status = _calculate_dual_variables_continous_model!(container, port)
+        return _calculate_dual_variables_discrete_model!(container, port)
     end
-    return
+    return _calculate_dual_variables_continous_model!(container, port)
 end
 
 ##### Build Models #######
@@ -676,8 +794,13 @@ function build_model!(
 )
     transport_model = get_transport_model(template)
     initialize_system_expressions!(container, transport_model, port)
+    initialize_network!(transport_model, template, port)
+    initialize_demands!(container, port)
 
-    tech_names = collect(values(template.technology_models))
+    tech_names = [
+        collect(values(template.technology_models))
+        collect(values(template.branch_models))
+    ]
 
     # Check for duplicate technologies
     flattened_list = collect(Iterators.flatten(tech_names))
@@ -693,6 +816,13 @@ function build_model!(
     br_type_capital_map, br_type_operation_map, br_type_feasibility_map =
         get_type_formulation_to_names_map(template.branch_models, port)
     br_names_to_model_map = names_to_technology_model_map(template.branch_models)
+    # Requirement Maps #
+    requirement_names_to_model_map =
+        names_to_requirement_model_map(get_requirement_models(template))
+    requirement_map =
+        get_requirement_formulation_to_names_map(get_requirement_models(template), port)
+    # Requirements can have technologies and lines attached
+    requirement_technology_models = merge(names_to_model_map, br_names_to_model_map)
 
     # Only build the feasibility model if there are feasibility timesteps
     if is_feasibility_empty(get_time_mapping(container))
@@ -731,13 +861,17 @@ function build_model!(
         end
     end
 
+    # Retrofit options take their capacity from their sources, before anything reads it
+    link_retrofits!(container, port, names_to_model_map)
+
     # Requirements (policies spanning multiple technologies/regions) — argument stage
     construct_requirements!(
         container,
         port,
         ArgumentConstructStage(),
-        get_requirement_models(template),
-        names_to_model_map,
+        requirement_map,
+        requirement_names_to_model_map,
+        requirement_technology_models,
         transport_model,
     )
 
@@ -793,8 +927,9 @@ function build_model!(
         container,
         port,
         ModelConstructStage(),
-        get_requirement_models(template),
-        names_to_model_map,
+        requirement_map,
+        requirement_names_to_model_map,
+        requirement_technology_models,
         transport_model,
     )
 
@@ -835,35 +970,23 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     optimizer_stats = get_optimizer_stats(container)
 
     jump_model = get_jump_model(container)
+    unfix_discrete_variables!(container)
 
     model_status = MOI.NO_SOLUTION::MOI.ResultStatusCode
-    conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
 
-    try_count = 0
-    while model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
-        _,
-        optimizer_stats.timed_solve_time,
-        optimizer_stats.solve_bytes_alloc,
-        optimizer_stats.sec_in_gc = @timed JuMP.optimize!(jump_model)
-        model_status = JuMP.primal_status(jump_model)
+    _,
+    optimizer_stats.timed_solve_time,
+    optimizer_stats.solve_bytes_alloc,
+    optimizer_stats.sec_in_gc = @timed JuMP.optimize!(jump_model)
+    model_status = JuMP.primal_status(jump_model)
 
-        if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
-            if get_calculate_conflict(get_settings(container))
-                @warn "Optimizer returned $model_status computing conflict"
-                conflict_status = compute_conflict!(container)
-                if conflict_status == MOI.CONFLICT_FOUND
-                    return RunStatus.FAILED
-                end
-            else
-                @warn "Optimizer returned $model_status trying optimize! again"
-            end
-
-            try_count += 1
-            if try_count > MAX_OPTIMIZE_TRIES
-                @error "Optimizer returned $model_status after $MAX_OPTIMIZE_TRIES optimize! attempts"
-                return RunStatus.FAILED
-            end
+    if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
+        if get_calculate_conflict(get_settings(container))
+            @warn "Optimizer returned $model_status; computing conflict"
+            compute_conflict!(container)
         end
+        @error "Optimizer returned $(model_status) (termination_status = $(JuMP.termination_status(jump_model)))"
+        return RunStatus.FAILED
     end
 
     _, optimizer_stats.timed_calculate_aux_variables =
@@ -872,10 +995,8 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     # Needs to be called here to avoid issues when getting duals from MILPs
     write_optimizer_stats!(container)
 
-    _, optimizer_stats.timed_calculate_dual_variables =
+    status, optimizer_stats.timed_calculate_dual_variables =
         @timed calculate_dual_variables!(container, port, is_milp(container))
-
-    status = RunStatus.SUCCESSFULLY_FINALIZED
 
     return status
 end
@@ -888,7 +1009,7 @@ end
 function compute_conflict!(container::SingleOptimizationContainer)
     jump_model = get_jump_model(container)
     settings = get_settings(container)
-    JuMP.unset_silent(jump_model)
+    get_optimizer_solve_log_print(settings) && JuMP.unset_silent(jump_model)
     jump_model.is_model_dirty = false
     conflict = container.infeasibility_conflict
     empty!(conflict)
@@ -915,7 +1036,7 @@ function compute_conflict!(container::SingleOptimizationContainer)
 
         msg = IOBuffer()
         for (k, v) in conflict
-            PrettyTables.pretty_table(msg, v; header=[k])
+            _print_conflict_table(msg, k, v)
         end
         @error "Constraints participating in conflict basis (IIS) \n\n$(String(take!(msg)))"
 

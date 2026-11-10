@@ -1,18 +1,27 @@
 ### Investment Constraints ###
 
-abstract type MaximumCumulativeInvestmentConstraint <: ISOPT.ConstraintType end
+# Minimum and maximum of a cumulative capacity in every investment period
+abstract type CumulativeInvestmentLimitConstraint <: ISOPT.ConstraintType end
 
-struct MaximumCumulativeCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativeCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
-struct MaximumCumulativePowerCapacity <: MaximumCumulativeInvestmentConstraint end
+struct SingleUnitInvestmentConstraint <: ISOPT.ConstraintType end
 
-struct MaximumCumulativeEnergyCapacity <: MaximumCumulativeInvestmentConstraint end
+struct RetrofitPotentialConstraint <: ISOPT.ConstraintType end
 
-struct MaximumCumulativeWindCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativePowerCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
-struct MaximumCumulativeSolarCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativeEnergyCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
-struct MaximumCumulativeInverterCapacity <: MaximumCumulativeInvestmentConstraint end
+struct CumulativeWindCapacityLimit <: CumulativeInvestmentLimitConstraint end
+
+struct CumulativeSolarCapacityLimit <: CumulativeInvestmentLimitConstraint end
+
+struct CumulativeInverterCapacityLimit <: CumulativeInvestmentLimitConstraint end
+
+struct StorageDurationLowerBoundConstraint <: ISOPT.ConstraintType end
+
+struct StorageDurationUpperBoundConstraint <: ISOPT.ConstraintType end
 
 ### Operations Constraints ###
 
@@ -26,7 +35,20 @@ struct MultiRegionBalanceConstraint <: ISOPT.ConstraintType end
 
 struct NodalBalanceConstraint <: ISOPT.ConstraintType end
 
+struct IslandBalanceConstraint <: ISOPT.ConstraintType end
+
+struct NetworkFlowConstraint <: ISOPT.ConstraintType end
+
+struct FlowRateConstraint <: ISOPT.ConstraintType end
+
+struct NewCorridorBuiltConstraint <: ISOPT.ConstraintType end
+
+struct VirtualTransactionLimitConstraint <: ISOPT.ConstraintType end
+
+struct UnitLineBuiltConstraint <: ISOPT.ConstraintType end
+
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end
+
 struct HydroEnergyBudgetConstraint <: OperationVariableLimitsConstraintType end
 
 struct FlowActivePowerLowerBoundConstraint <: OperationVariableLimitsConstraintType end
@@ -53,6 +75,38 @@ struct EnergyBalanceConstraint <: ISOPT.ConstraintType end
 
 struct SingleRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
 
+struct MultiRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
+
+struct CommittedCapacityLimitConstraint <: OperationVariableLimitsConstraintType end
+
+struct MinimumUpTimeConstraint <: OperationVariableLimitsConstraintType end
+
+struct MinimumDownTimeConstraint <: OperationVariableLimitsConstraintType end
+
+struct RampRateConstraint <: OperationVariableLimitsConstraintType end
+
+struct CommittedCapacityTrackingConstraint <: OperationVariableLimitsConstraintType end
+
+struct DemandBacklogConstraint <: ISOPT.ConstraintType end
+
+struct DemandDelayConstraint <: ISOPT.ConstraintType end
+
+struct DemandAdvanceConstraint <: ISOPT.ConstraintType end
+
+struct DemandDeferralLimitConstraint <: ISOPT.ConstraintType end
+
 ### Requirement Constraints ###
 
 struct EnergyShareRequirementConstraint <: ISOPT.ConstraintType end
+
+struct CarbonCapConstraint <: ISOPT.ConstraintType end
+
+struct CapacityReserveMarginConstraint <: ISOPT.ConstraintType end
+
+struct CapacityRequirementConstraint <: ISOPT.ConstraintType end
+
+struct HourlyMatchingConstraint <: ISOPT.ConstraintType end
+
+# Duals are stored as operation entries
+is_operation_entry(::Type{<:ISOPT.ConstraintType}) = true
+is_investment_entry(::Type{<:ISOPT.ConstraintType}) = false

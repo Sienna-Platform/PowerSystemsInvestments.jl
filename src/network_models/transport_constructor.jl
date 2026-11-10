@@ -5,6 +5,7 @@ function construct_transport!(
 )
     add_constraints!(container, SingleRegionBalanceConstraint, p)
     add_constraints!(container, SingleRegionBalanceFeasibilityConstraint, p)
+    return
 end
 
 function construct_transport!(
@@ -13,12 +14,38 @@ function construct_transport!(
     ::TransportModel{MultiRegionBalanceModel},
 )
     add_constraints!(container, MultiRegionBalanceConstraint, p)
+    add_constraints!(container, MultiRegionBalanceFeasibilityConstraint, p)
+    return
 end
 
 function construct_transport!(
     container::SingleOptimizationContainer,
     p::PSIP.Portfolio,
-    ::TransportModel{NodalBalanceModel},
+    transport_model::TransportModel{NodalBalanceModel},
 )
     add_constraints!(container, NodalBalanceConstraint, p)
+    return
+end
+
+function construct_transport!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    transport_model::TransportModel{NodalPTDFModel},
+)
+    network = get_network_data(transport_model)
+    add_variable!(container, BranchBuiltVariable(), p, network)
+    add_variable!(container, VirtualTransactionVariable(), p, network)
+    add_expression!(container, PTDFBranchFlow(), p, network)
+    if get(transport_model.attributes, "flow_variables", false)
+        add_variable!(container, FlowActivePowerVariable(), p, network)
+        add_constraints!(container, NetworkFlowConstraint, p, network)
+    end
+    add_constraints!(container, IslandBalanceConstraint, p, network)
+    add_constraints!(container, FlowRateConstraint, p, network)
+    add_constraints!(container, NewCorridorBuiltConstraint, p, network)
+    add_constraints!(container, UnitLineBuiltConstraint, p, network)
+    add_constraints!(container, VirtualTransactionLimitConstraint, p, network)
+    add_aux_variable!(container, BranchFlow(), p, network)
+    add_aux_variable!(container, LineFlow(), p, network)
+    return
 end

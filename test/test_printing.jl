@@ -1,7 +1,7 @@
 @testset "Printing" begin
     p_5bus, op_days = test_2_zone_portfolio()
-    # 2 representative days (24-hours for 5 years each)
-    weights = [365 * 5, 365 * 5]
+    # 2 representative days (24 hours each), one per period, with per-year weights
+    weights = [365, 365]
     # 2 periods: 2030-2035, 2035-2040
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
@@ -19,13 +19,13 @@
         capital,
         operations,
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
 
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -49,13 +49,41 @@
         BasicDispatchFeasibility,
     )
 
+    set_technology_model!(
+        template,
+        ["test_branch"],
+        PSIP.AggregateTransportTechnology{PSY.ACBranch},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_requirement_model!(
+        template,
+        ["share_a", "share_b"],
+        PSIP.EnergyShareRequirements,
+        RequirementEnergyShare,
+    )
+    @test collect(values(PSIN.get_branch_models(template))) == [["test_branch"]]
+    @test all(
+        !in("test_branch", names) for names in values(PSIN.get_technology_models(template))
+    )
+
     @testset "text/plain InvestmentModelTemplate" begin
         buf = IOBuffer()
         show(buf, MIME("text/plain"), template)
         out = String(take!(buf))
 
+        @test occursin("ThermalStandard", out)
+        @test occursin("ContinuousInvestment", out)
+        @test occursin("BasicDispatch", out)
+        @test occursin("Requirement Models", out)
+        @test occursin("EnergyShareRequirements", out)
+        @test occursin("share_a, share_b", out)
+
         @test occursin("Template Model", out)
         @test occursin("Technology Models", out)
+        @test occursin("Branch Models", out)
+        @test occursin("AggregateTransportTechnology", out)
         @test occursin("MultiRegionBalanceModel", out)
         @test occursin("DiscountedCashFlow", out)
     end
@@ -65,8 +93,17 @@
         show(buf, MIME("text/html"), template)
         out = String(take!(buf))
 
+        @test occursin("ThermalStandard", out)
+        @test occursin("ContinuousInvestment", out)
+        @test occursin("BasicDispatch", out)
+        @test occursin("Requirement Models", out)
+        @test occursin("EnergyShareRequirements", out)
+        @test occursin("share_a, share_b", out)
+
         @test occursin("Template Model", out)
         @test occursin("Technology Models", out)
+        @test occursin("Branch Models", out)
+        @test occursin("AggregateTransportTechnology", out)
         @test occursin("<table", out)
     end
 end
