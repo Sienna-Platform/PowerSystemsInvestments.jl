@@ -638,7 +638,7 @@ function _make_system_expressions!(
     ::Type{MultiRegionBalanceModel},
     port::PSIP.Portfolio,
 )
-    regions = PSY.get_name.(get_model_topologies(port, PSY.AggregationTopology))
+    regions = PSY.get_name.(PSIP.get_model_topologies(port, PSIP.get_zone_type(port)))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
@@ -658,7 +658,7 @@ function _make_system_expressions!(
     ::Type{<:AbstractNodalTransportAggregation},
     port::PSIP.Portfolio,
 )
-    nodes = PSY.get_name.(get_model_topologies(port, PSY.ACBus))
+    nodes = PSY.get_name.(PSIP.get_model_topologies(port, PSY.ACBus))
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)

@@ -5,7 +5,7 @@ function add_constraints!(
     port::U,
 ) where {T <: NodalBalanceConstraint, U <: PSIP.Portfolio}
     time_steps = get_time_steps(get_time_mapping(container))
-    nodes = PSY.get_name.(get_model_topologies(port, PSY.ACBus))
+    nodes = PSY.get_name.(PSIP.get_model_topologies(port, PSY.ACBus))
     expressions = get_expression(container, EnergyBalance(), U)
     constraint = add_constraints_container!(container, T(), U, nodes, time_steps)
     jump_model = get_jump_model(container)

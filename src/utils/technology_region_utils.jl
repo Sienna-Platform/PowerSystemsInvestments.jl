@@ -38,22 +38,3 @@ function check_multi_region_technology(d::PSIP.SupplyTechnology, init_cap)
     end
     return
 end
-
-# Topologies of type T that hold an available technology or end an available line, sorted by
-# name. The base system can hold other topologies (its own buses, for example), which the
-# model ignores.
-function get_model_topologies(port::PSIP.Portfolio, ::Type{T}) where {T <: PSY.Topology}
-    used = Set{T}()
-    for d in PSIP.get_technologies(PSIP.get_available, PSIP.Technology, port),
-        topology in _topologies(d)
-
-        topology isa T && push!(used, topology)
-    end
-    return sort!(collect(used); by=PSY.get_name)
-end
-
-_topologies(d::PSIP.Technology) = PSIP.get_region(d)
-_topologies(d::PSIP.AggregateTransportTechnology) =
-    [PSIP.get_start_region(d), PSIP.get_end_region(d)]
-_topologies(d::Union{PSIP.NodalACTransportTechnology, PSIP.NodalHVDCTransportTechnology}) =
-    [PSIP.get_start_node(d), PSIP.get_end_node(d)]

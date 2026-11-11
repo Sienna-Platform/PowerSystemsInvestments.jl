@@ -213,7 +213,7 @@ function PTDFNetworkData(
             Set(c.name for c in merged_corridors if any(in(monitored), _names(c)))
     end
     branches = [merged_corridors; new_corridors; unit_lines]
-    nodes = get_model_topologies(portfolio, PSY.ACBus)
+    nodes = PSIP.get_model_topologies(portfolio, PSY.ACBus)
     ptdf = PTDF(
         PSY.get_name.(nodes),
         String[b.name for b in branches],

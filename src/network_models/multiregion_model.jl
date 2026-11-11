@@ -5,7 +5,7 @@ function add_constraints!(
 ) where {T <: MultiRegionBalanceConstraint, U <: PSIP.Portfolio}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    regions = PSY.get_name.(get_model_topologies(port, PSY.AggregationTopology))
+    regions = PSY.get_name.(PSIP.get_model_topologies(port, PSIP.get_zone_type(port)))
     expressions = get_expression(container, EnergyBalance(), U)
     constraint = add_constraints_container!(container, T(), U, regions, time_steps)
     for t in time_steps, r in regions
@@ -23,7 +23,7 @@ function add_constraints!(
 ) where {T <: MultiRegionBalanceFeasibilityConstraint, U <: PSIP.Portfolio}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    regions = PSY.get_name.(get_model_topologies(port, PSY.AggregationTopology))
+    regions = PSY.get_name.(PSIP.get_model_topologies(port, PSIP.get_zone_type(port)))
     expressions = get_expression(container, FeasibilitySurplus(), U)
     constraint = add_constraints_container!(container, T(), U, regions, time_steps)
     for t in time_steps, r in regions

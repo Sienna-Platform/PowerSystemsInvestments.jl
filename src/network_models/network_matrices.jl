@@ -125,7 +125,7 @@ _reference_nodes(nodes) =
     Set(PSY.get_name(n) for n in nodes if PSY.get_bustype(n) == PSY.ACBusTypes.REF)
 
 function PTDF(portfolio::PSIP.Portfolio; tol::Float64=0.0)
-    nodes = get_model_topologies(portfolio, PSY.ACBus)
+    nodes = PSIP.get_model_topologies(portfolio, PSY.ACBus)
     lines = sort!(
         collect(
             PSIP.get_technologies(
