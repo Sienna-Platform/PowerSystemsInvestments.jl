@@ -1,31 +1,24 @@
 module PowerSystemsInvestments
 
-### Exports ###
+#### Exports ####
 
-### Base models ###
-export InvestmentModel
+### Models ###
+export DecisionModel # from InfrastructureOptimizationModels
 export InvestmentModelTemplate
-export TransportModel
-export OptimizationProblemOutputs
-
-### Algorithms ###
 export SingleInstanceSolve
-
-### Technology Models ###
 export TechnologyModel
-
-### Requirement Models ###
 export RequirementModel
+export TransportModel
 
-### Capital Model ###
+### Capital Models ###
 export DiscountedCashFlow
 
-### Operation Model ###
+### Operation Models ###
 export AggregateOperatingCost
 export ClusteredRepresentativeDays
 export OperationalRepresentativeDays
 
-### Feasibility Model ###
+### Feasibility Models ###
 export RepresentativePeriods
 
 ### Investment Formulations ###
@@ -50,81 +43,78 @@ export RequirementEnergyShare
 export SingleRegionBalanceModel
 export MultiRegionBalanceModel
 export NodalBalanceModel
+
+### Constraints ###
 export NodalBalanceConstraint
 export EnergyShareRequirementConstraint
 export HydroEnergyBudgetConstraint
 
 ### Variables ###
 export BuildCapacity
-export ActivePowerVariable
 export BuildEnergyCapacity
 export BuildPowerCapacity
-export BuildWindCapacity
-export BuildSolarCapacity
+export BuildSupplyCapacity
 export BuildInverterCapacity
+export ActivePowerVariable
 export ActiveInPowerVariable
 export ActiveOutPowerVariable
-export StateOfChargeVariable
 export ActivePowerChargeVariable
 export ActivePowerDischargeVariable
-export ActivePowerWindVariable
-export ActivePowerSolarVariable
+export ActivePowerSupplyVariable
+export StateOfChargeVariable
 export FlowActivePowerVariable
 
 ### Expressions ###
 export CumulativeCapacity
+export CumulativePowerCapacity
+export CumulativeEnergyCapacity
+export CumulativeSupplyCapacity
+export CumulativeInverterCapacity
 export CapitalCost
 export TotalCapitalCost
 export FixedOperationModelCost
 export VariableOMCost
 export EnergyBalance
-export CumulativePowerCapacity
-export CumulativeEnergyCapacity
-export CumulativeSolarCapacity
-export CumulativeWindCapacity
-export CumulativeInverterCapacity
 export WeightedEnergyGeneration
 export WeightedEnergyDemand
 export WeightedEnergyShareGeneration
 export WeightedEnergyShareDemand
 
 ### Functions ###
-# methods
-export build!
-# Template exports
+# Template
 export set_technology_model!
 export set_requirement_model!
-# Model Exports
+# Model
+export build!
 export solve!
-export get_initial_conditions
-export get_infeasibility_conflict
 export serialize_problem
+export optimizer_with_attributes # from JuMP
+# Results
+export OptimizationProblemOutputs
 export serialize_outputs
-#Results interfaces
 export read_variable
-export read_optimizer_stats
 export read_expression
+export read_optimizer_stats
 export get_variable
 export get_constraint
 export get_expression
 
-#### Imports ###
+#### Imports ####
 
-import InfrastructureSystems
-import InfrastructureOptimizationModels
-import PowerSystems
-import JuMP
-import MathOptInterface
-import PowerSystemsInvestmentsPortfolios
-import Dates
-import PowerModels
-import DataStructures
-import PrettyTables
-import TimeSeries
-import Logging
-import TimerOutputs
-import Serialization
 import DataFrames
+import DataStructures
+import Dates
+import InfrastructureOptimizationModels
+import InfrastructureSystems
+import JuMP
+import Logging
+import MathOptInterface
+import PowerSystems
+import PowerSystemsInvestmentsPortfolios
+import PrettyTables
+import Serialization
+import TimeSeries
+import TimerOutputs
 
 const IS = InfrastructureSystems
 const ISOPT = InfrastructureSystems.Optimization
@@ -132,8 +122,6 @@ const IOM = InfrastructureOptimizationModels
 const PSY = PowerSystems
 const MOI = MathOptInterface
 const PSIP = PowerSystemsInvestmentsPortfolios
-const PM = PowerModels
-const MOPFM = MOI.FileFormats.Model
 
 using DocStringExtensions
 
@@ -142,101 +130,155 @@ using DocStringExtensions
                                  $(DOCSTRING)
                                  """
 
-#### Imports ###
-# DS
-import DataStructures: OrderedDict, Deque, SortedDict
-
-# JuMP
+import DataStructures: OrderedDict
 import JuMP: optimizer_with_attributes
 import JuMP.Containers: DenseAxisArray, SparseAxisArray
-export optimizer_with_attributes
 
-# Base imports
-import Base.isempty
-
-# IS.Optimization imports that stay private, may or may not be additional methods in PowerSimulations
-import InfrastructureSystems.Optimization: ArgumentConstructStage, ModelConstructStage
-# Concrete container/store types moved to InfrastructureOptimizationModels in the IS4 split
+# ---- Optimization container, keys, and key types ----
 import InfrastructureOptimizationModels:
-    STORE_CONTAINERS,
-    STORE_CONTAINER_DUALS,
-    STORE_CONTAINER_EXPRESSIONS,
-    STORE_CONTAINER_PARAMETERS,
-    STORE_CONTAINER_VARIABLES,
-    STORE_CONTAINER_AUX_VARIABLES
-import InfrastructureOptimizationModels:
+    OptimizationContainer,
+    ArgumentConstructStage,
+    ModelConstructStage,
     OptimizationContainerKey,
     VariableKey,
     ConstraintKey,
     ExpressionKey,
     AuxVarKey,
-    InitialConditionKey,
-    ParameterKey
-import InfrastructureSystems.Optimization:
-    RightHandSideParameter, ObjectiveFunctionParameter, TimeSeriesParameter
-import InfrastructureSystems.Optimization:
+    ParameterKey,
     VariableType,
     ConstraintType,
     AuxVariableType,
-    ParameterType,
-    InitialConditionType,
-    ExpressionType
+    ExpressionType,
+    SparseVariableType,
+    STORE_CONTAINERS,
+    get_entry_type,
+    get_metadata,
+    encode_key_as_string,
+    should_write_resulting_value
+
+# ---- Model, template, store, build/solve lifecycle ----
 import InfrastructureOptimizationModels:
-    should_export_variable,
-    should_export_dual,
-    should_export_parameter,
-    should_export_aux_variable,
-    should_export_expression
-import InfrastructureOptimizationModels: get_entry_type, get_component_type, get_output_dir
-import InfrastructureSystems.Optimization: should_write_resulting_value
+    AbstractProblemTemplate,
+    DecisionModel,
+    ModelStoreParams,
+    Settings,
+    get_internal,
+    get_optimization_container,
+    get_template,
+    get_system,
+    get_store,
+    get_store_params,
+    set_store_params!,
+    init_model_store_params!,
+    initialize_storage!,
+    built_for_recurrent_solves,
+    reset!,
+    get_status,
+    set_status!,
+    get_run_status,
+    set_run_status!,
+    get_executions,
+    get_allow_fails,
+    configure_logging,
+    register_recorders!,
+    unregister_recorders!,
+    serialize_optimization_model,
+    get_output_dir,
+    set_output_dir!,
+    set_console_level!,
+    set_file_level!
+
+# ---- Settings accessors ----
 import InfrastructureOptimizationModels:
-    deserialize_key, encode_key_as_string, encode_keys_as_strings, get_store_container_type
+    get_initial_time,
+    get_resolution,
+    get_optimizer,
+    get_optimizer_solve_log_print,
+    get_portfolio_to_file
+
+# ---- Optimization container accessors ----
 import InfrastructureOptimizationModels:
-    OptimizationProblemOutputs, OptimizationProblemOutputsExport, OptimizerStats
+    get_jump_model,
+    get_settings,
+    get_variable,
+    get_variables,
+    get_aux_variables,
+    get_constraints,
+    get_duals,
+    get_problem_base_power,
+    is_milp,
+    update_objective_function!
+
+# ---- Time mapping ----
 import InfrastructureOptimizationModels:
-    list_variable_names, list_aux_variable_names, list_dual_names, list_expression_names
+    get_time_mapping,
+    set_time_mapping!,
+    get_time_steps,
+    get_base_date,
+    get_total_operation_period_count
+
+# ---- Formulations ----
 import InfrastructureOptimizationModels:
-    read_optimizer_stats,
+    AbstractDeviceFormulation,
+    AbstractServiceFormulation,
+    get_use_slacks,
+    get_default_attributes,
+    get_default_time_series_names
+
+# ---- Container construction / JuMP helpers ----
+import InfrastructureOptimizationModels:
+    container_spec,
+    sparse_container_spec,
+    remove_undef!,
+    add_proportional_to_jump_expression!
+
+# ---- Results, outputs, serialization ----
+import InfrastructureOptimizationModels:
+    OptimizationProblemOutputs,
     get_optimizer_stats,
-    export_outputs,
-    serialize_outputs,
-    get_timestamps,
-    get_model_base_power,
-    get_objective_value,
+    read_optimizer_stats,
+    write_optimizer_stats!,
+    list_variable_keys,
+    list_aux_variable_keys,
+    list_dual_keys,
+    list_expression_keys,
     read_variable,
     read_dual,
-    read_expression
-import TimerOutputs
+    read_expression,
+    read_aux_variable,
+    get_timestamps,
+    export_outputs,
+    serialize_outputs,
+    check_conflict_status
+
+# ---- Logging & printing ----
+import InfrastructureOptimizationModels:
+    LOG_GROUP_OPTIMIZATION_CONTAINER, tf_html_simple, _show_method
 
 ####
 # Order Required #
 include("utils/mpi_utils.jl")
-include("utils/jump_utils.jl")
 include("base/definitions.jl")
-include("base/simulation.jl")
-# Base #
 include("base/abstract_formulation_types.jl")
+# Base #
 include("capital/technology_capital_formulations.jl")
 include("capital/capital_models.jl")
 include("operation/technology_operation_formulations.jl")
 include("operation/feasibility_model.jl")
 include("operation/operation_model.jl")
+include("base/technology_model.jl")
+include("base/requirement_model.jl")
 include("base/transport_model.jl")
 include("base/constraints.jl")
 include("base/variables.jl")
 include("base/expressions.jl")
-include("base/settings.jl")
 include("base/solution_algorithms.jl")
-include("base/technology_model.jl")
 include("requirement_models/requirement_formulations.jl")
-include("base/requirement_model.jl")
 include("base/investment_model_template.jl")
 include("base/time_mapping.jl")
 include("base/objective_function.jl")
-include("base/single_optimization_container.jl")
-include("base/multi_optimization_container.jl")
+include("base/optimization_container.jl")
 # Investment Model #
-include("investment_model/investment_model_store.jl")
 include("investment_model/investment_model.jl")
 include("investment_model/investment_problem_results.jl")
 # Serialization #
@@ -244,12 +286,7 @@ include("base/serialization.jl")
 # Solve Instance #
 include("model_build/SingleInstanceSolve.jl")
 # Utils #
-@static if pkgversion(PrettyTables).major == 2
-    include("utils/printing_pt_v2.jl")
-else
-    include("utils/printing_pt_v3.jl")
-end
-include("utils/logging.jl")
+include("utils/printing_pt_v3.jl")
 include("utils/psip_utils.jl")
 # Technology Models #
 include("technology_models/technologies/common/add_variable.jl")

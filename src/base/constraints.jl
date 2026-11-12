@@ -1,6 +1,6 @@
 ### Investment Constraints ###
 
-abstract type MaximumCumulativeInvestmentConstraint <: ISOPT.ConstraintType end
+abstract type MaximumCumulativeInvestmentConstraint <: ConstraintType end
 
 struct MaximumCumulativeCapacity <: MaximumCumulativeInvestmentConstraint end
 
@@ -8,21 +8,19 @@ struct MaximumCumulativePowerCapacity <: MaximumCumulativeInvestmentConstraint e
 
 struct MaximumCumulativeEnergyCapacity <: MaximumCumulativeInvestmentConstraint end
 
-struct MaximumCumulativeWindCapacity <: MaximumCumulativeInvestmentConstraint end
-
-struct MaximumCumulativeSolarCapacity <: MaximumCumulativeInvestmentConstraint end
+struct MaximumCumulativeSupplyCapacity <: MaximumCumulativeInvestmentConstraint end
 
 struct MaximumCumulativeInverterCapacity <: MaximumCumulativeInvestmentConstraint end
 
 ### Operations Constraints ###
 
-abstract type OperationVariableLimitsConstraintType <: ISOPT.ConstraintType end
+abstract type OperationVariableLimitsConstraintType <: ConstraintType end
 
-struct SupplyDemandBalance <: ISOPT.ConstraintType end
+struct SupplyDemandBalance <: ConstraintType end
 
-struct SingleRegionBalanceConstraint <: ISOPT.ConstraintType end
+struct SingleRegionBalanceConstraint <: ConstraintType end
 
-struct MultiRegionBalanceConstraint <: ISOPT.ConstraintType end
+struct MultiRegionBalanceConstraint <: ConstraintType end
 
 struct NodalBalanceConstraint <: ISOPT.ConstraintType end
 
@@ -41,18 +39,16 @@ struct ActivePowerDischargeVariableLimitsConstraint <: OperationVariableLimitsCo
 
 struct ActivePowerChargeVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
 
-struct ActivePowerWindVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
-
-struct ActivePowerSolarVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
+struct ActivePowerSupplyVariableLimitsConstraint <: OperationVariableLimitsConstraintType end
 
 struct StateOfChargeLimitsConstraint <: OperationVariableLimitsConstraintType end
 
-struct ColocatedInternalBalanceConstraint <: ISOPT.ConstraintType end
+struct ColocatedInternalBalanceConstraint <: ConstraintType end
 
-struct EnergyBalanceConstraint <: ISOPT.ConstraintType end
+struct EnergyBalanceConstraint <: ConstraintType end
 
-struct SingleRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
+struct SingleRegionBalanceFeasibilityConstraint <: ConstraintType end
 
 ### Requirement Constraints ###
 
-struct EnergyShareRequirementConstraint <: ISOPT.ConstraintType end
+struct EnergyShareRequirementConstraint <: ConstraintType end

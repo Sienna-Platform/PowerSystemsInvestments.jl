@@ -1,6 +1,6 @@
-## For Co-located Technologies: Solar + Wind + Storage ##
+## For Co-located Technologies: Supply + Storage ##
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -19,8 +19,7 @@ function construct_technologies!(
     # BuildCapacity variables
     add_variable!(container, BuildEnergyCapacity(), devices, B())
     add_variable!(container, BuildPowerCapacity(), devices, B())
-    add_variable!(container, BuildWindCapacity(), devices, B())
-    add_variable!(container, BuildSolarCapacity(), devices, B())
+    add_variable!(container, BuildSupplyCapacity(), devices, B())
     add_variable!(container, BuildInverterCapacity(), devices, B())
 
     # CumulativeCapacity expressions
@@ -43,16 +42,8 @@ function construct_technologies!(
     add_expression!(
         container,
         p,
-        CumulativeWindCapacity(),
-        BuildWindCapacity(),
-        devices,
-        B(),
-    )
-    add_expression!(
-        container,
-        p,
-        CumulativeSolarCapacity(),
-        BuildSolarCapacity(),
+        CumulativeSupplyCapacity(),
+        BuildSupplyCapacity(),
         devices,
         B(),
     )
@@ -68,7 +59,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -89,8 +80,7 @@ function construct_technologies!(
     add_variable!(container, ActiveOutPowerVariable(), devices, C())
     add_variable!(container, ActivePowerChargeVariable(), devices, C())
     add_variable!(container, ActivePowerDischargeVariable(), devices, C())
-    add_variable!(container, ActivePowerWindVariable(), devices, C())
-    add_variable!(container, ActivePowerSolarVariable(), devices, C())
+    add_variable!(container, ActivePowerSupplyVariable(), devices, C())
 
     # StateOfChargeVariable
     add_variable!(container, StateOfChargeVariable(), devices, C())
@@ -120,7 +110,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ArgumentConstructStage,
@@ -142,7 +132,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,
@@ -159,7 +149,7 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Capital Component of objective function
-    objective_function!(container, devices, B())
+    objective_function!(container, p, devices, B())
 
     # Add objective function from container to JuMP model
     update_objective_function!(container)
@@ -183,16 +173,8 @@ function construct_technologies!(
 
     add_constraints!(
         container,
-        MaximumCumulativeWindCapacity(),
-        CumulativePowerCapacity(),
-        devices,
-        B(),
-    )
-
-    add_constraints!(
-        container,
-        MaximumCumulativeSolarCapacity(),
-        CumulativeEnergyCapacity(),
+        MaximumCumulativeSupplyCapacity(),
+        CumulativeSupplyCapacity(),
         devices,
         B(),
     )
@@ -200,7 +182,7 @@ function construct_technologies!(
     add_constraints!(
         container,
         MaximumCumulativeInverterCapacity(),
-        CumulativeEnergyCapacity(),
+        CumulativeInverterCapacity(),
         devices,
         B(),
     )
@@ -210,7 +192,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,
@@ -227,7 +209,7 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Operations Component of objective function
-    objective_function!(container, devices, C())
+    objective_function!(container, p, devices, C())
 
     # Add objective function from container to JuMP model
     update_objective_function!(container)
@@ -297,22 +279,12 @@ function construct_technologies!(
         C(),
     )
 
-    ##### Solar #####
+    ##### Supply #####
     add_constraints!(
         container,
-        ActivePowerSolarVariableLimitsConstraint(),
-        ActivePowerSolarVariable(),
-        CumulativeSolarCapacity(),
-        devices,
-        C(),
-        tech_model_vector,
-    )
-    ##### Wind #####
-    add_constraints!(
-        container,
-        ActivePowerWindVariableLimitsConstraint(),
-        ActivePowerWindVariable(),
-        CumulativeWindCapacity(),
+        ActivePowerSupplyVariableLimitsConstraint(),
+        ActivePowerSupplyVariable(),
+        CumulativeSupplyCapacity(),
         devices,
         C(),
         tech_model_vector,
@@ -323,7 +295,7 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
     ::ModelConstructStage,

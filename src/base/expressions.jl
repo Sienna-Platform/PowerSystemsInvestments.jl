@@ -1,6 +1,6 @@
-abstract type InvestmentExpressionType <: ISOPT.ExpressionType end
-abstract type OperationsExpressionType <: ISOPT.ExpressionType end
-abstract type FeasibilityExpressionType <: ISOPT.ExpressionType end
+abstract type InvestmentExpressionType <: ExpressionType end
+abstract type OperationsExpressionType <: ExpressionType end
+abstract type FeasibilityExpressionType <: ExpressionType end
 
 abstract type CumulativeInvestmentExpressionType <: InvestmentExpressionType end
 
@@ -20,14 +20,13 @@ struct CumulativeCapacity <: CumulativeInvestmentExpressionType end
 
 struct CumulativePowerCapacity <: CumulativeInvestmentExpressionType end
 struct CumulativeEnergyCapacity <: CumulativeInvestmentExpressionType end
-struct CumulativeWindCapacity <: CumulativeInvestmentExpressionType end
-struct CumulativeSolarCapacity <: CumulativeInvestmentExpressionType end
+struct CumulativeSupplyCapacity <: CumulativeInvestmentExpressionType end
 struct CumulativeInverterCapacity <: CumulativeInvestmentExpressionType end
 
 struct CapitalCost <: InvestmentExpressionType end
 struct FixedOperationModelCost <: InvestmentExpressionType end
 
-struct TotalCapitalCost <: ISOPT.ExpressionType end
+struct TotalCapitalCost <: ExpressionType end
 
 struct VariableOMCost <: OperationsExpressionType end
 
@@ -36,17 +35,10 @@ struct FeasibilitySurplus <: FeasibilityExpressionType end
 should_write_resulting_value(::Type{CumulativeCapacity}) = true
 should_write_resulting_value(::Type{CumulativePowerCapacity}) = true
 should_write_resulting_value(::Type{CumulativeEnergyCapacity}) = true
-should_write_resulting_value(::Type{CumulativeSolarCapacity}) = true
-should_write_resulting_value(::Type{CumulativeWindCapacity}) = true
+should_write_resulting_value(::Type{CumulativeSupplyCapacity}) = true
 should_write_resulting_value(::Type{CumulativeInverterCapacity}) = true
 
 should_write_resulting_value(::Type{WeightedEnergyGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyDemand}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareDemand}) = true
-
-is_operation_entry(::Type{<:OperationsExpressionType}) = true
-is_operation_entry(::Type{<:InvestmentExpressionType}) = false
-
-is_investment_entry(::Type{<:OperationsExpressionType}) = false
-is_investment_entry(::Type{<:InvestmentExpressionType}) = true

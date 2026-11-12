@@ -27,4 +27,8 @@ const PROBLEM_LOG_FILENAME = "investment_problem.log"
 const ModelBuildStatus = ISOPT.ModelBuildStatus
 const RunStatus = IS.Simulation.RunStatus
 
+# PSI-specific: more retries than IOM default
 const MAX_OPTIMIZE_TRIES = 10
+
+# Import shared name delimiter
+const PSI_NAME_DELIMITER = "__"

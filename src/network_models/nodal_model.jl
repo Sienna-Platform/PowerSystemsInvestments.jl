@@ -1,14 +1,14 @@
 # Nodal power balance model: energy balance constraint at each bus (node).
-# Structure mirrors multiregion_model.jl but uses PSIP.Node instead of PSIP.Zone.
+# Structure mirrors multiregion_model.jl but uses PSY.ACBus instead of PSY.LoadZone.
 
 function add_constraints!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     ::Type{T},
     port::U,
 ) where {T <: NodalBalanceConstraint, U <: PSIP.Portfolio}
-    time_mapping = get_time_mapping(container)
+    time_mapping = IOM.get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    nodes = PSY.get_name.(PSIP.get_regions(PSY.ACBus, port))
     expressions = get_expression(container, EnergyBalance(), U)
     constraint = add_constraints_container!(container, T(), U, nodes, time_steps)
     for t in time_steps, n in nodes

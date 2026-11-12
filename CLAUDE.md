@@ -48,9 +48,9 @@ Portfolio (PSIP)
                   B = OperationsTechnologyFormulation  (e.g. BasicDispatch)
                   C = FeasibilityTechnologyFormulation (e.g. BasicDispatchFeasibility)
 
-InvestmentModel{SingleInstanceSolve}(template, alg, portfolio; optimizer=...)
-    └─ build!(model; output_dir=...)   → SingleOptimizationContainer (wraps JuMP.Model)
-    └─ solve!(model; ...)              → OptimizationProblemResults
+DecisionModel{SingleInstanceSolve}(template, portfolio; optimizer=...)   # IOM.DecisionModel
+    └─ build!(model; output_dir=...)   → OptimizationContainer (wraps JuMP.Model)
+    └─ solve!(model; ...)              → OptimizationProblemOutputs
 ```
 
 ### Key layers
@@ -63,8 +63,11 @@ InvestmentModel{SingleInstanceSolve}(template, alg, portfolio; optimizer=...)
 - `multi_optimization_container.jl` — decomposition container with a main problem + subproblems (MPI-capable)
 
 **`src/investment_model/`** — Top-level model orchestration:
-- `investment_model.jl` — `InvestmentModel{S}`, `build!`, `solve!`, `write_results!`
-- `investment_model_store.jl` — in-memory result store
+- `investment_model.jl` — `build!`, `solve!`, and the IOM extension points for
+  `DecisionModel{<:AbstractInvestmentProblem}` (`prepare_time_series!`,
+  `init_model_store_params!`, `initialize_storage!`, result readers). There is no
+  investment-specific model or store type: models are `IOM.DecisionModel`s whose results
+  live in an `IOM.DecisionModelStore` keyed by the time mapping's base date.
 - `investment_problem_results.jl` — results interface wrapping the store
 
 **`src/capital/`** — Capital cost models (`DiscountedCashFlow`) and their JuMP formulations

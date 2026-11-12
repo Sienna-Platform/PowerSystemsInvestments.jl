@@ -1,4 +1,4 @@
-function OptimizationProblemOutputs(model::InvestmentModel)
+function OptimizationProblemOutputs(model::DecisionModel{<:AbstractInvestmentProblem})
     status = get_run_status(model)
     status != RunStatus.SUCCESSFULLY_FINALIZED &&
         error("problem was not solved successfully: $status")
@@ -9,7 +9,7 @@ function OptimizationProblemOutputs(model::InvestmentModel)
         error("Model Solved as part of a Simulation.")
     end
 
-    timestamps = get_time_stamps(model)
+    timestamps = get_timestamps(model)
     optimizer_stats = IOM.to_dataframe(get_optimizer_stats(model))
     aux_variable_values =
         Dict(x => read_aux_variable(model, x) for x in list_aux_variable_keys(model))
@@ -31,7 +31,7 @@ function OptimizationProblemOutputs(model::InvestmentModel)
         parameter_values,
         expression_values,
         optimizer_stats,
-        get_metadata(get_optimization_container(model)),
+        get_metadata(IOM.get_optimization_container(model)),
         IS.strip_module_name(typeof(model)),
         mkpath(joinpath(get_output_dir(model), "results")),
         get_output_dir(model),
