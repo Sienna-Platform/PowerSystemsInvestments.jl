@@ -19,6 +19,9 @@ function construct_technologies!(
     add_variable!(container, BuildEnergyCapacity(), devices, B())
     add_variable!(container, BuildPowerCapacity(), devices, B())
 
+    add_expression!(container, PowerCapacityAdditions(), devices, B())
+    add_expression!(container, EnergyCapacityAdditions(), devices, B())
+
     # CumulativeCapacity expressions
     add_expression!(container, p, CumulativePowerCapacity(), devices, B())
     add_expression!(container, p, CumulativeEnergyCapacity(), devices, B())
@@ -66,6 +69,9 @@ function construct_technologies!(
         C(),
         transport_model,
     )
+
+    # WeightedEnergyGeneration
+    add_expression!(container, WeightedEnergyGeneration(), devices, C())
 
     return
 end
@@ -129,9 +135,6 @@ function construct_technologies!(
     # Capital Component of objective function
     objective_function!(container, devices, B())
 
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
-
     # Capacity constraints
     add_constraints!(
         container,
@@ -149,7 +152,9 @@ function construct_technologies!(
         B(),
     )
 
-    # TODO: Implement Constraints on Ratio Energy vs Power
+    # Duration constraints
+    add_constraints!(container, StorageDurationLowerBoundConstraint(), devices, B())
+    add_constraints!(container, StorageDurationUpperBoundConstraint(), devices, B())
     return
 end
 
@@ -172,9 +177,6 @@ function construct_technologies!(
 
     # Operations Component of objective function
     objective_function!(container, devices, C())
-
-    # Add objective function from container to JuMP model
-    update_objective_function!(container)
 
     # Dispatch input power constraint
     add_constraints!(

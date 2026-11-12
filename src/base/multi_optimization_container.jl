@@ -121,6 +121,21 @@ function _finalize_jump_model!(container::MultiOptimizationContainer, settings::
     return
 end
 
+_get_default_initial_time(::Type{<:PSY.AbstractDeterministic}, portfolio::PSIP.Portfolio) =
+    PSY.get_forecast_initial_timestamp(portfolio)
+
+function _get_default_initial_time(
+    ::Type{<:PSY.SingleTimeSeries},
+    portfolio::PSIP.Portfolio,
+)
+    ini_time, _ = PSY.check_time_series_consistency(portfolio, PSY.SingleTimeSeries)
+    return ini_time
+end
+
+function _get_default_initial_time(time_series_type::Type, ::PSIP.Portfolio)
+    error("Bug: unhandled $(time_series_type)")
+end
+
 function init_optimization_container!(
     container::MultiOptimizationContainer,
     transport_model::TransportModel{<:AbstractTransportAggregation},
@@ -131,14 +146,9 @@ function init_optimization_container!(
     settings = get_settings(container)
 
     if get_initial_time(settings) == UNSET_INI_TIME
-        if get_default_time_series_type(container) <: PSY.AbstractDeterministic
-            set_initial_time!(settings, PSY.get_forecast_initial_timestamp(portfolio))
-        elseif get_default_time_series_type(container) <: PSY.SingleTimeSeries
-            ini_time, _ = PSY.check_time_series_consistency(portfolio, PSY.SingleTimeSeries)
-            set_initial_time!(settings, ini_time)
-        else
-            error("Bug: unhandled $(get_default_time_series_type(container))")
-        end
+        ini_time =
+            _get_default_initial_time(get_default_time_series_type(container), portfolio)
+        set_initial_time!(settings, ini_time)
     end
 
     # TODO: what if the time series type is SingleTimeSeries?

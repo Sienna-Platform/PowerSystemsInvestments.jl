@@ -2,6 +2,7 @@ using Test
 import InfrastructureSystems
 import InfrastructureSystems.Optimization
 using JuMP
+import MathOptInterface
 using Logging
 using PowerSystemsInvestments
 using PowerSystemsInvestmentsPortfolios
