@@ -1,18 +1,12 @@
-"""
-Names used to index the variables and expressions of a technology. A technology has a single
-entry, its own name, unless it defines separate variables per region.
-"""
+# Names that index the variables and expressions of a technology
 get_variable_names(d::PSIP.Technology) = [PSIP.get_name(d)]
 
 function get_variable_names(devices::Vector{<:PSIP.Technology})
     return reduce(vcat, get_variable_names.(devices))
 end
 
-"""
-Names of the build and dispatch variables of a supply technology. A technology located in
-more than one region has separate variables in each of them, named
-`<technology name>__<region name>`.
-"""
+# A supply technology in more than one region has separate variables in each of them, named
+# <technology name>__<region name>
 function get_variable_names(d::PSIP.SupplyTechnology)
     name = PSIP.get_name(d)
     regions = PSIP.get_region(d)
@@ -22,9 +16,6 @@ function get_variable_names(d::PSIP.SupplyTechnology)
     return [name]
 end
 
-"""
-Pairs of variable name and region name of a supply technology, one per region.
-"""
 function get_variable_names_and_regions(d::PSIP.SupplyTechnology)
     regions = PSIP.get_region(d)
     if isempty(regions)
@@ -33,10 +24,7 @@ function get_variable_names_and_regions(d::PSIP.SupplyTechnology)
     return collect(zip(get_variable_names(d), PSIP.get_name.(regions)))
 end
 
-"""
-The existing capacity and the minimum capacity limit of a technology are not defined per
-region, so they are only supported for technologies located in a single region.
-"""
+# Existing capacity and the minimum capacity limit are not defined per region
 function check_multi_region_technology(d::PSIP.SupplyTechnology, init_cap)
     if length(PSIP.get_region(d)) <= 1
         return
