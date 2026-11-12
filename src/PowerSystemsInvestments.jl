@@ -311,26 +311,12 @@ import InfrastructureOptimizationModels:
     get_total_operation_period_count
 
 # ---- Variable / expression types ----
-import InfrastructureOptimizationModels:
-    SparseVariableType,
-    InvestmentVariableType,
-    OperationsVariableType,
-    FeasibilityVariableType,
-    BuildInvestmentVariableType,
-    InvestmentExpressionType,
-    OperationsExpressionType,
-    FeasibilityExpressionType,
-    CumulativeInvestmentExpressionType,
-    is_operation_entry,
-    is_investment_entry
+import InfrastructureOptimizationModels: SparseVariableType
 
 # ---- Technology / requirement formulations ----
 import InfrastructureOptimizationModels:
-    AbstractTechnologyFormulation,
-    InvestmentTechnologyFormulation,
-    OperationsTechnologyFormulation,
-    FeasibilityTechnologyFormulation,
-    RequirementFormulation,
+    AbstractDeviceFormulation,
+    AbstractServiceFormulation,
     get_use_slacks,
     get_default_attributes,
     get_default_time_series_names
@@ -385,6 +371,7 @@ import TimerOutputs
 # Order Required #
 include("utils/mpi_utils.jl")
 include("base/definitions.jl")
+include("base/abstract_formulation_types.jl")
 # Base #
 include("capital/technology_capital_formulations.jl")
 include("capital/capital_models.jl")
