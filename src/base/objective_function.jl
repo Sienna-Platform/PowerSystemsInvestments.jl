@@ -3,8 +3,8 @@
 # those terms while IOM stores solver-facing invariant/variant expressions.
 
 mutable struct _PSIObjectiveTerms
-    capital_terms
-    operation_terms
+    capital_terms::Any
+    operation_terms::Any
 end
 
 const _OBJECTIVE_TERMS = IdDict{IOM.ObjectiveFunction, _PSIObjectiveTerms}()
@@ -17,13 +17,21 @@ function _register_objective_function!(obj::IOM.ObjectiveFunction)
 end
 
 function _track_objective_capital_terms!(obj::IOM.ObjectiveFunction, expr)
-    terms = get!(_OBJECTIVE_TERMS, obj, _PSIObjectiveTerms(zero(JuMP.AffExpr), zero(JuMP.AffExpr)))
+    terms = get!(
+        _OBJECTIVE_TERMS,
+        obj,
+        _PSIObjectiveTerms(zero(JuMP.AffExpr), zero(JuMP.AffExpr)),
+    )
     terms.capital_terms = terms.capital_terms + expr
     return
 end
 
 function _track_objective_operation_terms!(obj::IOM.ObjectiveFunction, expr)
-    terms = get!(_OBJECTIVE_TERMS, obj, _PSIObjectiveTerms(zero(JuMP.AffExpr), zero(JuMP.AffExpr)))
+    terms = get!(
+        _OBJECTIVE_TERMS,
+        obj,
+        _PSIObjectiveTerms(zero(JuMP.AffExpr), zero(JuMP.AffExpr)),
+    )
     terms.operation_terms = terms.operation_terms + expr
     return
 end
@@ -34,12 +42,21 @@ function ObjectiveFunction()
 end
 
 function get_capital_terms(v::IOM.ObjectiveFunction)
-    return get(_OBJECTIVE_TERMS, v, _PSIObjectiveTerms(IOM.get_invariant_terms(v), IOM.get_variant_terms(v))).capital_terms
+    return get(
+        _OBJECTIVE_TERMS,
+        v,
+        _PSIObjectiveTerms(IOM.get_invariant_terms(v), IOM.get_variant_terms(v)),
+    ).capital_terms
 end
 
 function get_operation_terms(v::IOM.ObjectiveFunction)
-    return get(_OBJECTIVE_TERMS, v, _PSIObjectiveTerms(IOM.get_invariant_terms(v), IOM.get_variant_terms(v))).operation_terms
+    return get(
+        _OBJECTIVE_TERMS,
+        v,
+        _PSIObjectiveTerms(IOM.get_invariant_terms(v), IOM.get_variant_terms(v)),
+    ).operation_terms
 end
 
 get_sense(v::IOM.ObjectiveFunction) = IOM.get_sense(v)
-set_sense!(v::IOM.ObjectiveFunction, sense::MOI.OptimizationSense) = IOM.set_sense!(v, sense)
+set_sense!(v::IOM.ObjectiveFunction, sense::MOI.OptimizationSense) =
+    IOM.set_sense!(v, sense)
