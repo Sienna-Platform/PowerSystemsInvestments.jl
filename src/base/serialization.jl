@@ -6,7 +6,10 @@ struct OptimizerAttributes
     attributes::Any
 end
 
-function OptimizerAttributes(model::InvestmentModel, optimizer::MOI.OptimizerWithAttributes)
+function OptimizerAttributes(
+    model::DecisionModel{<:AbstractInvestmentProblem},
+    optimizer::MOI.OptimizerWithAttributes,
+)
     jump_model = get_jump_model(model)
     name = JuMP.solver_name(jump_model)
     # Note that this uses private field access to MOI.OptimizerWithAttributes because there
@@ -22,7 +25,7 @@ function OptimizerAttributes(model::InvestmentModel, optimizer::MOI.OptimizerWit
     end
 end
 
-function _get_optimizer_attributes(model::InvestmentModel)
+function _get_optimizer_attributes(model::DecisionModel{<:AbstractInvestmentProblem})
     return get_optimizer(get_settings(model)).params
 end
 
@@ -35,7 +38,10 @@ struct ProblemSerializationWrapper
     optimizer::OptimizerAttributes
 end
 
-function serialize_problem(model::InvestmentModel; optimizer=nothing)
+function serialize_problem(
+    model::DecisionModel{<:AbstractInvestmentProblem};
+    optimizer=nothing,
+)
     # A PowerSystem cannot be serialized in this format because of how it stores
     # time series data. Use its specialized serialization method instead.
     portfolio_to_file = get_portfolio_to_file(get_settings(model))

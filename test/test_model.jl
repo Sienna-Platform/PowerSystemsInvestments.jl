@@ -77,11 +77,11 @@
         BasicDispatchFeasibility,
     )
 
-    m = InvestmentModel{SingleInstanceSolve}(
+    m = DecisionModel{SingleInstanceSolve}(
         template,
         p_5bus;
         optimizer=HiGHS.Optimizer,
-        portfolio_to_file=false,
+        system_to_file=false,
         store_variable_names=true,
     )
 
@@ -155,11 +155,11 @@
         BasicDispatchFeasibility,
     )
 
-    m = InvestmentModel{SingleInstanceSolve}(
+    m = DecisionModel{SingleInstanceSolve}(
         template,
         p_5bus;
         optimizer=HiGHS.Optimizer,
-        portfolio_to_file=false,
+        system_to_file=false,
         store_variable_names=true,
     )
 
@@ -236,7 +236,7 @@ end
     @test !isempty(indices)
 end
 
-@testset "InvestmentModel calculate_conflict=true detects infeasibility" begin
+@testset "Investment model calculate_conflict=true detects infeasibility" begin
     p_5bus, op_days = test_2_zone_portfolio()
     weights = [365 * 5, 365 * 5]
     periods = [
@@ -278,12 +278,12 @@ end
         BasicDispatchFeasibility,
     )
 
-    m = InvestmentModel{SingleInstanceSolve}(
+    m = DecisionModel{SingleInstanceSolve}(
         template,
         p_5bus;
         optimizer=HiGHS.Optimizer,
         calculate_conflict=true,
-        portfolio_to_file=false,
+        system_to_file=false,
         store_variable_names=true,
     )
 
@@ -340,7 +340,7 @@ end
         BasicDispatchFeasibility,
     )
 
-    model = InvestmentModel{SingleInstanceSolve}(
+    model = DecisionModel{SingleInstanceSolve}(
         template,
         p_hydro,
         nothing;
@@ -422,7 +422,7 @@ end
         BasicDispatchFeasibility,
     )
 
-    model = InvestmentModel{SingleInstanceSolve}(
+    model = DecisionModel{SingleInstanceSolve}(
         template,
         p_tight,
         nothing;
@@ -507,7 +507,7 @@ end
         BasicDispatchFeasibility,
     )
 
-    model = InvestmentModel{SingleInstanceSolve}(
+    model = DecisionModel{SingleInstanceSolve}(
         template,
         p_hydro,
         nothing;
@@ -643,11 +643,11 @@ end
         RequirementEnergyShare,
     )
 
-    m = InvestmentModel{SingleInstanceSolve}(
+    m = DecisionModel{SingleInstanceSolve}(
         template,
         p_5bus;
         optimizer=HiGHS.Optimizer,
-        portfolio_to_file=false,
+        system_to_file=false,
         store_variable_names=true,
     )
 

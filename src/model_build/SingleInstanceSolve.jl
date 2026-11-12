@@ -1,4 +1,4 @@
-function build_impl!(model::InvestmentModel{SingleInstanceSolve})
+function build_impl!(model::DecisionModel{SingleInstanceSolve})
     build_pre_step!(model)
 
     build_model!(

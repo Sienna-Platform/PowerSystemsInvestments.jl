@@ -69,11 +69,19 @@ function _show_method(io::IO, template::InvestmentModelTemplate, backend::Symbol
     return
 end
 
-function Base.show(io::IO, ::MIME"text/plain", input::InvestmentModel)
+function Base.show(
+    io::IO,
+    ::MIME"text/plain",
+    input::DecisionModel{<:AbstractInvestmentProblem},
+)
     _show_method(io, input.template, :auto)
 end
 
-function Base.show(io::IO, ::MIME"text/html", input::InvestmentModel)
+function Base.show(
+    io::IO,
+    ::MIME"text/html",
+    input::DecisionModel{<:AbstractInvestmentProblem},
+)
     _show_method(io, input.template, :html; stand_alone=false, table_format=tf_html_simple)
 end
 

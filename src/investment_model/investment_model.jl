@@ -1,10 +1,10 @@
-function build_impl!(::InvestmentModel{T}) where {T}
+function build_impl!(::DecisionModel{T}) where {T <: AbstractInvestmentProblem}
     error("Build not implemented for $T")
     return
 end
 
 function build_if_not_already_built!(
-    model::InvestmentModel{<:AbstractInvestmentProblem};
+    model::DecisionModel{<:AbstractInvestmentProblem};
     kwargs...,
 )
     status = get_status(model)
@@ -24,19 +24,37 @@ function build_if_not_already_built!(
     return
 end
 
-# Called by the InvestmentModel constructor. Operational time series are read per
+# Called by the DecisionModel constructor before the container is built. Investment
+# problems read the portfolio's static time series directly, so nothing is transformed.
+function IOM.prepare_time_series!(
+    ::Type{<:AbstractInvestmentProblem},
+    ::PSIP.Portfolio,
+    ::Settings,
+)
+    return IS.SingleTimeSeries
+end
+
+get_portfolio(model::DecisionModel{<:AbstractInvestmentProblem}) = get_system(model)
+
+# No Base Power for Portfolio models. Always in Natural Units.
+IOM.get_problem_base_power(::DecisionModel{<:AbstractInvestmentProblem}) = 1.0
+
+IOM.get_timestamps(model::DecisionModel{<:AbstractInvestmentProblem}) =
+    get_timestamps(get_time_mapping(get_optimization_container(model)))
+
+# Called by the DecisionModel constructor. Operational time series are read per
 # representative period during the build, so this only checks that there is data to read.
-function IOM.validate_time_series!(model::InvestmentModel{<:AbstractInvestmentProblem})
+function IOM.validate_time_series!(model::DecisionModel{<:AbstractInvestmentProblem})
     counts = IS.get_time_series_counts(get_portfolio(model).data)
     if counts.static_time_series_count < 1
         error(
-            "The portfolio does not contain any time series data. An InvestmentModel can't be built.",
+            "The portfolio does not contain any time series data. An investment model can't be built.",
         )
     end
     return
 end
 
-function init_model_store_params!(model::InvestmentModel)
+function init_model_store_params!(model::DecisionModel{<:AbstractInvestmentProblem})
     base_power = 1.0 # Investment Models should default to Natural Units
     port_uuid = IS.make_uuid()
     container = get_optimization_container(model)
@@ -59,7 +77,7 @@ function init_model_store_params!(model::InvestmentModel)
     return
 end
 
-function build_pre_step!(model::InvestmentModel)
+function build_pre_step!(model::DecisionModel{<:AbstractInvestmentProblem})
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Build pre-step" begin
         # TODO: add template validation
         #validate_template(model)
@@ -70,7 +88,7 @@ function build_pre_step!(model::InvestmentModel)
         end
         # Initial time are set here because the information is specified in the
         # Simulation Sequence object and not at the problem creation.
-        @info "Initializing Optimization Container For an InvestmentModel"
+        @info "Initializing Optimization Container For an investment model"
         container = get_optimization_container(model)
         IOM.init_optimization_container!(
             container,
@@ -89,14 +107,14 @@ Build the Investment Model.
 
 # Arguments
 
-    - `model::InvestmentModel{<:AbstractInvestmentProblem}`: InvestmentModel object
+    - `model::DecisionModel{<:AbstractInvestmentProblem}`: investment model object
     - `output_dir::String`: Output directory for results
     - `console_level = Logging.Error`:
     - `file_level = Logging.Info`:
     - `disable_timer_outputs = false` : Enable/Disable timing outputs
 """
 function build!(
-    model::InvestmentModel{<:AbstractInvestmentProblem};
+    model::DecisionModel{<:AbstractInvestmentProblem};
     output_dir::String,
     console_level=Logging.Error,
     file_level=Logging.Info,
@@ -122,7 +140,7 @@ function build!(
             catch e
                 set_status!(model, ModelBuildStatus.FAILED)
                 bt = catch_backtrace()
-                @error "InvestmentModel Build Failed" exception = e, bt
+                @error "Investment model build failed" exception = e, bt
             end
         end
     finally
@@ -132,12 +150,12 @@ function build!(
     return get_status(model)
 end
 
-function reset!(model::InvestmentModel{<:AbstractInvestmentProblem})
+function reset!(model::DecisionModel{<:AbstractInvestmentProblem})
     was_built_for_recurrent_solves = built_for_recurrent_solves(model)
     if was_built_for_recurrent_solves
         IOM.set_execution_count!(model, 0)
     end
-    port = IOM.get_portfolio(model)
+    port = get_portfolio(model)
     IOM.set_container!(
         get_internal(model),
         OptimizationContainer(port, get_settings(model), nothing, IS.SingleTimeSeries),
@@ -153,7 +171,7 @@ function reset!(model::InvestmentModel{<:AbstractInvestmentProblem})
 end
 
 function solve!(
-    model::InvestmentModel{<:AbstractInvestmentProblem};
+    model::DecisionModel{<:AbstractInvestmentProblem};
     export_problem_results=false,
     console_level=Logging.Error,
     file_level=Logging.Info,
@@ -226,7 +244,7 @@ function solve!(
     return get_run_status(model)
 end
 
-function solve_impl!(model::InvestmentModel)
+function solve_impl!(model::DecisionModel{<:AbstractInvestmentProblem})
     container = get_optimization_container(model)
     status = solve_model!(container, get_portfolio(model))
     set_run_status!(model, status)
@@ -247,10 +265,14 @@ function solve_impl!(model::InvestmentModel)
     return
 end
 
-read_dual(model::InvestmentModel, key::ConstraintKey) = _read_results(model, key)
-read_aux_variable(model::InvestmentModel, key::AuxVarKey) = _read_results(model, key)
-read_variable(model::InvestmentModel, key::VariableKey) = _read_results(model, key)
-read_expression(model::InvestmentModel, key::ExpressionKey) = _read_results(model, key)
+read_dual(model::DecisionModel{<:AbstractInvestmentProblem}, key::ConstraintKey) =
+    _read_results(model, key)
+read_aux_variable(model::DecisionModel{<:AbstractInvestmentProblem}, key::AuxVarKey) =
+    _read_results(model, key)
+read_variable(model::DecisionModel{<:AbstractInvestmentProblem}, key::VariableKey) =
+    _read_results(model, key)
+read_expression(model::DecisionModel{<:AbstractInvestmentProblem}, key::ExpressionKey) =
+    _read_results(model, key)
 
 function _read_col_name(axes)
     if length(axes) == 1
@@ -269,7 +291,10 @@ function _read_col_name(axes)
     end
 end
 
-function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
+function _read_results(
+    model::DecisionModel{<:AbstractInvestmentProblem},
+    key::OptimizationContainerKey,
+)
     arr = IOM.read_outputs(get_store(model), key)
     col_names = string.(_read_col_name(axes(arr)))
     df_wide = DataFrames.DataFrame(permutedims(arr.data), col_names)
@@ -282,31 +307,40 @@ function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
     )
 end
 
-read_optimizer_stats(model::InvestmentModel) = read_optimizer_stats(get_store(model))
+read_optimizer_stats(model::DecisionModel{<:AbstractInvestmentProblem}) =
+    read_optimizer_stats(get_store(model))
 
-list_aux_variable_keys(x::InvestmentModel) = list_keys(get_store(x), AuxVariableType)
-list_aux_variable_names(x::InvestmentModel) = _list_names(x, AuxVariableType)
-list_variable_keys(x::InvestmentModel) = list_keys(get_store(x), VariableType)
-list_variable_names(x::InvestmentModel) = _list_names(x, VariableType)
-list_dual_keys(x::InvestmentModel) = list_keys(get_store(x), ConstraintType)
-list_dual_names(x::InvestmentModel) = _list_names(x, ConstraintType)
-list_expression_keys(x::InvestmentModel) = list_keys(get_store(x), ExpressionType)
-list_expression_names(x::InvestmentModel) = _list_names(x, ExpressionType)
+list_aux_variable_keys(x::DecisionModel{<:AbstractInvestmentProblem}) =
+    list_keys(get_store(x), AuxVariableType)
+list_aux_variable_names(x::DecisionModel{<:AbstractInvestmentProblem}) =
+    _list_names(x, AuxVariableType)
+list_variable_keys(x::DecisionModel{<:AbstractInvestmentProblem}) =
+    list_keys(get_store(x), VariableType)
+list_variable_names(x::DecisionModel{<:AbstractInvestmentProblem}) =
+    _list_names(x, VariableType)
+list_dual_keys(x::DecisionModel{<:AbstractInvestmentProblem}) =
+    list_keys(get_store(x), ConstraintType)
+list_dual_names(x::DecisionModel{<:AbstractInvestmentProblem}) =
+    _list_names(x, ConstraintType)
+list_expression_keys(x::DecisionModel{<:AbstractInvestmentProblem}) =
+    list_keys(get_store(x), ExpressionType)
+list_expression_names(x::DecisionModel{<:AbstractInvestmentProblem}) =
+    _list_names(x, ExpressionType)
 
-function list_all_keys(x::InvestmentModel)
+function list_all_keys(x::DecisionModel{<:AbstractInvestmentProblem})
     return Iterators.flatten(
         keys(get_data_field(get_store(x), f)) for f in STORE_CONTAINERS
     )
 end
 
 function _list_names(
-    model::InvestmentModel,
+    model::DecisionModel{<:AbstractInvestmentProblem},
     container_type::Type{T},
 ) where {T <: OptimizationKeyType}
     return encode_keys_as_strings(list_keys(get_store(model), container_type))
 end
 
-function register_recorders!(model::InvestmentModel, file_mode)
+function register_recorders!(model::DecisionModel{<:AbstractInvestmentProblem}, file_mode)
     recorder_dir = get_recorder_dir(model)
     mkpath(recorder_dir)
     for name in get_recorders(get_internal(model))
@@ -314,7 +348,7 @@ function register_recorders!(model::InvestmentModel, file_mode)
     end
 end
 
-function unregister_recorders!(model::InvestmentModel)
+function unregister_recorders!(model::DecisionModel{<:AbstractInvestmentProblem})
     for name in get_recorders(get_internal(model))
         IS.unregister_recorder!(name)
     end
@@ -322,7 +356,7 @@ end
 
 const _JUMP_MODEL_FILENAME = "jump_model.json"
 
-function serialize_optimization_model(model::InvestmentModel)
+function serialize_optimization_model(model::DecisionModel{<:AbstractInvestmentProblem})
     serialize_optimization_model(
         get_optimization_container(model),
         joinpath(get_output_dir(model), _JUMP_MODEL_FILENAME),

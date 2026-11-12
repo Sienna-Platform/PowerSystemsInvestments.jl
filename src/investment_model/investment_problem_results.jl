@@ -1,4 +1,4 @@
-function OptimizationProblemOutputs(model::InvestmentModel)
+function OptimizationProblemOutputs(model::DecisionModel{<:AbstractInvestmentProblem})
     status = get_run_status(model)
     status != RunStatus.SUCCESSFULLY_FINALIZED &&
         error("problem was not solved successfully: $status")

@@ -3,7 +3,7 @@ module PowerSystemsInvestments
 ### Exports ###
 
 ### Base models ###
-export InvestmentModel
+export DecisionModel
 export InvestmentModelTemplate
 export TransportModel
 export OptimizationProblemOutputs
@@ -232,14 +232,13 @@ import InfrastructureOptimizationModels:
 # ---- Model, template, store, build/solve lifecycle ----
 import InfrastructureOptimizationModels:
     AbstractProblemTemplate,
-    InvestmentModel,
-    InvestmentModelStore,
+    DecisionModel,
     ModelStoreParams,
     Settings,
     get_internal,
     get_optimization_container,
     get_template,
-    get_portfolio,
+    get_system,
     get_store,
     get_store_params,
     set_store_params!,
