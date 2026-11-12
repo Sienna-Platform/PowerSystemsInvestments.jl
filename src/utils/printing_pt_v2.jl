@@ -69,6 +69,70 @@ function Base.show(io::IO, ::MIME"text/html", input::OptimizationProblemResults)
     _show_method(io, input, :html; standalone=false, tf=PrettyTables.tf_html_simple)
 end
 
+function Base.show(io::IO, ::MIME"text/plain", input::InvestmentProblemResults)
+    _show_method(io, input, :auto)
+end
+
+function Base.show(io::IO, ::MIME"text/html", input::InvestmentProblemResults)
+    _show_method(io, input, :html; standalone=false, tf=PrettyTables.tf_html_simple)
+end
+
+function _show_method(io::IO, results::InvestmentProblemResults, backend::Symbol; kwargs...)
+    time_mapping = get_time_mapping(results)
+    periods = get_investment_time_stamps(time_mapping)
+    if !isempty(periods)
+        header = ["Period", "Start", "End"]
+        table = Matrix{String}(undef, length(periods), length(header))
+        for (ix, (start_time, end_time)) in enumerate(periods)
+            table[ix, 1] = string(ix)
+            table[ix, 2] = string(start_time)
+            table[ix, 3] = string(end_time)
+        end
+        PrettyTables.pretty_table(
+            io,
+            table;
+            backend=Val(backend),
+            header=header,
+            title="Investment Periods ($(length(periods)))",
+            alignment=:l,
+            kwargs...,
+        )
+    end
+
+    slices = get_consecutive_slices(time_mapping)[get_operational_indexes(time_mapping)]
+    timestamps = get_time_stamps(time_mapping)
+    if !isempty(slices)
+        header = ["Slice", "Start", "End", "Timestamps", "Resolution"]
+        table = Matrix{String}(undef, length(slices), length(header))
+        for (ix, indexes) in enumerate(slices)
+            intervals = unique(diff(timestamps[indexes]))
+            resolution = if isempty(intervals)
+                "N/A (single timestamp)"
+            elseif length(intervals) == 1 && only(intervals) > Dates.Millisecond(0)
+                string(Dates.canonicalize(only(intervals)))
+            else
+                "Irregular"
+            end
+            table[ix, 1] = string(ix)
+            table[ix, 2] = string(timestamps[first(indexes)])
+            table[ix, 3] = string(timestamps[last(indexes)])
+            table[ix, 4] = string(length(indexes))
+            table[ix, 5] = resolution
+        end
+        println(io)
+        PrettyTables.pretty_table(
+            io,
+            table;
+            backend=Val(backend),
+            header=header,
+            title="Operational Slices ($(length(slices))), Timestamps ($(sum(length, slices)))",
+            alignment=:l,
+            kwargs...,
+        )
+    end
+    _show_method(io, OptimizationProblemResults(results), backend; kwargs...)
+end
+
 function _show_method(
     io::IO,
     results::T,

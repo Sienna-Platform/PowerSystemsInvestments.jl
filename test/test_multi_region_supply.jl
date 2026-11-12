@@ -55,6 +55,16 @@ function _test_multi_region_wind(model::InvestmentModel, region_names::Vector{St
         PSIN.get_variable(container, PSIN.ActivePowerVariable(), wind_type, "BasicDispatch")
     @test sort(axes(build)[1]) == sort(wind_names)
     @test sort(axes(dispatch)[1]) == sort(wind_names)
+    additions = PSIN.get_expression(
+        container,
+        PSIN.CapacityAdditions(),
+        wind_type,
+        "ContinuousInvestment",
+    )
+    @test sort(axes(additions)[1]) == sort(wind_names)
+    for t in PSIN.get_investment_time_steps(time_mapping), wind_name in wind_names
+        @test JuMP.coefficient(additions[wind_name, t], build[wind_name, t]) == 1.0
+    end
 
     balance = PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio)
     for t in PSIN.get_time_steps(time_mapping)

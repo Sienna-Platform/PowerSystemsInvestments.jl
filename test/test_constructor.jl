@@ -192,8 +192,8 @@ end
         [vre_model],
     )
 
-    # + CumulativeCapacity and WeightedEnergyGeneration for the wind supply tech.
-    @test length(container.expressions) == 5
+    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for wind.
+    @test length(container.expressions) == 6
     @test length(container.variables) == 2
 
     v = PSIN.get_variable(
@@ -245,8 +245,8 @@ end
         [thermal_model, thermal_model],
     )
 
-    # + CumulativeCapacity and WeightedEnergyGeneration for the thermal supply tech.
-    @test length(container.expressions) == 7
+    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for thermal.
+    @test length(container.expressions) == 9
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(

@@ -19,6 +19,9 @@ function construct_technologies!(
     add_variable!(container, BuildEnergyCapacity(), devices, B())
     add_variable!(container, BuildPowerCapacity(), devices, B())
 
+    add_expression!(container, PowerCapacityAdditions(), devices, B())
+    add_expression!(container, EnergyCapacityAdditions(), devices, B())
+
     # CumulativeCapacity expressions
     add_expression!(container, p, CumulativePowerCapacity(), devices, B())
     add_expression!(container, p, CumulativeEnergyCapacity(), devices, B())

@@ -463,7 +463,7 @@ function solve!(
                     end
                 end
                 TimerOutputs.@timeit RUN_OPERATION_MODEL_TIMER "Results processing" begin
-                    results = OptimizationProblemResults(model)
+                    results = InvestmentProblemResults(model)
                     serialize_results(results, get_output_dir(model))
                     export_problem_results && export_results(results)
                 end
