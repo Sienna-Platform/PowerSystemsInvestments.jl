@@ -108,8 +108,8 @@ function check_flow_variable_values(
     psi_cont = IOM.get_optimization_container(model)
     variable = PSIN.get_variable(psi_cont, T(), U)
     for var in variable[device_name, :]
-        if !(PSIN.jump_value(var) <= (limit + 1e-2))
-            @error "$device_name out of bounds $(PSIN.jump_value(var))"
+        if !(IOM.jump_value(var) <= (limit + 1e-2))
+            @error "$device_name out of bounds $(IOM.jump_value(var))"
             return false
         end
     end

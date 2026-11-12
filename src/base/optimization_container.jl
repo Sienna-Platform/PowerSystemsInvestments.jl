@@ -698,14 +698,6 @@ function compute_conflict!(container::OptimizationContainer)
 end
 
 """
-Exports the OpModel JuMP object in MathOptFormat
-"""
-function serialize_optimization_model(container::OptimizationContainer, save_path::String)
-    serialize_jump_optimization_model(get_jump_model(container), save_path)
-    return
-end
-
-"""
 Each Tuple corresponds to (con_name, internal_index, moi_index)
 """
 function get_all_variable_index(container::OptimizationContainer)
