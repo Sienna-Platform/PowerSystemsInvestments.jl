@@ -54,7 +54,7 @@ function IOM.validate_time_series!(model::DecisionModel{<:AbstractInvestmentProb
     return
 end
 
-function init_model_store_params!(model::DecisionModel{<:AbstractInvestmentProblem})
+function IOM.init_model_store_params!(model::DecisionModel{<:AbstractInvestmentProblem})
     base_power = 1.0 # Investment Models should default to Natural Units
     port_uuid = IS.make_uuid()
     container = get_optimization_container(model)
@@ -76,6 +76,45 @@ function init_model_store_params!(model::DecisionModel{<:AbstractInvestmentProbl
     set_store_params!(get_internal(model), store_params)
     return
 end
+
+"""
+Allocate the output store of an investment model. Outputs are indexed by the time
+mapping's base date. Each output gets one row per entry of the last axis of its container
+(operational time steps, investment periods, representative periods, ...), which is the
+shape `write_output!` stores it in.
+"""
+function IOM.initialize_storage!(model::DecisionModel{<:AbstractInvestmentProblem})
+    store = get_store(model)
+    container = get_optimization_container(model)
+    time_mapping = get_time_mapping(container)
+    if isempty(get_time_steps(time_mapping))
+        error("The time step count in the optimization container is not defined")
+    end
+    base_timestamp = Dates.DateTime(get_base_date(time_mapping))
+    for type in STORE_CONTAINERS
+        # Investment models have no parameters to store.
+        type == :parameters && continue
+        field_containers = getfield(container, type)
+        outputs_container = getfield(store, type)
+        for (key, field_container) in field_containers
+            !should_write_resulting_value(get_entry_type(key)) && continue
+            count = _storage_row_count(field_container)
+            column_names = IOM.get_column_names_from_axis_array(key, field_container)
+            data = valtype(outputs_container)()
+            data[base_timestamp] =
+                fill!(DenseAxisArray{Float64}(undef, column_names..., 1:count), NaN)
+            outputs_container[key] = data
+        end
+    end
+    return
+end
+
+_storage_row_count(array::DenseAxisArray) = length(last(axes(array)))
+# Rows are the distinct values of the last index, as in IOM's sparse `write_output!`.
+_storage_row_count(array::SparseAxisArray{T, N}) where {T, N} =
+    length(Set(k[N] for k in keys(array.data)))
+_storage_row_count(array) =
+    error("Can't size storage for an output of type $(typeof(array)).")
 
 function build_pre_step!(model::DecisionModel{<:AbstractInvestmentProblem})
     TimerOutputs.@timeit BUILD_PROBLEMS_TIMER "Build pre-step" begin
@@ -197,11 +236,7 @@ function solve!(
     try
         Logging.with_logger(logger) do
             try
-                initialize_storage!(
-                    get_store(model),
-                    get_optimization_container(model),
-                    get_store_params(model),
-                )
+                initialize_storage!(model)
                 TimerOutputs.@timeit RUN_OPERATION_MODEL_TIMER "Solve" begin
                     @warn "todo: add pre-solve model check back in"
                     #_pre_solve_model_checks(model, optimizer)
@@ -274,21 +309,17 @@ read_variable(model::DecisionModel{<:AbstractInvestmentProblem}, key::VariableKe
 read_expression(model::DecisionModel{<:AbstractInvestmentProblem}, key::ExpressionKey) =
     _read_results(model, key)
 
+# The first axis holds the column names: 2-D outputs are (names, time index) and 1-D
+# outputs (no time axis) are a vector over names, read back as a single row.
 function _read_col_name(axes)
     if length(axes) == 1
-        error("Axes of size 1 are not supported")
+        axes[1] isa Vector{String} && return axes[1]
+        error("1-D outputs must be indexed by names, not $(typeof(axes[1]))")
     end
-    # Currently, variables that don't have timestamps have a dummy axes to keep
-    # two axes in the Store (HDF or Memory). This if-else is used to decide if a
-    # dummy axes is being used or not.
-    if typeof(axes[2]) <: UnitRange{Int}
+    if axes[2] isa UnitRange{Int}
         return axes[1]
-    elseif typeof(axes[2]) <: Vector{String}
-        IS.@assert_op length(axes[1]) == 1
-        return axes[2]
-    else
-        error("Second axes in store is not allowed to be $(typeof(axes[2]))")
     end
+    error("Second axes in store is not allowed to be $(typeof(axes[2]))")
 end
 
 function _read_results(

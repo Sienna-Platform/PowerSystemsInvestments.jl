@@ -242,6 +242,7 @@ import InfrastructureOptimizationModels:
     get_store,
     get_store_params,
     set_store_params!,
+    init_model_store_params!,
     initialize_storage!,
     init_optimization_container!,
     built_for_recurrent_solves,

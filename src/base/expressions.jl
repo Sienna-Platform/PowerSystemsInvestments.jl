@@ -42,18 +42,3 @@ should_write_resulting_value(::Type{WeightedEnergyGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyDemand}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareGeneration}) = true
 should_write_resulting_value(::Type{WeightedEnergyShareDemand}) = true
-
-# Operation vs investment entry classification (see variables.jl)
-is_operation_entry(::Type{<:OperationsExpressionType}) = true
-is_operation_entry(::Type{<:InvestmentExpressionType}) = false
-
-is_investment_entry(::Type{<:OperationsExpressionType}) = false
-is_investment_entry(::Type{<:InvestmentExpressionType}) = true
-
-function _unclassified_entry_error(::Type{T}) where {T <: ExpressionType}
-    error(
-        "Expression type $T is neither an OperationsExpressionType nor an " *
-        "InvestmentExpressionType. Expressions in an investment problem must subtype " *
-        "one of the two.",
-    )
-end

@@ -86,6 +86,39 @@
     )
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) == IOM.ModelBuildStatus.BUILT
+
+    # Callers going through IOM's generic function get the investment store params:
+    # natural units and one horizon step per time-mapping time step.
+    IOM.init_model_store_params!(m)
+    params = IOM.get_store_params(m)
+    @test IOM.get_base_power(params) == 1.0
+    @test IOM.get_horizon_count(params) == 48
+
+    # Storage is indexed by the time mapping's base date and each output gets one row per
+    # entry of its container's last axis: operational time steps (2 days x 24 h) for
+    # dispatch, investment periods (2) for builds.
+    IOM.initialize_storage!(m)
+    store = IOM.get_store(m)
+    container = IOM.get_optimization_container(m)
+    tm = IOM.get_time_mapping(container)
+    base_ts = DateTime(IOM.get_base_date(tm))
+    @test base_ts == DateTime(2030, 1, 1)
+    @test !isempty(store.variables)
+    row_counts = Set{Int}()
+    for (store_field, container_field) in (
+            (store.variables, IOM.get_variables(container)),
+            (store.expressions, IOM.get_expressions(container)),
+        ),
+        (key, data) in store_field
+
+        @test collect(keys(data)) == [base_ts]
+        rows = size(data[base_ts])[end]
+        @test rows == length(last(axes(container_field[key])))
+        push!(row_counts, rows)
+    end
+    @test 48 in row_counts
+    @test 2 in row_counts
+
     # @show m.internal.container.expressions
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
