@@ -33,3 +33,16 @@ function investment_period_annuity_factor(discount_rate::Float64, inv_tuple)
     discount_factor = 1.0 / (1.0 + discount_rate)
     return sum(discount_factor^k for k in 0:(num_years - 1))
 end
+
+# Present value in the base year of one unit paid at the start of each year of an investment
+# period. The payments are valued at the start of the period and discounted from its first
+# year, whatever the dates of the representative periods that stand for it.
+function investment_period_present_value_factor(
+    discount_rate::Float64,
+    base_year::Int,
+    inv_tuple,
+)
+    start_year = Dates.value(Dates.Year(inv_tuple[1]))
+    return investment_period_annuity_factor(discount_rate, inv_tuple) /
+           (1.0 + discount_rate)^(start_year - base_year)
+end

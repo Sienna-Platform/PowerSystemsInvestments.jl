@@ -1334,3 +1334,72 @@ end
               unit_size .* raw_builds.value
     end
 end
+
+@testset "Operation costs are discounted from the start of the investment period" begin
+    # The first investment period starts in 2028, but its representative day is in 2030.
+    # Its annual operation costs are valued at the start of 2028 and discounted from there.
+    p_5bus, op_days = test_2_zone_portfolio()
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    periods = [
+        (Date(Month(1), Year(2028)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{DateTime}}()),
+        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal"],
+        thermal_type,
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    r = PSIN.get_discount_rate(container)
+    base_year = PSIN.get_base_year(container)
+    thermal = PSIP.get_technology(thermal_type, p_5bus, "cheap_thermal")
+    cost_per_mwh = PSY.get_proportional_term(
+        PSY.get_value_curve(PSY.get_variable(PSIP.get_operation_costs(thermal))),
+    )
+    tech_base_year = PSIP.get_technology_base_year(PSIP.get_financial_data(thermal))
+    dollars_to_base_year =
+        (1.0 + PSIN.get_inflation_rate(container))^(-(tech_base_year - base_year))
+    # Seven annual payments, 2028 to 2034, valued at the start of 2028
+    annuity = sum((1.0 + r)^(-k) for k in 0:6)
+    expected =
+        cost_per_mwh * dollars_to_base_year * 365 * annuity / (1.0 + r)^(2028 - base_year)
+
+    dispatch = PSIN.get_variable(
+        container,
+        PSIN.ActivePowerVariable(),
+        thermal_type,
+        "BasicDispatch",
+    )
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    for t in (1, 12, 24)
+        @test JuMP.coefficient(objective, dispatch["cheap_thermal", t]) ≈ expected
+    end
+end
