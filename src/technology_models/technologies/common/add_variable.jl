@@ -10,8 +10,10 @@ get_variable_multiplier(::InvestmentVariableType, ::PSIP.Technology, ::Investmen
 #! format: on
 
 """
-Capacity added by one unit of a discrete investment variable. It must be positive, otherwise
-the investment would not add any capacity.
+Capacity (MW) added by one unit of an investment variable. It must be positive, otherwise
+the investment would not add any capacity. It is the technology's unit size only for discrete
+formulations; continuous investment variables are already in MW, so it is 1.0 for them
+whatever the unit size in the data.
 """
 function get_unit_size(
     variable_type::InvestmentVariableType,

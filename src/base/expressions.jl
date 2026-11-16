@@ -37,6 +37,9 @@ struct VariableOMCost <: OperationsExpressionType end
 
 struct FeasibilitySurplus <: FeasibilityExpressionType end
 
+# Capacity of the branches connected to a region, which can import over them
+struct FeasibilityImportCapacity <: FeasibilityExpressionType end
+
 should_write_resulting_value(::Type{CapacityAdditions}) = true
 should_write_resulting_value(::Type{PowerCapacityAdditions}) = true
 should_write_resulting_value(::Type{EnergyCapacityAdditions}) = true

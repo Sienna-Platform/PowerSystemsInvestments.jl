@@ -1107,8 +1107,17 @@ end
     @test isapprox(wesd_1, weight_1 * total_demand_2030; atol=1e-2)
 end
 
-function _build_thermal_investment_model(investment_formulation)
+function _build_thermal_investment_model(investment_formulation; min_capacity=nothing)
     p_5bus, op_days = test_2_zone_portfolio()
+    if !isnothing(min_capacity)
+        thermal = PSIP.get_technology(
+            PSIP.SupplyTechnology{PSY.ThermalStandard},
+            p_5bus,
+            "expensive_thermal",
+        )
+        max_capacity = PSIP.get_capacity_limits(thermal).max
+        PSIP.set_capacity_limits!(thermal, (min=min_capacity, max=max_capacity))
+    end
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -1228,6 +1237,55 @@ end
         thermal,
         IntegerInvestment(),
     )
+end
+
+@testset "Minimum cumulative capacity" begin
+    # "expensive_thermal" has no existing capacity and units of 75 MW. Its minimum is more than
+    # the system needs, and applies to its total capacity in every period, not to what it
+    # builds in each period.
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    min_capacity = 3000.0
+    for (formulation, mw_per_unit) in
+        ((ContinuousInvestment, 1.0), (IntegerInvestment, 75.0))
+        m, _ = _build_thermal_investment_model(formulation; min_capacity=min_capacity)
+        container = PSIN.get_optimization_container(m)
+        meta = string(formulation)
+        build = PSIN.get_variable(container, PSIN.BuildCapacity(), thermal_type, meta)
+        min_cap = PSIN.get_constraint(
+            container,
+            PSIN.MinimumCumulativeCapacity(),
+            thermal_type,
+            meta,
+        )
+        @test axes(min_cap)[1] == ["expensive_thermal"]
+        for t in PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+            @test JuMP.lower_bound(build["expensive_thermal", t]) == 0.0
+            @test JuMP.normalized_rhs(min_cap["expensive_thermal", t]) == min_capacity
+            @test JuMP.normalized_coefficient(
+                min_cap["expensive_thermal", t],
+                build["expensive_thermal", 1],
+            ) == mw_per_unit
+        end
+
+        @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        capacity = filter(
+            r -> r.name == "expensive_thermal",
+            read_expression(m, PSIN.ExpressionKey(CumulativeCapacity, thermal_type, meta)),
+        )
+        @test all(capacity.value .>= min_capacity - 1e-6)
+        builds =
+            sort!(
+                filter(
+                    r -> r.name == "expensive_thermal",
+                    read_variable(m, PSIN.VariableKey(BuildCapacity, thermal_type, meta)),
+                ),
+                :time_index,
+            ).value
+        # The capacity built in the first period also counts in the second, so nothing else
+        # has to be built.
+        @test builds[2] ≈ 0.0 atol = 1e-6
+        @test builds[1] * mw_per_unit >= min_capacity - 1e-6
+    end
 end
 
 @testset "Storage technology with IntegerInvestment" begin

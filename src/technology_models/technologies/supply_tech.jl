@@ -5,10 +5,8 @@ _supported_investment_formulations(::Type{<:PSIP.SupplyTechnology}) = (Continuou
 get_variable_lower_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = 0.0
 get_variable_upper_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = nothing
 get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
-get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).min
-# Discrete investments count units, so the limits in MW do not apply to the variable
+# Discrete investments count units, so the limit in MW does not apply to the variable
 get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = nothing
-get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = 0.0
 
 get_variable_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 get_expression_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
@@ -288,30 +286,34 @@ function add_to_expression!(
     return
 end
 
+# The installed capacity counts toward the feasibility surplus. It is the cumulative capacity
+# of the investment formulation of each technology.
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::S,
     transport_model::TransportModel{V},
+    tech_model_vector::Vector{X},
 ) where {
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Vector{D},
     V <: SingleRegionBalanceModel,
+    X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
-    tech_model = string(S)
 
     W = CumulativeCapacity
-    installed_cap = get_expression(container, W(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
 
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    for d in devices, name in get_variable_names(d)
+    for (ix, d) in enumerate(devices), name in get_variable_names(d)
+        inv_model = string(get_investment_formulation(tech_model_vector[ix]))
+        installed_cap = get_expression(container, W(), D, inv_model)
         for op_ix in feasibility_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
@@ -328,30 +330,33 @@ function add_to_expression!(
     return
 end
 
+# Each region, zone or node, counts the capacity installed in it
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::S,
     transport_model::TransportModel{V},
+    tech_model_vector::Vector{X},
 ) where {
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Vector{D},
-    V <: MultiRegionBalanceModel,
+    V <: Union{MultiRegionBalanceModel, NodalBalanceModel},
+    X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
-    tech_model = string(S)
 
     W = CumulativeCapacity
-    installed_cap = get_expression(container, W(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
 
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    for d in devices, (name, region) in get_variable_names_and_regions(d)
+    for (ix, d) in enumerate(devices), (name, region) in get_variable_names_and_regions(d)
+        inv_model = string(get_investment_formulation(tech_model_vector[ix]))
+        installed_cap = get_expression(container, W(), D, inv_model)
         for op_ix in feasibility_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
@@ -476,6 +481,45 @@ function add_constraints!(
                 )
             end
         end
+    end
+    return
+end
+
+# Minimum cumulative capacity, in MW, for the technologies with a minimum capacity limit
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+) where {
+    T <: MinimumCumulativeCapacity,
+    S <: InvestmentTechnologyFormulation,
+    U <: Vector{D},
+    V <: CumulativeCapacity,
+} where {D <: PSIP.SupplyTechnology}
+    limited_devices = filter(d -> PSIP.get_capacity_limits(d).min > 0.0, devices)
+    if isempty(limited_devices)
+        return
+    end
+    time_steps = get_investment_time_steps(get_time_mapping(container))
+    tech_model = string(S)
+    con_lb = add_constraints_container!(
+        container,
+        T(),
+        D,
+        PSIP.get_name.(limited_devices),
+        time_steps,
+        meta=tech_model,
+    )
+    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
+    for d in limited_devices, t in time_steps
+        name = PSIP.get_name(d)
+        con_lb[name, t] = JuMP.@constraint(
+            get_jump_model(container),
+            sum(installed_cap[n, t] for n in get_variable_names(d)) >=
+            PSIP.get_capacity_limits(d).min
+        )
     end
     return
 end
