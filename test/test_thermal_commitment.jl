@@ -169,13 +169,13 @@
 end
 
 # Single region model where the thermal technologies use the commitment formulation and
-# "expensive_thermal" has the given operation cost.
-function _commitment_cost_test_model(operation_cost)
+# "expensive_thermal" has the given operation cost and minimum up and down times.
+function _commitment_cost_test_model(operation_cost; time_limits=(up=3.0, down=2.0))
     thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
     p_5bus, op_days = test_2_zone_portfolio()
     thermal = PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal")
     PSIP.set_operation_costs!(thermal, operation_cost)
-    PSIP.set_time_limits!(thermal, (up=3.0, down=2.0))
+    PSIP.set_time_limits!(thermal, time_limits)
     PSIP.set_min_generation_fraction!(thermal, 0.35)
 
     periods = [
@@ -345,6 +345,62 @@ end
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 end
 
+@testset "Minimum up and down times longer than the representative period" begin
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    name = "expensive_thermal"
+    # Representative days have 24 hourly time steps. A 30-hour up time covers the day once
+    # plus 6 more steps, and a 50-hour down time covers it twice plus 2 more steps.
+    m = _commitment_cost_test_model(
+        ThermalGenerationCost(;
+            variable=CostCurve(LinearCurve(30.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        );
+        time_limits=(up=30.0, down=50.0),
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    meta = string(ContinuousThermalCommitment)
+    variable(variable_type) =
+        PSIN.get_variable(container, variable_type, thermal_type, meta)
+    constraint(constraint_type) =
+        PSIN.get_constraint(container, constraint_type, thermal_type, meta)
+    start_up = variable(PSIN.StartUpCapacityVariable())
+    shut_down = variable(PSIN.ShutDownCapacityVariable())
+    coefficient = JuMP.normalized_coefficient
+
+    # The start ups of the time step and the 5 before it are in the window twice, the rest of
+    # the day once.
+    min_up = constraint(PSIN.MinimumUpTimeConstraint())
+    for t in 5:10
+        @test coefficient(min_up[name, 10], start_up[name, t]) == -2.0
+    end
+    for t in (4, 11, 24)
+        @test coefficient(min_up[name, 10], start_up[name, t]) == -1.0
+    end
+    # The window of the first time step wraps to the end of the day.
+    for t in (1, 24, 20)
+        @test coefficient(min_up[name, 1], start_up[name, t]) == -2.0
+    end
+    @test coefficient(min_up[name, 1], start_up[name, 19]) == -1.0
+    # Time steps of the second representative day only cover that day.
+    @test coefficient(min_up[name, 30], start_up[name, 30]) == -2.0
+    @test coefficient(min_up[name, 30], start_up[name, 10]) == 0.0
+
+    min_down = constraint(PSIN.MinimumDownTimeConstraint())
+    for t in (1, 24)
+        @test coefficient(min_down[name, 1], shut_down[name, t]) == 3.0
+    end
+    for t in (2, 23)
+        @test coefficient(min_down[name, 1], shut_down[name, t]) == 2.0
+    end
+
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+end
+
 @testset "Start-up costs by stages are not supported" begin
     m = _commitment_cost_test_model(
         ThermalGenerationCost(;
@@ -354,6 +410,6 @@ end
             shut_down=0.0,
         ),
     )
-    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
-          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+    build_log = build_expecting_failure(m)
+    @test occursin("defines its start-up cost by stages", build_log)
 end

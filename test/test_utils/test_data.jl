@@ -8,6 +8,11 @@ using Dates
 const PSIP = PowerSystemsInvestmentsPortfolios
 const IS = InfrastructureSystems
 
+function next_region_id(portfolio::PSIP.Portfolio)
+    regions = PSIP.get_regions(PSIP.RegionTopology, portfolio)
+    return maximum(PSIP.get_id(r) for r in regions; init=0) + 1
+end
+
 function test_2_zone_portfolio()
     ########################
     #### Financial Data ####

@@ -587,14 +587,32 @@ function get_availability(d::PSIP.SupplyTechnology)
     return (1.0 - outage_factors.forced) * (1.0 - outage_factors.planned)
 end
 
-# Number of time steps of the representative period covered by a minimum up or down time,
-# rounded up and at least one
+# Number of time steps covered by a minimum up or down time, rounded up and at least one.
+# It can be longer than the representative period.
 function get_commitment_time_steps(time_mapping::TimeMapping, op_ix::Int, duration::Float64)
     num_time_steps = ceil(
         Int,
         duration / get_time_step_length(time_mapping, op_ix) - TIME_STEP_COUNT_TOLERANCE,
     )
-    return clamp(num_time_steps, 1, length(get_consecutive_slices(time_mapping)[op_ix]))
+    return max(num_time_steps, 1)
+end
+
+# Sum of a variable over the `num_time_steps` time steps ending at `t`. Representative periods
+# are cyclic, so a window longer than the period counts each time step once per repetition.
+function get_cyclic_window_sum(var, name, time_mapping, op_ix, t, num_time_steps)
+    time_slices = get_consecutive_slices(time_mapping)[op_ix]
+    full_periods, partial = divrem(num_time_steps, length(time_slices))
+    window_sum = JuMP.AffExpr(0.0)
+    if full_periods > 0
+        for s in time_slices
+            JuMP.add_to_expression!(window_sum, full_periods, var[name, s])
+        end
+    end
+    for i in 0:(partial - 1)
+        s = get_previous_time_step(time_mapping, op_ix, t, i)
+        JuMP.add_to_expression!(window_sum, var[name, s])
+    end
+    return window_sum
 end
 
 # Dispatch of the committed capacity is between its minimum output and its full output
@@ -735,11 +753,13 @@ function add_constraints!(
             for t in consecutive_slices[op_ix]
                 con_up[name, t] = JuMP.@constraint(
                     get_jump_model(container),
-                    committed_cap[name, t] >= sum(
-                        start_up_cap[
-                            name,
-                            get_previous_time_step(time_mapping, op_ix, t, i),
-                        ] for i in 0:(num_time_steps - 1)
+                    committed_cap[name, t] >= get_cyclic_window_sum(
+                        start_up_cap,
+                        name,
+                        time_mapping,
+                        op_ix,
+                        t,
+                        num_time_steps,
                     )
                 )
             end
@@ -791,11 +811,14 @@ function add_constraints!(
                 con_down[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     committed_cap[name, t] <=
-                    availability * installed_cap[name, time_step_inv] - sum(
-                        shut_down_cap[
-                            name,
-                            get_previous_time_step(time_mapping, op_ix, t, i),
-                        ] for i in 0:(num_time_steps - 1)
+                    availability * installed_cap[name, time_step_inv] -
+                    get_cyclic_window_sum(
+                        shut_down_cap,
+                        name,
+                        time_mapping,
+                        op_ix,
+                        t,
+                        num_time_steps,
                     )
                 )
             end

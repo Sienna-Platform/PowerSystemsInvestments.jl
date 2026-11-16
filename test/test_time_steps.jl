@@ -51,14 +51,13 @@ end
     @test PSIN.get_previous_time_step(two_hourly, 2, 14, 0) == 14
     @test PSIN.get_previous_time_step(mixed, 2, 49) == 49
 
-    # Minimum up and down times are rounded up to a whole number of time steps, at least one
-    # and at most the length of the period.
+    # Minimum up and down times are rounded up to a whole number of time steps, at least one.
     @test PSIN.get_commitment_time_steps(hourly, 1, 3.0) == 3
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 3.0) == 2
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 4.0) == 2
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 0.5) == 1
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 0.0) == 1
-    @test PSIN.get_commitment_time_steps(two_hourly, 1, 100.0) == 12
+    @test PSIN.get_commitment_time_steps(two_hourly, 1, 100.0) == 50
     # Exact multiples of the time step do not round up an extra step.
     @test PSIN.get_commitment_time_steps(mixed, 1, 0.9 + 0.6) == 3
 end

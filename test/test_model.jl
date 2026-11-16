@@ -328,7 +328,12 @@ end
     balance_con = PSIN.get_constraints(container)[balance_key]
     JuMP.set_normalized_rhs(first(balance_con), 1e18)
 
-    @test solve!(m; export_optimization_problem=false) == PSIN.RunStatus.FAILED
+    # The failure is expected, so neither the logged errors nor the solver's conflict search
+    # are printed to the console.
+    status = redirect_stdout(devnull) do
+        solve!(m; export_optimization_problem=false, console_level=Logging.AboveMaxLevel)
+    end
+    @test status == PSIN.RunStatus.FAILED
     conflict = get_infeasibility_conflict(container)
     @test !isempty(conflict)
 
