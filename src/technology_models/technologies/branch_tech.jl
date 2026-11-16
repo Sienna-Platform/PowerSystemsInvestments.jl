@@ -30,6 +30,8 @@ get_variable_upper_bound(
 
 get_max_cap(d::PSIP.TransmissionTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d).max
 
+_arc(d::PSIP.AggregateTransportTechnology) = (PSIP.get_name(PSIP.get_start_region(d)), PSIP.get_name(PSIP.get_end_region(d)))
+_arc(d::PSIP.TransmissionTechnology) = (PSIP.get_name(PSIP.get_start_node(d)), PSIP.get_name(PSIP.get_end_node(d)))
 #! format: on
 
 function get_default_attributes(
@@ -153,6 +155,43 @@ function add_to_expression!(
         )
     end
 
+    return
+end
+
+# Either end of a branch can import over its cumulative capacity in the feasibility periods
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    devices::U,
+    formulation::S,
+    transport_model::TransportModel{V},
+    tech_model_vector::Vector{X},
+) where {
+    T <: FeasibilityImportCapacity,
+    S <: BasicDispatchFeasibility,
+    U <: Vector{D},
+    V <: Union{MultiRegionBalanceModel, NodalBalanceModel},
+    X <: TechnologyModel,
+} where {D <: PSIP.TransmissionTechnology}
+    IS.@assert_op length(devices) > 0
+    time_mapping = get_time_mapping(container)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    for (ix, d) in enumerate(devices)
+        name = PSIP.get_name(d)
+        inv_model = string(get_investment_formulation(tech_model_vector[ix]))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        for op_ix in get_feasibility_indexes(time_mapping), t in consecutive_slices[op_ix]
+            for region in _arc(d)
+                _add_to_jump_expression!(
+                    expression[region, t],
+                    installed_cap[name, inverse_invest_mapping[op_ix]],
+                    1.0,
+                )
+            end
+        end
+    end
     return
 end
 

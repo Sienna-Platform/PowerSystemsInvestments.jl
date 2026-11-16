@@ -294,7 +294,7 @@ function add_to_expression!(
 ) where {
     T <: FeasibilitySurplus,
     U <: Vector{D},
-    V <: MultiRegionBalanceModel,
+    V <: Union{MultiRegionBalanceModel, NodalBalanceModel},
 } where {D <: PSIP.DemandRequirement}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)

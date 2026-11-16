@@ -636,6 +636,8 @@ function _make_system_expressions!(
             _make_container_array(regions, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
+        ExpressionKey(FeasibilityImportCapacity, PSIP.Portfolio) =>
+            _make_container_array(regions, time_steps),
         ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) =>
             _make_container_array(regions, operational_indexes),
     )
@@ -655,6 +657,8 @@ function _make_system_expressions!(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
+            _make_container_array(nodes, time_steps),
+        ExpressionKey(FeasibilityImportCapacity, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
         ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) =>
             _make_container_array(nodes, operational_indexes),
