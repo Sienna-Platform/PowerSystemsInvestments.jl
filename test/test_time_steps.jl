@@ -340,59 +340,61 @@ end
     m_two_hourly = _time_step_test_model(2, ContinuousThermalCommitment)
     hourly = PSIN.get_optimization_container(m_hourly)
     two_hourly = PSIN.get_optimization_container(m_two_hourly)
-    variable(container, variable_type) =
-        PSIN.get_variable(container, variable_type, thermal_type, meta)["gas", 1]
+    # Entries of "gas" at time step t (1 unless given)
+    variable(container, variable_type, t=1) =
+        PSIN.get_variable(container, variable_type, thermal_type, meta)["gas", t]
     constraint(container, constraint_type, constraint_meta=meta) =
-        PSIN.get_constraint(container, constraint_type, thermal_type, constraint_meta)
+        PSIN.get_constraint(container, constraint_type, thermal_type, constraint_meta)[
+            "gas",
+            1,
+        ]
+    fuel(container) =
+        PSIN.get_expression(container, FuelConsumptionExpression(), thermal_type, meta)[
+            "gas",
+            1,
+        ]
     objective_coefficient(container, variable_type) = JuMP.coefficient(
         JuMP.objective_function(PSIN.get_jump_model(container)),
         variable(container, variable_type),
     )
-    fuel(container) =
-        PSIN.get_expression(container, FuelConsumptionExpression(), thermal_type, meta)
     coefficient = JuMP.normalized_coefficient
+    committed = PSIN.CommittedCapacityVariable()
+    start_up = PSIN.StartUpCapacityVariable()
+    shut_down = PSIN.ShutDownCapacityVariable()
 
     # Dispatch and the no-load cost of committed capacity are per hour, so they cost twice as
     # much during a 2-hour time step. Start-up and shut-down costs are per event.
-    for variable_type in (PSIN.ActivePowerVariable(), PSIN.CommittedCapacityVariable())
+    for variable_type in (PSIN.ActivePowerVariable(), committed)
         @test objective_coefficient(two_hourly, variable_type) ≈
               2.0 * objective_coefficient(hourly, variable_type)
     end
-    for variable_type in (PSIN.StartUpCapacityVariable(), PSIN.ShutDownCapacityVariable())
+    for variable_type in (start_up, shut_down)
         @test objective_coefficient(hourly, variable_type) > 0.0
         @test objective_coefficient(two_hourly, variable_type) ≈
               objective_coefficient(hourly, variable_type)
     end
 
     # No-load fuel is burned per hour committed, start-up fuel once per MW started.
-    committed(container) = variable(container, PSIN.CommittedCapacityVariable())
-    start_up(container) = variable(container, PSIN.StartUpCapacityVariable())
-    @test JuMP.coefficient(fuel(hourly)["gas", 1], committed(hourly)) == 1.5
-    @test JuMP.coefficient(fuel(two_hourly)["gas", 1], committed(two_hourly)) == 3.0
-    @test JuMP.coefficient(fuel(hourly)["gas", 1], start_up(hourly)) == 3.0
-    @test JuMP.coefficient(fuel(two_hourly)["gas", 1], start_up(two_hourly)) == 3.0
+    @test JuMP.coefficient(fuel(hourly), variable(hourly, committed)) == 1.5
+    @test JuMP.coefficient(fuel(two_hourly), variable(two_hourly, committed)) == 3.0
+    @test JuMP.coefficient(fuel(hourly), variable(hourly, start_up)) == 3.0
+    @test JuMP.coefficient(fuel(two_hourly), variable(two_hourly, start_up)) == 3.0
 
     # Committed capacity can ramp by 0.3 of its capacity per hour.
     ramp_up(container) = constraint(container, PSIN.RampRateConstraint(), "$(meta)_up")
-    @test coefficient(ramp_up(hourly)["gas", 1], committed(hourly)) ≈ -0.3
-    @test coefficient(ramp_up(two_hourly)["gas", 1], committed(two_hourly)) ≈ -0.6
+    @test coefficient(ramp_up(hourly), variable(hourly, committed)) ≈ -0.3
+    @test coefficient(ramp_up(two_hourly), variable(two_hourly, committed)) ≈ -0.6
 
     # The 4-hour minimum up time covers 4 hourly time steps or 2 time steps of 2 hours, and
     # the 2-hour minimum down time covers 2 hourly time steps or a single time step.
-    start_ups(container) =
-        PSIN.get_variable(container, PSIN.StartUpCapacityVariable(), thermal_type, meta)
-    shut_downs(container) =
-        PSIN.get_variable(container, PSIN.ShutDownCapacityVariable(), thermal_type, meta)
     min_up(container) = constraint(container, PSIN.MinimumUpTimeConstraint())
     min_down(container) = constraint(container, PSIN.MinimumDownTimeConstraint())
-    @test coefficient(min_up(hourly)["gas", 1], start_ups(hourly)["gas", 22]) == -1.0
-    @test coefficient(min_up(hourly)["gas", 1], start_ups(hourly)["gas", 21]) == 0.0
-    @test coefficient(min_up(two_hourly)["gas", 1], start_ups(two_hourly)["gas", 12]) ==
-          -1.0
-    @test coefficient(min_up(two_hourly)["gas", 1], start_ups(two_hourly)["gas", 11]) == 0.0
-    @test coefficient(min_down(hourly)["gas", 1], shut_downs(hourly)["gas", 24]) == 1.0
-    @test coefficient(min_down(two_hourly)["gas", 1], shut_downs(two_hourly)["gas", 12]) ==
-          0.0
+    @test coefficient(min_up(hourly), variable(hourly, start_up, 22)) == -1.0
+    @test coefficient(min_up(hourly), variable(hourly, start_up, 21)) == 0.0
+    @test coefficient(min_up(two_hourly), variable(two_hourly, start_up, 12)) == -1.0
+    @test coefficient(min_up(two_hourly), variable(two_hourly, start_up, 11)) == 0.0
+    @test coefficient(min_down(hourly), variable(hourly, shut_down, 24)) == 1.0
+    @test coefficient(min_down(two_hourly), variable(two_hourly, shut_down, 12)) == 0.0
 
     @test solve!(m_hourly) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     @test solve!(m_two_hourly) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED

@@ -13,6 +13,61 @@ function next_region_id(portfolio::PSIP.Portfolio)
     return maximum(PSIP.get_id(r) for r in regions; init=0) + 1
 end
 
+# Single region model of the 2-zone portfolio in which the thermal technologies use the given
+# operation formulation. The keyword arguments that are given replace the data of
+# "expensive_thermal".
+function thermal_test_model(
+    operation_formulation;
+    operation_cost=nothing,
+    time_limits=nothing,
+    ramp_limits=nothing,
+    min_generation_fraction=nothing,
+)
+    p_5bus, op_days = test_2_zone_portfolio()
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    thermal = PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal")
+    !isnothing(operation_cost) && PSIP.set_operation_costs!(thermal, operation_cost)
+    !isnothing(time_limits) && PSIP.set_time_limits!(thermal, time_limits)
+    !isnothing(ramp_limits) && PSIP.set_ramp_limits!(thermal, ramp_limits)
+    !isnothing(min_generation_fraction) &&
+        PSIP.set_min_generation_fraction!(thermal, min_generation_fraction)
+
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{DateTime}}()),
+        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal"],
+        thermal_type,
+        ContinuousInvestment,
+        operation_formulation,
+        BasicDispatchFeasibility,
+    )
+    return InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+end
+
 function test_2_zone_portfolio()
     ########################
     #### Financial Data ####

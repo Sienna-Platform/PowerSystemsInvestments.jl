@@ -3,54 +3,16 @@ const FUEL_TEST_THERMAL_TYPE = PSIP.SupplyTechnology{PSY.ThermalStandard}
 # Single region model with two thermal technologies. When a variable cost is given, it
 # replaces the one of "expensive_thermal".
 function _make_fuel_cost_model(variable_cost=nothing)
-    p_5bus, op_days = test_2_zone_portfolio()
-    thermal = PSIP.get_technology(FUEL_TEST_THERMAL_TYPE, p_5bus, "expensive_thermal")
+    operation_cost = nothing
     if !isnothing(variable_cost)
-        PSIP.set_operation_costs!(
-            thermal,
-            ThermalGenerationCost(;
-                variable=variable_cost,
-                fixed=0.0,
-                start_up=0.0,
-                shut_down=0.0,
-            ),
+        operation_cost = ThermalGenerationCost(;
+            variable=variable_cost,
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
         )
     end
-
-    periods = [
-        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
-        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
-    ]
-    template = InvestmentModelTemplate(
-        DiscountedCashFlow(0.07, Year(2025), periods),
-        OperationalRepresentativeDays(op_days, [365, 365]),
-        RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
-    )
-    set_technology_model!(
-        template,
-        ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
-        StaticLoadInvestment,
-        BasicDispatch,
-        BasicDispatchFeasibility,
-    )
-    set_technology_model!(
-        template,
-        ["cheap_thermal", "expensive_thermal"],
-        FUEL_TEST_THERMAL_TYPE,
-        ContinuousInvestment,
-        BasicDispatch,
-        BasicDispatchFeasibility,
-    )
-    return InvestmentModel(
-        template,
-        SingleInstanceSolve,
-        p_5bus;
-        optimizer=HiGHS.Optimizer,
-        portfolio_to_file=false,
-        store_variable_names=true,
-    )
+    return thermal_test_model(BasicDispatch; operation_cost=operation_cost)
 end
 
 function _build_fuel_cost_model(variable_cost=nothing)

@@ -263,8 +263,8 @@ end
         [thermal_model, thermal_model],
     )
 
-    # + CumulativeCapacity and WeightedEnergyGeneration for the thermal supply tech.
-    @test length(container.expressions) == 14
+    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for the thermal supply tech.
+    @test length(container.expressions) == 15
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(

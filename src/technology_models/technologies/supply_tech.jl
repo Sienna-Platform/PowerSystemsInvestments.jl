@@ -994,28 +994,14 @@ function objective_function!(
     formulation::S,
 ) where {T <: PSIP.SupplyTechnology, S <: ThermalCommitmentFormulation}
     tech_model = string(S)
-    add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model)
-    add_commitment_cost!(
-        container,
+    for variable_type in (
+        ActivePowerVariable(),
         CommittedCapacityVariable(),
-        devices,
-        formulation,
-        tech_model,
-    )
-    add_commitment_cost!(
-        container,
         StartUpCapacityVariable(),
-        devices,
-        formulation,
-        tech_model,
-    )
-    add_commitment_cost!(
-        container,
         ShutDownCapacityVariable(),
-        devices,
-        formulation,
-        tech_model,
     )
+        add_variable_cost!(container, variable_type, devices, formulation, tech_model)
+    end
     return
 end
 

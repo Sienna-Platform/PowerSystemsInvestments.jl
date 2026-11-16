@@ -96,7 +96,7 @@ function _add_proportional_term!(
     tech_model::String,
 ) where {T <: InvestmentVariableType, U <: PSIP.Technology}
     variable = get_variable(container, T(), U, tech_model)
-    lin_cost = JuMP.AffExpr(0.0, variable[name, time_period] => linear_term)
+    lin_cost = linear_term * variable[name, time_period]
     add_to_objective_investment_expression!(container, lin_cost)
     return lin_cost
 end
@@ -152,8 +152,7 @@ function _add_proportional_term!(
     tech_model::String,
 ) where {T <: InvestmentExpressionType, U <: PSIP.Technology}
     expr = get_expression(container, T(), U, tech_model)
-    lin_cost = JuMP.AffExpr(0.0)
-    JuMP.add_to_expression!(lin_cost, linear_term, expr[name, time_period])
+    lin_cost = linear_term * expr[name, time_period]
     add_to_objective_investment_expression!(container, lin_cost)
     return lin_cost
 end

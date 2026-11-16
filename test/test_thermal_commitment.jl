@@ -1,48 +1,22 @@
+# "expensive_thermal" has a minimum output of 0.35 and, unless given, minimum up and down times
+# of 3 and 2 hours.
+_commitment_test_model(operation_cost=nothing; time_limits=(up=3.0, down=2.0), kwargs...) =
+    thermal_test_model(
+        ContinuousThermalCommitment;
+        operation_cost=operation_cost,
+        time_limits=time_limits,
+        min_generation_fraction=0.35,
+        kwargs...,
+    )
+
 @testset "Thermal commitment constraints" begin
     thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
-    p_5bus, op_days = test_2_zone_portfolio()
     name = "expensive_thermal"
-    thermal = PSIP.get_technology(thermal_type, p_5bus, name)
-    PSIP.set_time_limits!(thermal, (up=3.0, down=2.0))
-    PSIP.set_ramp_limits!(thermal, (up=0.3, down=0.4))
-    PSIP.set_min_generation_fraction!(thermal, 0.35)
+    m = _commitment_test_model(; ramp_limits=(up=0.3, down=0.4))
+    thermal = PSIP.get_technology(thermal_type, PSIN.get_portfolio(m), name)
     forced_outage = PSIP.get_outage_factors(thermal).forced
     @test forced_outage > 0.0
 
-    periods = [
-        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
-        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
-    ]
-    template = InvestmentModelTemplate(
-        DiscountedCashFlow(0.07, Year(2025), periods),
-        OperationalRepresentativeDays(op_days, [365, 365]),
-        RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
-    )
-    set_technology_model!(
-        template,
-        ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
-        StaticLoadInvestment,
-        BasicDispatch,
-        BasicDispatchFeasibility,
-    )
-    set_technology_model!(
-        template,
-        ["cheap_thermal", name],
-        thermal_type,
-        ContinuousInvestment,
-        ContinuousThermalCommitment,
-        BasicDispatchFeasibility,
-    )
-    m = InvestmentModel(
-        template,
-        SingleInstanceSolve,
-        p_5bus;
-        optimizer=HiGHS.Optimizer,
-        portfolio_to_file=false,
-        store_variable_names=true,
-    )
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
 
@@ -168,52 +142,6 @@
     end
 end
 
-# Single region model where the thermal technologies use the commitment formulation and
-# "expensive_thermal" has the given operation cost and minimum up and down times.
-function _commitment_cost_test_model(operation_cost; time_limits=(up=3.0, down=2.0))
-    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
-    p_5bus, op_days = test_2_zone_portfolio()
-    thermal = PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal")
-    PSIP.set_operation_costs!(thermal, operation_cost)
-    PSIP.set_time_limits!(thermal, time_limits)
-    PSIP.set_min_generation_fraction!(thermal, 0.35)
-
-    periods = [
-        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
-        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
-    ]
-    template = InvestmentModelTemplate(
-        DiscountedCashFlow(0.07, Year(2025), periods),
-        OperationalRepresentativeDays(op_days, [365, 365]),
-        RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
-    )
-    set_technology_model!(
-        template,
-        ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
-        StaticLoadInvestment,
-        BasicDispatch,
-        BasicDispatchFeasibility,
-    )
-    set_technology_model!(
-        template,
-        ["cheap_thermal", "expensive_thermal"],
-        thermal_type,
-        ContinuousInvestment,
-        ContinuousThermalCommitment,
-        BasicDispatchFeasibility,
-    )
-    return InvestmentModel(
-        template,
-        SingleInstanceSolve,
-        p_5bus;
-        optimizer=HiGHS.Optimizer,
-        portfolio_to_file=false,
-        store_variable_names=true,
-    )
-end
-
 @testset "Thermal commitment start-up, shut-down and no-load costs" begin
     thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
     name = "expensive_thermal"
@@ -223,7 +151,7 @@ end
     start_up_fuel = 2.0
     start_up_cost = 50.0
     shut_down_cost = 20.0
-    m = _commitment_cost_test_model(
+    m = _commitment_test_model(
         ThermalGenerationCost(;
             variable=FuelCurve(;
                 value_curve=LinearCurve(heat_rate, no_load_fuel),
@@ -307,7 +235,7 @@ end
     name = "expensive_thermal"
     cost_per_mwh = 30.0
     no_load_cost = 4.0
-    m = _commitment_cost_test_model(
+    m = _commitment_test_model(
         ThermalGenerationCost(;
             variable=CostCurve(LinearCurve(cost_per_mwh, no_load_cost)),
             fixed=0.0,
@@ -353,7 +281,7 @@ end
     name = "expensive_thermal"
     # Representative days have 24 hourly time steps. A 30-hour up time covers the day once
     # plus 6 more steps, and a 50-hour down time covers it twice plus 2 more steps.
-    m = _commitment_cost_test_model(
+    m = _commitment_test_model(
         ThermalGenerationCost(;
             variable=CostCurve(LinearCurve(30.0)),
             fixed=0.0,
@@ -405,7 +333,7 @@ end
 end
 
 @testset "Start-up costs by stages are not supported" begin
-    m = _commitment_cost_test_model(
+    m = _commitment_test_model(
         ThermalGenerationCost(;
             variable=CostCurve(LinearCurve(30.0)),
             fixed=0.0,

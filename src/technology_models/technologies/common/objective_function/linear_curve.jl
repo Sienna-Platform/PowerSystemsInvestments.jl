@@ -325,15 +325,18 @@ function _add_cost_to_objective!(
     ::U,
     tech_model::String,
 ) where {T <: StartUpCapacityVariable, U <: AbstractTechnologyFormulation}
-    _add_start_up_cost_to_objective!(
-        container,
-        T(),
-        technology,
-        om_cost,
-        PSY.get_start_up(om_cost),
-        U(),
-        tech_model,
-    )
+    start_up_cost = _get_start_up_cost(PSY.get_start_up(om_cost), technology)
+    if !iszero(start_up_cost)
+        _add_linearcurve_cost!(
+            container,
+            T(),
+            StartUpCost(),
+            technology,
+            om_cost,
+            objective_function_multiplier(T(), U()) * start_up_cost,
+            tech_model,
+        )
+    end
     _add_commitment_curve_cost_to_objective!(
         container,
         T(),
@@ -370,43 +373,13 @@ function _add_cost_to_objective!(
     return
 end
 
-function _add_start_up_cost_to_objective!(
-    container::SingleOptimizationContainer,
-    ::T,
-    technology::PSIP.Technology,
-    om_cost::PSY.OperationalCost,
-    start_up_cost::Float64,
-    ::U,
-    tech_model::String,
-) where {T <: StartUpCapacityVariable, U <: AbstractTechnologyFormulation}
-    if !iszero(start_up_cost)
-        _add_linearcurve_cost!(
-            container,
-            T(),
-            StartUpCost(),
-            technology,
-            om_cost,
-            objective_function_multiplier(T(), U()) * start_up_cost,
-            tech_model,
-        )
-    end
-    return
-end
+_get_start_up_cost(start_up_cost::Float64, ::PSIP.Technology) = start_up_cost
 
-function _add_start_up_cost_to_objective!(
-    ::SingleOptimizationContainer,
-    ::StartUpCapacityVariable,
-    technology::PSIP.Technology,
-    ::PSY.OperationalCost,
-    ::PSY.StartUpStages,
-    ::AbstractTechnologyFormulation,
-    ::String,
-)
+function _get_start_up_cost(::PSY.StartUpStages, technology::PSIP.Technology)
     error(
         "Technology $(PSIP.get_name(technology)) defines its start-up cost by stages (hot, " *
         "warm, cold), which is not currently supported. Use a single start-up cost.",
     )
-    return
 end
 
 function _add_commitment_curve_cost_to_objective!(
@@ -495,7 +468,7 @@ get_cost_weight(
     op_ix::Int,
 ) = get_operational_weights(container)[op_ix]
 
-# Dispatch for scalar proportional terms
+# Operation costs are reported in VariableOMCost unless a cost expression is given
 function _add_linearcurve_cost!(
     container::SingleOptimizationContainer,
     ::T,
