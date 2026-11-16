@@ -5,10 +5,6 @@ objective_function_multiplier(::ISOPT.ExpressionType, ::AbstractTechnologyFormul
 
 #! format: on
 
-##############################################################
-#### Dispatch, committed, start-up and shut-down capacity ####
-##############################################################
-
 function add_variable_cost!(
     container::SingleOptimizationContainer,
     ::U,
@@ -32,7 +28,6 @@ function add_variable_cost!(
     return
 end
 
-# Adds the cost of one variable of a technology to the objective function and returns it
 function _add_proportional_term!(
     container::SingleOptimizationContainer,
     ::T,

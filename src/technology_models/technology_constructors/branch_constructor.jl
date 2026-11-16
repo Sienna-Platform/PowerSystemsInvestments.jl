@@ -21,7 +21,6 @@ function construct_technologies!(
     # CumulativeCapacity
     add_expression!(container, p, CumulativeCapacity(), devices, B())
 
-    # Investment costs
     add_expression!(container, CapitalCostExpression(), devices, B())
     return
 end
@@ -172,7 +171,6 @@ function construct_technologies!(
     # CumulativeCapacity
     add_expression!(container, p, CumulativeCapacity(), devices, B())
 
-    # Investment costs
     add_expression!(container, CapitalCostExpression(), devices, B())
     return
 end

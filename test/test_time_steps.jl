@@ -340,7 +340,6 @@ end
     m_two_hourly = _time_step_test_model(2, ContinuousThermalCommitment)
     hourly = PSIN.get_optimization_container(m_hourly)
     two_hourly = PSIN.get_optimization_container(m_two_hourly)
-    # Entries of "gas" at time step t (1 unless given)
     variable(container, variable_type, t=1) =
         PSIN.get_variable(container, variable_type, thermal_type, meta)["gas", t]
     constraint(container, constraint_type, constraint_meta=meta) =

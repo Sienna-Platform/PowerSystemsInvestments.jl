@@ -22,7 +22,6 @@ function _build_fuel_cost_model(variable_cost=nothing)
     return m
 end
 
-# Objective function coefficient of the dispatch of a thermal technology in a time step.
 function _dispatch_cost_coefficient(m::InvestmentModel, name::String, t::Int)
     container = PSIN.get_optimization_container(m)
     dispatch = PSIN.get_variable(

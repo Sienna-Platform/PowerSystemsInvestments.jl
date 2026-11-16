@@ -116,7 +116,6 @@ _commitment_test_model(operation_cost=nothing; time_limits=(up=3.0, down=2.0), k
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
-    # The solution respects the commitment and ramp limits.
     values(variable_type) =
         sort!(
             filter(

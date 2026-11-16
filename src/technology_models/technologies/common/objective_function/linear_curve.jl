@@ -349,7 +349,6 @@ function _add_cost_to_objective!(
     return
 end
 
-# Capacity that shuts down has a shut-down cost
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
     ::T,
@@ -535,8 +534,6 @@ function _add_linearcurve_cost!(
     return
 end
 
-# Adds the cost of each variable of a technology to the objective function and to the cost
-# expression S
 function _add_linearcurve_variable_term_to_model!(
     container::SingleOptimizationContainer,
     ::T,

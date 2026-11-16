@@ -121,7 +121,6 @@ function add_expression!(
     return
 end
 
-# Fuel cost of the technologies with a fuel curve
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -191,7 +190,6 @@ function add_expression!(
     return
 end
 
-# Fuel consumption of the technologies with a fuel curve
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,

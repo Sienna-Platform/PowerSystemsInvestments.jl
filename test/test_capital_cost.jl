@@ -156,7 +156,6 @@ end
             @test cc / ce ≈ slope_cheap / slope_expensive
         end
 
-        # CapitalCostExpression reports the capital cost of the objective function.
         capital_cost = PSIN.get_expression(
             container,
             PSIN.CapitalCostExpression(),
