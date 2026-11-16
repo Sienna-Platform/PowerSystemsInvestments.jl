@@ -208,10 +208,10 @@ end
         [vre_model],
     )
 
-    # + CumulativeCapacity, CapitalCostExpression, FixedOperationModelCost,
+    # + CapacityAdditions, CumulativeCapacity, CapitalCostExpression, FixedOperationModelCost,
     # WeightedEnergyGeneration and VariableOMCost for the wind supply tech. It has no fuel
     # curve, so there is no FuelConsumptionExpression or FuelCost.
-    @test length(container.expressions) == 8
+    @test length(container.expressions) == 9
     @test length(container.variables) == 2
 
     v = PSIN.get_variable(
@@ -263,9 +263,8 @@ end
         [thermal_model, thermal_model],
     )
 
-    # + CumulativeCapacity, CapitalCostExpression, FixedOperationModelCost,
-    # WeightedEnergyGeneration and VariableOMCost for the thermal supply tech.
-    @test length(container.expressions) == 13
+    # + CumulativeCapacity and WeightedEnergyGeneration for the thermal supply tech.
+    @test length(container.expressions) == 14
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(

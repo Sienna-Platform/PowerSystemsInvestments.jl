@@ -45,14 +45,13 @@ end
 
 function add_expression!(
     container::SingleOptimizationContainer,
-    portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
     formulation::V,
 ) where {
-    T <: CumulativePowerCapacity,
+    T <: PowerCapacityAdditions,
     U <: Vector{D},
-    V <: AbstractTechnologyFormulation,
+    V <: Union{ContinuousInvestment, IntegerInvestment},
 } where {D <: PSIP.StorageTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -65,117 +64,31 @@ function add_expression!(
         container,
         expression_type,
         D,
-        [PSIP.get_name(d) for d in devices],
-        time_steps,
-        meta=tech_model,
-    )
-
-    for d in devices
-        name = PSIP.get_name(d)
-        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
-        running = JuMP.AffExpr(init_cap)
-        for t in time_steps
-            JuMP.add_to_expression!(running, var[name, t])
-            expression[name, t] = copy(running)
-        end
-    end
-
-    return
-end
-
-function add_expression!(
-    container::SingleOptimizationContainer,
-    portfolio::PSIP.Portfolio,
-    expression_type::T,
-    devices::U,
-    formulation::V,
-) where {
-    T <: CumulativeEnergyCapacity,
-    U <: Vector{D},
-    V <: AbstractTechnologyFormulation,
-} where {D <: PSIP.StorageTechnology}
-    IS.@assert_op length(devices) > 0
-    time_mapping = get_time_mapping(container)
-    time_steps = get_investment_time_steps(time_mapping)
-    tech_model = string(V)
-
-    var = get_variable(container, BuildEnergyCapacity(), D, tech_model)
-
-    expression = add_expression_container!(
-        container,
-        expression_type,
-        D,
-        [PSIP.get_name(d) for d in devices],
-        time_steps,
-        meta=tech_model,
-    )
-
-    for d in devices
-        name = PSIP.get_name(d)
-        init_cap = PSIP.get_existing_capacity_mwh(portfolio, d)
-        running = JuMP.AffExpr(init_cap)
-        for t in time_steps
-            JuMP.add_to_expression!(running, var[name, t])
-            expression[name, t] = copy(running)
-        end
-    end
-
-    return
-end
-
-# PowerCap for IntegerInvestment
-function add_expression!(
-    container::SingleOptimizationContainer,
-    portfolio::PSIP.Portfolio,
-    expression_type::T,
-    devices::U,
-    formulation::V,
-) where {
-    T <: CumulativePowerCapacity,
-    U <: Vector{D},
-    V <: IntegerInvestment,
-} where {D <: PSIP.StorageTechnology}
-    IS.@assert_op length(devices) > 0
-    time_mapping = get_time_mapping(container)
-    time_steps = get_investment_time_steps(time_mapping)
-    tech_model = string(V)
-
-    var = get_variable(container, BuildPowerCapacity(), D, tech_model)
-
-    expression = add_expression_container!(
-        container,
-        expression_type,
-        D,
-        [PSIP.get_name(d) for d in devices],
+        get_variable_names(devices),
         time_steps,
         meta=tech_model,
     )
 
     for d in devices
         unit_size = get_unit_size(BuildPowerCapacity(), d, V())
-        name = PSIP.get_name(d)
-        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
-        running = JuMP.AffExpr(init_cap)
-        for t in time_steps
-            JuMP.add_to_expression!(running, var[name, t], unit_size)
-            expression[name, t] = copy(running)
+        for name in get_variable_names(d), t in time_steps
+            expression[name, t] =
+                JuMP.@expression(get_jump_model(container), unit_size * var[name, t])
         end
     end
 
     return
 end
 
-# EnergyCap for Integer decisions in Storage
 function add_expression!(
     container::SingleOptimizationContainer,
-    portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
     formulation::V,
 ) where {
-    T <: CumulativeEnergyCapacity,
+    T <: EnergyCapacityAdditions,
     U <: Vector{D},
-    V <: IntegerInvestment,
+    V <: Union{ContinuousInvestment, IntegerInvestment},
 } where {D <: PSIP.StorageTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -188,18 +101,95 @@ function add_expression!(
         container,
         expression_type,
         D,
-        [PSIP.get_name(d) for d in devices],
+        get_variable_names(devices),
         time_steps,
         meta=tech_model,
     )
 
     for d in devices
         unit_size = get_unit_size(BuildEnergyCapacity(), d, V())
+        for name in get_variable_names(d), t in time_steps
+            expression[name, t] =
+                JuMP.@expression(get_jump_model(container), unit_size * var[name, t])
+        end
+    end
+
+    return
+end
+
+function add_expression!(
+    container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
+    expression_type::T,
+    devices::U,
+    formulation::V,
+) where {
+    T <: CumulativePowerCapacity,
+    U <: Vector{D},
+    V <: Union{ContinuousInvestment, IntegerInvestment},
+} where {D <: PSIP.StorageTechnology}
+    IS.@assert_op length(devices) > 0
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(V)
+
+    additions = get_expression(container, PowerCapacityAdditions(), D, tech_model)
+
+    expression = add_expression_container!(
+        container,
+        expression_type,
+        D,
+        [PSIP.get_name(d) for d in devices],
+        time_steps,
+        meta=tech_model,
+    )
+
+    for d in devices
+        name = PSIP.get_name(d)
+        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
+        running = JuMP.AffExpr(init_cap)
+        for t in time_steps
+            JuMP.add_to_expression!(running, additions[name, t])
+            expression[name, t] = copy(running)
+        end
+    end
+
+    return
+end
+
+function add_expression!(
+    container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
+    expression_type::T,
+    devices::U,
+    formulation::V,
+) where {
+    T <: CumulativeEnergyCapacity,
+    U <: Vector{D},
+    V <: Union{ContinuousInvestment, IntegerInvestment},
+} where {D <: PSIP.StorageTechnology}
+    IS.@assert_op length(devices) > 0
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(V)
+
+    additions = get_expression(container, EnergyCapacityAdditions(), D, tech_model)
+
+    expression = add_expression_container!(
+        container,
+        expression_type,
+        D,
+        [PSIP.get_name(d) for d in devices],
+        time_steps,
+        meta=tech_model,
+    )
+
+    for d in devices
         name = PSIP.get_name(d)
         init_cap = PSIP.get_existing_capacity_mwh(portfolio, d)
         running = JuMP.AffExpr(init_cap)
         for t in time_steps
-            JuMP.add_to_expression!(running, var[name, t], unit_size)
+            JuMP.add_to_expression!(running, additions[name, t])
             expression[name, t] = copy(running)
         end
     end
