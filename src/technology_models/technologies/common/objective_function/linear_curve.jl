@@ -242,7 +242,7 @@ function _add_linearcurve_cost!(
         _add_linearcurve_variable_term_to_model!(
             container,
             T(),
-            CapitalCost(),
+            CapitalCostExpression(),
             technology,
             npv_proportional_term,
             t,
@@ -410,6 +410,19 @@ function _add_start_up_cost_to_objective!(
 end
 
 function _add_commitment_curve_cost_to_objective!(
+    ::SingleOptimizationContainer,
+    ::OperationsVariableType,
+    ::PSIP.Technology,
+    ::PSY.OperationalCost,
+    cost_curve::PSY.ProductionVariableCostCurve,
+    ::AbstractTechnologyFormulation,
+    ::String,
+)
+    throw_unsupported_curve(cost_curve)
+    return
+end
+
+function _add_commitment_curve_cost_to_objective!(
     container::SingleOptimizationContainer,
     ::T,
     technology::PSIP.Technology,
@@ -549,7 +562,8 @@ function _add_linearcurve_cost!(
     return
 end
 
-# Add proportional terms to objective function and expression
+# Adds the cost of each variable of a technology to the objective function and to the cost
+# expression S
 function _add_linearcurve_variable_term_to_model!(
     container::SingleOptimizationContainer,
     ::T,
@@ -558,213 +572,18 @@ function _add_linearcurve_variable_term_to_model!(
     proportional_term::Float64,
     time_period::Int,
     tech_model::String,
-) where {T <: OperationsVariableType, S <: OperationsExpressionType}
-    linear_cost = _add_proportional_term!(
-        container,
-        T(),
-        technology,
-        proportional_term,
-        time_period,
-        tech_model,
-    )
-    add_to_expression!(container, S, linear_cost, technology, time_period, tech_model)
-    return
-end
-
-# Add proportional terms to objective function and expression
-function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::FixedOperationModelCost,
-    technology::PSIP.Technology,
-    proportional_term::Float64,
-    time_period::Int,
-    tech_model::String,
-) where {T <: CumulativeInvestmentExpressionType}
-    linear_cost = _add_proportional_term!(
-        container,
-        T(),
-        technology,
-        proportional_term,
-        time_period,
-        tech_model,
-    )
-    add_to_expression!(
-        container,
-        FixedOperationModelCost,
-        linear_cost,
-        technology,
-        time_period,
-        tech_model,
-    )
-    return
-end
-
-# Add proportional terms to objective function and expression
-function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::CapitalCost,
-    technology::PSIP.Technology,
-    proportional_term::Float64,
-    time_period::Int,
-    tech_model::String,
-) where {T <: BuildInvestmentVariableType}
-    linear_cost = _add_proportional_term!(
-        container,
-        T(),
-        technology,
-        proportional_term,
-        time_period,
-        tech_model,
-    )
-    add_to_expression!(
-        container,
-        CapitalCost,
-        linear_cost,
-        technology,
-        time_period,
-        tech_model,
-    )
-    return
-end
-
-function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::CapitalCost,
-    technology::PSIP.Technology,
-    proportional_term::Float64,
-    time_period::Int,
-    tech_model::String,
-) where {T <: CumulativeCapacity}
-    linear_cost = _add_proportional_term!(
-        container,
-        T(),
-        technology,
-        proportional_term,
-        time_period,
-        tech_model,
-    )
-    add_to_expression!(
-        container,
-        CapitalCost,
-        linear_cost,
-        technology,
-        time_period,
-        tech_model,
-    )
-    return
-end
-
-function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::CapitalCost,
-    technology::PSIP.Technology,
-    proportional_term::Float64,
-    time_period::Int,
-    tech_model::String,
-) where {T <: BuildEnergyCapacity}
-    linear_cost = _add_proportional_term!(
-        container,
-        T(),
-        technology,
-        proportional_term,
-        time_period,
-        tech_model,
-    )
-    add_to_expression!(
-        container,
-        CapitalCost,
-        linear_cost,
-        technology,
-        time_period,
-        tech_model,
-    )
-    return
-end
-
-function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::CapitalCost,
-    technology::PSIP.Technology,
-    proportional_term::Float64,
-    time_period::Int,
-    tech_model::String,
-) where {T <: BuildPowerCapacity}
-    linear_cost = _add_proportional_term!(
-        container,
-        T(),
-        technology,
-        proportional_term,
-        time_period,
-        tech_model,
-    )
-    add_to_expression!(
-        container,
-        CapitalCost,
-        linear_cost,
-        technology,
-        time_period,
-        tech_model,
-    )
-    return
-end
-
-function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::CapitalCost,
-    technology::PSIP.Technology,
-    proportional_term::Float64,
-    time_period::Int,
-    tech_model::String,
-) where {T <: CumulativePowerCapacity}
-    linear_cost = _add_proportional_term!(
-        container,
-        T(),
-        technology,
-        proportional_term,
-        time_period,
-        tech_model,
-    )
-    add_to_expression!(
-        container,
-        CapitalCost,
-        linear_cost,
-        technology,
-        time_period,
-        tech_model,
-    )
-    return
-end
-
-function _add_linearcurve_variable_term_to_model!(
-    container::SingleOptimizationContainer,
-    ::T,
-    ::CapitalCost,
-    technology::PSIP.Technology,
-    proportional_term::Float64,
-    time_period::Int,
-    tech_model::String,
-) where {T <: CumulativeEnergyCapacity}
-    linear_cost = _add_proportional_term!(
-        container,
-        T(),
-        technology,
-        proportional_term,
-        time_period,
-        tech_model,
-    )
-    add_to_expression!(
-        container,
-        CapitalCost,
-        linear_cost,
-        technology,
-        time_period,
-        tech_model,
-    )
+) where {T <: Union{VariableType, ExpressionType}, S <: ExpressionType}
+    for name in get_variable_names(technology)
+        cost = _add_proportional_term!(
+            container,
+            T(),
+            technology,
+            name,
+            proportional_term,
+            time_period,
+            tech_model,
+        )
+        add_to_expression!(container, S, cost, technology, name, time_period, tech_model)
+    end
     return
 end

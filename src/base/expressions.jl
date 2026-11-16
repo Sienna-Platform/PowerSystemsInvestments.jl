@@ -24,7 +24,7 @@ struct CumulativeWindCapacity <: CumulativeInvestmentExpressionType end
 struct CumulativeSolarCapacity <: CumulativeInvestmentExpressionType end
 struct CumulativeInverterCapacity <: CumulativeInvestmentExpressionType end
 
-struct CapitalCost <: InvestmentExpressionType end
+struct CapitalCostExpression <: InvestmentExpressionType end
 struct FixedOperationModelCost <: InvestmentExpressionType end
 
 struct TotalCapitalCost <: ISOPT.ExpressionType end

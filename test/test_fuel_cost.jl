@@ -222,6 +222,33 @@ end
         CostCurve(; value_curve=LinearCurve(cost_per_mwh), vom_cost=LinearCurve(vom)),
     )
     @test _dispatch_cost_coefficient(m_cost, "expensive_thermal", t) ≈ expected_coefficient
+
+    # The cost expressions report the same costs as the objective function. A fuel curve
+    # reports its fuel in FuelCost and its VOM in VariableOMCost. A cost curve reports both
+    # its cost and its VOM in VariableOMCost.
+    function cost_coefficient(m, expression_type, name)
+        container = PSIN.get_optimization_container(m)
+        expression = PSIN.get_expression(
+            container,
+            expression_type(),
+            FUEL_TEST_THERMAL_TYPE,
+            "BasicDispatch",
+        )
+        dispatch = PSIN.get_variable(
+            container,
+            PSIN.ActivePowerVariable(),
+            FUEL_TEST_THERMAL_TYPE,
+            "BasicDispatch",
+        )
+        return JuMP.coefficient(expression[name, t], dispatch[name, t])
+    end
+    @test cost_coefficient(m_fuel, FuelCost, "expensive_thermal") ≈ base_coefficient
+    @test cost_coefficient(m_fuel, VariableOMCost, "expensive_thermal") ≈
+          expected_coefficient - base_coefficient
+    @test cost_coefficient(m_cost, VariableOMCost, "expensive_thermal") ≈
+          expected_coefficient
+    @test cost_coefficient(m_cost, VariableOMCost, "cheap_thermal") ≈
+          _dispatch_cost_coefficient(m_cost, "cheap_thermal", t)
 end
 
 @testset "Unsupported fuel curves fail at build" begin

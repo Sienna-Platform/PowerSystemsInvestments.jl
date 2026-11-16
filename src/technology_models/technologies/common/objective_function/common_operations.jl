@@ -27,19 +27,18 @@ function add_variable_cost!(
     return
 end
 
+# Adds the cost of one variable of a technology to the objective function and returns it
 function _add_proportional_term!(
     container::SingleOptimizationContainer,
     ::T,
-    technology::U,
+    ::U,
+    name::String,
     linear_term::Float64,
     time_period::Int,
     tech_model::String,
 ) where {T <: OperationsVariableType, U <: PSIP.Technology}
     variable = get_variable(container, T(), U, tech_model)
-    lin_cost = JuMP.AffExpr(0.0)
-    for name in get_variable_names(technology)
-        JuMP.add_to_expression!(lin_cost, linear_term, variable[name, time_period])
-    end
+    lin_cost = JuMP.AffExpr(0.0, variable[name, time_period] => linear_term)
     add_to_objective_operations_expression!(container, lin_cost)
     return lin_cost
 end

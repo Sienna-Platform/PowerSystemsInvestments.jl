@@ -323,15 +323,18 @@ end
     variable(variable_type) =
         PSIN.get_variable(container, variable_type, thermal_type, meta)
     objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    vom_cost = PSIN.get_expression(container, VariableOMCost(), thermal_type, meta)
     for t in (1, 30)
         # The constant term is a cost per hour and MW committed, weighted like the cost of
         # dispatch.
         dispatch_cost =
             JuMP.coefficient(objective, variable(PSIN.ActivePowerVariable())[name, t])
-        @test JuMP.coefficient(
-            objective,
-            variable(PSIN.CommittedCapacityVariable())[name, t],
-        ) ≈ dispatch_cost * no_load_cost / cost_per_mwh
+        committed = variable(PSIN.CommittedCapacityVariable())[name, t]
+        @test JuMP.coefficient(objective, committed) ≈
+              dispatch_cost * no_load_cost / cost_per_mwh
+        # The no-load cost is reported with the variable OM cost.
+        @test JuMP.coefficient(vom_cost[name, t], committed) ≈
+              JuMP.coefficient(objective, committed)
         @test JuMP.coefficient(
             objective,
             variable(PSIN.StartUpCapacityVariable())[name, t],

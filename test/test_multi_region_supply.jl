@@ -78,6 +78,37 @@ function _test_multi_region_wind(model::InvestmentModel, region_names::Vector{St
         @test JuMP.normalized_coefficient(max_capacity["wind", t], build[wind_name, 1]) ==
               1.0
     end
+
+    # Costs are reported per region, like the variables they are the cost of.
+    cost_expression(expression_type, meta) =
+        PSIN.get_expression(container, expression_type(), wind_type, meta)
+    capital_cost = cost_expression(PSIN.CapitalCostExpression, "ContinuousInvestment")
+    fixed_cost = cost_expression(FixedOperationModelCost, "ContinuousInvestment")
+    for (expression_type, meta) in (
+        (PSIN.CapitalCostExpression, "ContinuousInvestment"),
+        (FixedOperationModelCost, "ContinuousInvestment"),
+        (VariableOMCost, "BasicDispatch"),
+    )
+        @test sort(axes(cost_expression(expression_type, meta))[1]) == sort(wind_names)
+    end
+    # The capacity built in the first period pays its capital cost once and its fixed cost
+    # in every period. Together they are its cost in the objective function, and the costs
+    # of a region only include the capacity built in that region.
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    investment_steps = PSIN.get_investment_time_steps(time_mapping)
+    for wind_name in wind_names, other_name in wind_names
+        reported =
+            JuMP.coefficient(capital_cost[wind_name, 1], build[other_name, 1]) + sum(
+                JuMP.coefficient(fixed_cost[wind_name, t], build[other_name, 1]) for
+                t in investment_steps
+            )
+        expected = 0.0
+        if other_name == wind_name
+            expected = JuMP.coefficient(objective, build[wind_name, 1])
+        end
+        @test reported ≈ expected
+    end
+    @test JuMP.coefficient(objective, build[first(wind_names), 1]) > 0.0
     return
 end
 

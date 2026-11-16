@@ -64,8 +64,9 @@ end
 
 # One zone with a gas technology defined by a fuel curve, wind, storage and a demand. The
 # profiles are constant over blocks of two hours, so a model with hourly time steps and a
-# model with 2-hour time steps describe the same system.
-function _time_step_test_model(step_hours::Int)
+# model with 2-hour time steps describe the same system. The gas technology uses the given
+# operation formulation. Its commitment data is only used by the commitment formulation.
+function _time_step_test_model(step_hours::Int, gas_formulation=BasicDispatch)
     days = _time_step_test_days(step_hours)
     steps_per_block = 2 ÷ step_hours
     blocks = 0:11
@@ -94,16 +95,20 @@ function _time_step_test_model(step_hours::Int)
         capital_costs=PSIP.CapitalCost(LinearCurve(1_100_000.0), 0.0),
         operation_costs=ThermalGenerationCost(;
             variable=FuelCurve(;
-                value_curve=LinearCurve(7.0),
+                value_curve=LinearCurve(7.0, 1.5),
                 fuel_cost=5.0,
                 vom_cost=LinearCurve(2.0),
+                startup_fuel_offtake=LinearCurve(3.0),
             ),
             fixed=15_000.0,
-            start_up=0.0,
-            shut_down=0.0,
+            start_up=40.0,
+            shut_down=10.0,
         ),
         capacity_limits=(min=0.0, max=5_000.0),
         financial_data=financial_data(),
+        min_generation_fraction=0.4,
+        time_limits=(up=4.0, down=2.0),
+        ramp_limits=(up=0.3, down=0.3),
     )
     wind = SupplyTechnology{RenewableDispatch}(;
         name="wind",
@@ -204,7 +209,7 @@ function _time_step_test_model(step_hours::Int)
         ["gas"],
         PSIP.SupplyTechnology{PSY.ThermalStandard},
         ContinuousInvestment,
-        BasicDispatch,
+        gas_formulation,
         BasicDispatchFeasibility,
     )
     set_technology_model!(
@@ -326,4 +331,69 @@ end
     fuel_key = PSIN.ExpressionKey(FuelConsumptionExpression, thermal_type, "BasicDispatch")
     @test sum(read_expression(m_two_hourly, fuel_key).value) ≈
           sum(read_expression(m_hourly, fuel_key).value) rtol = 1e-5
+end
+
+@testset "Thermal commitment with time steps of different length" begin
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    meta = string(ContinuousThermalCommitment)
+    m_hourly = _time_step_test_model(1, ContinuousThermalCommitment)
+    m_two_hourly = _time_step_test_model(2, ContinuousThermalCommitment)
+    hourly = PSIN.get_optimization_container(m_hourly)
+    two_hourly = PSIN.get_optimization_container(m_two_hourly)
+    variable(container, variable_type) =
+        PSIN.get_variable(container, variable_type, thermal_type, meta)["gas", 1]
+    constraint(container, constraint_type, constraint_meta=meta) =
+        PSIN.get_constraint(container, constraint_type, thermal_type, constraint_meta)
+    objective_coefficient(container, variable_type) = JuMP.coefficient(
+        JuMP.objective_function(PSIN.get_jump_model(container)),
+        variable(container, variable_type),
+    )
+    fuel(container) =
+        PSIN.get_expression(container, FuelConsumptionExpression(), thermal_type, meta)
+    coefficient = JuMP.normalized_coefficient
+
+    # Dispatch and the no-load cost of committed capacity are per hour, so they cost twice as
+    # much during a 2-hour time step. Start-up and shut-down costs are per event.
+    for variable_type in (PSIN.ActivePowerVariable(), PSIN.CommittedCapacityVariable())
+        @test objective_coefficient(two_hourly, variable_type) ≈
+              2.0 * objective_coefficient(hourly, variable_type)
+    end
+    for variable_type in (PSIN.StartUpCapacityVariable(), PSIN.ShutDownCapacityVariable())
+        @test objective_coefficient(hourly, variable_type) > 0.0
+        @test objective_coefficient(two_hourly, variable_type) ≈
+              objective_coefficient(hourly, variable_type)
+    end
+
+    # No-load fuel is burned per hour committed, start-up fuel once per MW started.
+    committed(container) = variable(container, PSIN.CommittedCapacityVariable())
+    start_up(container) = variable(container, PSIN.StartUpCapacityVariable())
+    @test JuMP.coefficient(fuel(hourly)["gas", 1], committed(hourly)) == 1.5
+    @test JuMP.coefficient(fuel(two_hourly)["gas", 1], committed(two_hourly)) == 3.0
+    @test JuMP.coefficient(fuel(hourly)["gas", 1], start_up(hourly)) == 3.0
+    @test JuMP.coefficient(fuel(two_hourly)["gas", 1], start_up(two_hourly)) == 3.0
+
+    # Committed capacity can ramp by 0.3 of its capacity per hour.
+    ramp_up(container) = constraint(container, PSIN.RampRateConstraint(), "$(meta)_up")
+    @test coefficient(ramp_up(hourly)["gas", 1], committed(hourly)) ≈ -0.3
+    @test coefficient(ramp_up(two_hourly)["gas", 1], committed(two_hourly)) ≈ -0.6
+
+    # The 4-hour minimum up time covers 4 hourly time steps or 2 time steps of 2 hours, and
+    # the 2-hour minimum down time covers 2 hourly time steps or a single time step.
+    start_ups(container) =
+        PSIN.get_variable(container, PSIN.StartUpCapacityVariable(), thermal_type, meta)
+    shut_downs(container) =
+        PSIN.get_variable(container, PSIN.ShutDownCapacityVariable(), thermal_type, meta)
+    min_up(container) = constraint(container, PSIN.MinimumUpTimeConstraint())
+    min_down(container) = constraint(container, PSIN.MinimumDownTimeConstraint())
+    @test coefficient(min_up(hourly)["gas", 1], start_ups(hourly)["gas", 22]) == -1.0
+    @test coefficient(min_up(hourly)["gas", 1], start_ups(hourly)["gas", 21]) == 0.0
+    @test coefficient(min_up(two_hourly)["gas", 1], start_ups(two_hourly)["gas", 12]) ==
+          -1.0
+    @test coefficient(min_up(two_hourly)["gas", 1], start_ups(two_hourly)["gas", 11]) == 0.0
+    @test coefficient(min_down(hourly)["gas", 1], shut_downs(hourly)["gas", 24]) == 1.0
+    @test coefficient(min_down(two_hourly)["gas", 1], shut_downs(two_hourly)["gas", 12]) ==
+          0.0
+
+    @test solve!(m_hourly) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test solve!(m_two_hourly) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 end

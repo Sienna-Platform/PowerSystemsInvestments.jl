@@ -74,7 +74,7 @@ export FlowActivePowerVariable
 
 ### Expressions ###
 export CumulativeCapacity
-export CapitalCost
+export CapitalCostExpression
 export TotalCapitalCost
 export FixedOperationModelCost
 export VariableOMCost

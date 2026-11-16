@@ -1,5 +1,7 @@
 #! format: off
 _supported_investment_formulations(::Type{<:PSIP.SupplyTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment)
+_supported_operation_formulations(::Type{<:PSIP.SupplyTechnology}) = (BasicDispatch, BasicDispatchWithBudget)
+_supported_operation_formulations(::Type{<:PSIP.SupplyTechnology{PSY.ThermalStandard}}) = (BasicDispatch, BasicDispatchWithBudget, ContinuousThermalCommitment)
 
 get_variable_lower_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = 0.0
 get_variable_upper_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = nothing
@@ -125,30 +127,29 @@ function add_expression!(
     return
 end
 
+# Fuel cost of the technologies with a fuel curve
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::V,
 ) where {
-    T <: Union{VariableOMCost, StartUpCost, ShutDownCost},
+    T <: FuelCost,
     U <: Vector{D},
-    V <: AbstractTechnologyFormulation,
+    V <: OperationsTechnologyFormulation,
 } where {D <: PSIP.SupplyTechnology}
-    IS.@assert_op length(devices) > 0
-    time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
-    tech_model = string(V)
-
+    fuel_devices = filter(has_fuel_curve, devices)
+    if isempty(fuel_devices)
+        return
+    end
     add_expression_container!(
         container,
         expression_type,
         D,
-        [PSIP.get_name(d) for d in devices],
-        time_steps,
-        meta=tech_model,
+        get_variable_names(fuel_devices),
+        get_time_steps(get_time_mapping(container)),
+        meta=string(V),
     )
-
     return
 end
 
@@ -196,7 +197,7 @@ function add_expression!(
     return
 end
 
-# Fuel consumption of the technologies with a fuel curve, and the container for its cost
+# Fuel consumption of the technologies with a fuel curve
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -222,14 +223,6 @@ function add_expression!(
         expression_type,
         D,
         get_variable_names(fuel_devices),
-        time_steps,
-        meta=tech_model,
-    )
-    add_expression_container!(
-        container,
-        FuelCost(),
-        D,
-        PSIP.get_name.(fuel_devices),
         time_steps,
         meta=tech_model,
     )

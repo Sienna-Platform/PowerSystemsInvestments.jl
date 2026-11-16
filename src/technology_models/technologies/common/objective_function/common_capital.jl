@@ -89,16 +89,14 @@ end
 function _add_proportional_term!(
     container::SingleOptimizationContainer,
     ::T,
-    technology::U,
+    ::U,
+    name::String,
     linear_term::Float64,
     time_period::Int,
     tech_model::String,
 ) where {T <: InvestmentVariableType, U <: PSIP.Technology}
     variable = get_variable(container, T(), U, tech_model)
-    lin_cost = JuMP.AffExpr(0.0)
-    for name in get_variable_names(technology)
-        JuMP.add_to_expression!(lin_cost, linear_term, variable[name, time_period])
-    end
+    lin_cost = JuMP.AffExpr(0.0, variable[name, time_period] => linear_term)
     add_to_objective_investment_expression!(container, lin_cost)
     return lin_cost
 end
@@ -147,16 +145,15 @@ end
 function _add_proportional_term!(
     container::SingleOptimizationContainer,
     ::T,
-    technology::U,
+    ::U,
+    name::String,
     linear_term::Float64,
     time_period::Int,
     tech_model::String,
 ) where {T <: InvestmentExpressionType, U <: PSIP.Technology}
     expr = get_expression(container, T(), U, tech_model)
     lin_cost = JuMP.AffExpr(0.0)
-    for name in get_variable_names(technology)
-        JuMP.add_to_expression!(lin_cost, linear_term, expr[name, time_period])
-    end
+    JuMP.add_to_expression!(lin_cost, linear_term, expr[name, time_period])
     add_to_objective_investment_expression!(container, lin_cost)
     return lin_cost
 end
