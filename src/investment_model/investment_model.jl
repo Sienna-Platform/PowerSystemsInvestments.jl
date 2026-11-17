@@ -544,15 +544,12 @@ function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
     for (_, arr) in store_data
         col_names = string.(_read_col_name(axes(arr)))
         n_times = size(arr.data, 2)
-        df_wide = DataFrames.DataFrame(permutedims(arr.data), col_names)
-        df_wide.time_index = (t_offset + 1):(t_offset + n_times)
         push!(
             frames,
-            DataFrames.stack(
-                df_wide,
-                DataFrames.Not(:time_index);
-                variable_name=:name,
-                value_name=:value,
+            DataFrames.DataFrame(;
+                time_index=repeat((t_offset + 1):(t_offset + n_times), length(col_names)),
+                name=repeat(col_names; inner=n_times),
+                value=vec(permutedims(arr.data)),
             ),
         )
         t_offset += n_times

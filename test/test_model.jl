@@ -619,11 +619,91 @@ end
     @test solve!(m; export_optimization_problem=false) == PSIN.RunStatus.FAILED
     conflict = get_infeasibility_conflict(container)
     @test !isempty(conflict)
+    # The conflict search leaves the optimizer silent again.
+    @test MOI.get(jump_model, MOI.Silent())
 
     # The conflict table must print with the installed PrettyTables version.
     key, indices = first(conflict)
     table = sprint(PSIN._print_conflict_table, key, indices)
     @test occursin(string(key), table)
+end
+
+@testset "Results of a technology named time_index" begin
+    p_5bus, op_days = test_2_zone_portfolio()
+    thermal_type = PSIP.SupplyTechnology{ThermalStandard}
+    expensive = PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal")
+    PSIP.add_technology!(
+        p_5bus,
+        thermal_type(;
+            prime_mover_type=PrimeMovers.ST,
+            capital_costs=PSIP.get_capital_costs(expensive),
+            id=1000,
+            available=true,
+            name="time_index",
+            fuel=[ThermalFuels.COAL],
+            power_systems_type="ThermalStandard",
+            operation_costs=PSIP.get_operation_costs(expensive),
+            capacity_limits=(0.0, 1e8),
+            outage_factors=(planned=0.0, forced=0.05),
+            region=PSIP.get_region(expensive),
+            unit_size=75.0,
+            financial_data=PSIP.get_financial_data(expensive),
+        ),
+    )
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{Dates}}()),
+        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1", "demand2"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["wind"],
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal", "time_index"],
+        thermal_type,
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+
+    dispatch = read_variable(
+        m,
+        PSIN.VariableKey(ActivePowerVariable, thermal_type, string(BasicDispatch)),
+    )
+    @test names(dispatch) == ["time_index", "name", "value"]
+    rows = filter(r -> r.name == "time_index", dispatch)
+    @test rows.time_index == 1:48
+    @test sort(unique(dispatch.name)) ==
+          ["cheap_thermal", "expensive_thermal", "time_index"]
 end
 
 @testset "Build and solve hydro portfolio with BasicDispatchWithBudget" begin

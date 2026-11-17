@@ -55,7 +55,7 @@ The investment formulations a technology accepts are listed by `_supported_inves
 - Operational weights (`OperationalRepresentativeDays`) are per-year: the weighted duration of each investment period's slices adds up to one year (e.g. `365` for a single representative day). The period length comes from the capital model and is applied when costs are discounted; `check_operational_weights` warns at build time otherwise.
 - A `SupplyTechnology` located in more than one region has separate build and dispatch variables per region, indexed as `<name>__<region>` (`get_variable_names` in `utils/technology_region_utils.jl`); `capacity_limits` applies to the total over its regions, and existing capacity or a minimum limit is an error for such a technology. Other technologies must be located in a single region.
 - Discrete investment variables count units: capacity and capital cost are scaled by `get_variable_multiplier`, and `get_unit_size` errors on a non-positive unit size.
-- A time series that does not start on the first time stamp of its representative period is an error (`check_initial_timestamp`).
+- A time series must start on the first time stamp of its representative period and have one value per time step; `retrieve_ops_time_series` checks both on every read.
 - The base year and discount rate used in the objective come from the `Portfolio`; `DiscountedCashFlow` only supplies the investment periods.
 - Respect the include order in `src/PowerSystemsInvestments.jl`: abstract formulation types, capital/operation/transport, then containers, then technology constructors. New types must be defined before files that reference them.
 

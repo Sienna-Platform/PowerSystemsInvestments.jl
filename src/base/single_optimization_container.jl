@@ -912,11 +912,10 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     model_status = JuMP.primal_status(jump_model)
 
     if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
+        @error "Optimizer returned $(model_status) (termination_status = $(JuMP.termination_status(jump_model)))"
         if get_calculate_conflict(get_settings(container))
-            @warn "Optimizer returned $model_status; computing conflict"
             compute_conflict!(container)
         end
-        @error "Optimizer returned $(model_status) (termination_status = $(JuMP.termination_status(jump_model)))"
         return RunStatus.FAILED
     end
 
@@ -951,9 +950,6 @@ function compute_conflict!(container::SingleOptimizationContainer)
         conflict_status = MOI.get(jump_model, MOI.ConflictStatus())
         if conflict_status != MOI.CONFLICT_FOUND
             @error "No conflict could be found for the model. Status: $conflict_status"
-            if !get_optimizer_solve_log_print(settings)
-                JuMP.set_silent(jump_model)
-            end
             return conflict_status
         end
 
@@ -975,12 +971,13 @@ function compute_conflict!(container::SingleOptimizationContainer)
 
         return conflict_status
     catch e
-        jump_model.is_model_dirty = true
         if isa(e, MethodError)
             @info "Can't compute conflict, check that your optimizer supports conflict refining/IIS"
         else
             @error "Can't compute conflict" exception = (e, catch_backtrace())
         end
+    finally
+        !get_optimizer_solve_log_print(settings) && JuMP.set_silent(jump_model)
     end
 
     return MOI.NO_CONFLICT_EXISTS

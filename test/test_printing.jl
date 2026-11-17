@@ -49,6 +49,13 @@
         BasicDispatchFeasibility,
     )
 
+    set_requirement_model!(
+        template,
+        ["wind_share", "wind_share_2035"],
+        PSIP.EnergyShareRequirements,
+        RequirementEnergyShare,
+    )
+
     @testset "text/plain InvestmentModelTemplate" begin
         buf = IOBuffer()
         show(buf, MIME("text/plain"), template)
@@ -56,6 +63,7 @@
 
         @test occursin("Template Model", out)
         @test occursin("Technology Models", out)
+        @test occursin("wind_share, wind_share_2035", out)
         @test occursin("MultiRegionBalanceModel", out)
         @test occursin("DiscountedCashFlow", out)
     end
