@@ -29,6 +29,9 @@ function construct_technologies!(
     # EnergyBalance
     add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
 
+    # WeightedEnergyDemand
+    add_to_expression!(container, WeightedEnergyDemand(), devices, C(), transport_model)
+
     return
 end
 

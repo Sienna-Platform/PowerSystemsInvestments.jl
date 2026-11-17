@@ -5,8 +5,9 @@ mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
     operation_model::OperationCostModel
     feasibility_model::FeasibilityModel
     transport_model::TransportModel{<:AbstractTransportAggregation}
-    technology_models::Dict # TODO: define strict Type for this
-    branch_models::Dict # TODO: Decide name for branches: path? corridors? We are using transport for network
+    technology_models::Dict{TechnologyModel, Vector{String}}
+    branch_models::Dict{TechnologyModel, Vector{String}} # TODO: Decide name for branches: path? corridors? We are using transport for network
+    requirement_models::Dict{RequirementModel, Vector{String}}
 
     function InvestmentModelTemplate(
         capital_model::CapitalCostModel,
@@ -19,8 +20,9 @@ mutable struct InvestmentModelTemplate <: AbstractInvestmentModelTemplate
             operation_model,
             feasibility_model,
             transport_model,
-            Dict(),
-            Dict(),
+            Dict{TechnologyModel, Vector{String}}(),
+            Dict{TechnologyModel, Vector{String}}(),
+            Dict{RequirementModel, Vector{String}}(),
         )
     end
 end
@@ -39,6 +41,7 @@ InvestmentModelTemplate() = InvestmentModelTemplate(SingleRegionPowerModel)
 
 get_technology_models(template::InvestmentModelTemplate) = template.technology_models
 get_branch_models(template::InvestmentModelTemplate) = template.branch_models
+get_requirement_models(template::InvestmentModelTemplate) = template.requirement_models
 get_transport_model(template::InvestmentModelTemplate) = template.transport_model
 get_transport_formulation(::TransportModel{T}) where {T <: AbstractTransportAggregation} = T
 
@@ -144,23 +147,34 @@ function set_technology_model!(
     return
 end
 
+function set_requirement_model!(
+    template::InvestmentModelTemplate,
+    names::Vector{String},
+    requirement_type::Type{<:PSIP.Requirement},
+    formulation::Type{<:RequirementFormulation},
+)
+    set_requirement_model!(template, names, RequirementModel(requirement_type, formulation))
+    return
+end
+
+function set_requirement_model!(
+    template::InvestmentModelTemplate,
+    names::Vector{String},
+    model::RequirementModel{<:PSIP.Requirement, <:RequirementFormulation},
+)
+    _set_model!(template.requirement_models, names, model)
+    return
+end
+
 function get_type_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfolio)
-    tech_types = Set()
-    capital_formulations = Set()
-    operation_formulations = Set()
-    feasibility_formulations = Set()
-    type_capital_map = Dict()
-    type_operation_map = Dict()
-    type_feasibility_map = Dict()
+    type_capital_map = Dict{Tuple{Type, Type}, Vector{String}}()
+    type_operation_map = Dict{Tuple{Type, Type}, Vector{String}}()
+    type_feasibility_map = Dict{Tuple{Type, Type}, Vector{String}}()
     for (model, names) in models_dict
         tech_type = get_technology_type(model)
         cap_formulation = get_investment_formulation(model)
         ops_formulation = get_operations_formulation(model)
         feas_formulation = get_feasibility_formulation(model)
-        push!(tech_types, tech_type)
-        push!(capital_formulations, cap_formulation)
-        push!(operation_formulations, ops_formulation)
-        push!(feasibility_formulations, feas_formulation)
         if !haskey(type_capital_map, (tech_type, cap_formulation))
             type_capital_map[(tech_type, cap_formulation)] = deepcopy(names)
         else
@@ -220,6 +234,29 @@ function get_type_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfol
     return type_capital_map, type_operation_map, type_feasibility_map
 end
 
+function get_requirement_formulation_to_names_map(models_dict::Dict, port::PSIP.Portfolio)
+    type_formulation_map = Dict{Tuple{Type, Type}, Vector{String}}()
+    for (model, names) in models_dict
+        req_type = get_requirement_type(model)
+        req_formulation = get_requirement_formulation(model)
+        for name in names
+            requirement = PSIP.get_requirement(req_type, port, name)
+            if isnothing(requirement)
+                error(
+                    "Requirement with name $name was added in a Formulation but does not exist in the Portfolio.",
+                )
+            end
+            if PSIP.get_available(requirement)
+                merged_names = get!(type_formulation_map, (req_type, req_formulation)) do
+                    return Vector{String}()
+                end
+                push!(merged_names, name)
+            end
+        end
+    end
+    return type_formulation_map
+end
+
 function names_to_technology_model_map(models_dict::Dict)
     inverse_dic = Dict{String, TechnologyModel}()
     for (model, names) in models_dict
@@ -241,6 +278,33 @@ function names_to_technology_model_vector(
     names::Vector{String},
 )
     model_vector = Vector{TechnologyModel}(undef, length(names))
+    for (ix, name) in enumerate(names)
+        model_vector[ix] = names_model_map[name]
+    end
+    return model_vector
+end
+
+function names_to_requirement_model_map(models_dict::Dict)
+    inverse_dic = Dict{String, RequirementModel}()
+    for (model, names) in models_dict
+        for name in names
+            if haskey(inverse_dic, name)
+                error(
+                    "Requirement $name is currently present in more than one requirement model",
+                )
+            else
+                inverse_dic[name] = model
+            end
+        end
+    end
+    return inverse_dic
+end
+
+function names_to_requirement_model_vector(
+    names_model_map::Dict{String, RequirementModel},
+    names::Vector{String},
+)
+    model_vector = Vector{RequirementModel}(undef, length(names))
     for (ix, name) in enumerate(names)
         model_vector[ix] = names_model_map[name]
     end

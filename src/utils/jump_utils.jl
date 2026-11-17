@@ -41,19 +41,6 @@ function fix_parameter_value(input::JuMP.VariableRef, value::Float64)
     return
 end
 
-function to_matrix(array::DenseAxisArray{T, 1, K}) where {T, K <: NTuple{1, Any}}
-    data = array.data[:]
-    return reshape(data, length(data), 1)
-end
-
-to_matrix(array::DenseAxisArray{T, 2} where {T}) = permutedims(array.data)
-
-function to_matrix(::DenseAxisArray{T, N, K}) where {T, N, K <: NTuple{N, Any}}
-    error(
-        "Converting $(N)-dimensional DenseAxisArrays to matrix is currently not supported",
-    )
-end
-
 function get_column_names(key::OptimizationContainerKey)
     return ([encode_key_as_string(key)],)
 end
@@ -114,18 +101,10 @@ function _to_matrix(
     return data
 end
 
-function to_matrix(array::SparseAxisArray{T, N, K}) where {T, N, K <: NTuple{N, Any}}
-    # Don't use _get_column_names to avoid additional string conversion
-    columns = sort!(unique!([k[1:(N - 1)] for k in keys(array.data)]))
-    return _to_matrix(array, columns)
-end
-
 function to_dataframe(array::SparseAxisArray{T, N, K}) where {T, N, K <: NTuple{N, Any}}
     columns = _get_column_names(array)
     return DataFrames.DataFrame(_to_matrix(array, columns), columns)
 end
-
-to_matrix(array::Matrix) = array
 
 """
 Returns the correct container specification for the selected type of JuMP Model
@@ -281,4 +260,38 @@ function serialize_jump_optimization_model(jump_model::JuMP.Model, save_path::St
     MOI.copy_to(MOF_model, JuMP.backend(jump_model))
     MOI.write_to_file(MOF_model, save_path)
     return
+end
+
+function check_conflict_status(
+    jump_model::JuMP.Model,
+    constraint_container::DenseAxisArray{JuMP.ConstraintRef},
+)
+    indexes = Iterators.product(axes(constraint_container)...)
+    conflict_indices = Vector{eltype(indexes)}()
+    for index in indexes
+        if isassigned(constraint_container, index...) &&
+           MOI.get(
+            jump_model,
+            MOI.ConstraintConflictStatus(),
+            constraint_container[index...],
+        ) != MOI.NOT_IN_CONFLICT
+            push!(conflict_indices, index)
+        end
+    end
+    return conflict_indices
+end
+
+function check_conflict_status(
+    jump_model::JuMP.Model,
+    constraint_container::SparseAxisArray{<:Union{Nothing, JuMP.ConstraintRef}},
+)
+    conflict_indices = Vector{keytype(constraint_container.data)}()
+    for (index, constraint) in constraint_container.data
+        isnothing(constraint) && continue
+        if MOI.get(jump_model, MOI.ConstraintConflictStatus(), constraint) !=
+           MOI.NOT_IN_CONFLICT
+            push!(conflict_indices, index)
+        end
+    end
+    return conflict_indices
 end
