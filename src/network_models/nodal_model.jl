@@ -33,18 +33,16 @@ function add_constraints!(
     investment_time_stamps = get_investment_time_stamps(time_mapping)
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
-    discount_factor = 1.0 / (1.0 + discount_rate)
-    years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
     penalty = Dict{Int, Float64}()
     for op_ix in get_operational_indexes(time_mapping)
         inv_tuple = investment_time_stamps[inverse_invest_mapping[op_ix]]
-        period_factor = investment_period_annuity_factor(discount_rate, inv_tuple)
+        period_factor =
+            investment_period_present_value_factor(discount_rate, base_year, inv_tuple)
         for t in consecutive_slices[op_ix]
             penalty[t] =
                 BALANCE_SLACK_PENALTY *
                 period_factor *
-                get_time_step_weight(container, op_ix) *
-                discount_factor^(years[t] - base_year)
+                get_time_step_weight(container, op_ix)
         end
     end
     store_names = get_store_variable_names(get_settings(container))
@@ -68,5 +66,15 @@ function add_constraints!(
         )
     end
 
+    return
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::Type{T},
+    port::U,
+) where {T <: NodalBalanceFeasibilityConstraint, U <: PSIP.Portfolio}
+    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    _add_feasibility_constraints!(container, T, U, nodes)
     return
 end

@@ -4,6 +4,8 @@ abstract type MaximumCumulativeInvestmentConstraint <: ISOPT.ConstraintType end
 
 struct MaximumCumulativeCapacity <: MaximumCumulativeInvestmentConstraint end
 
+struct MinimumCumulativeCapacity <: ISOPT.ConstraintType end
+
 struct MaximumCumulativePowerCapacity <: MaximumCumulativeInvestmentConstraint end
 
 struct MaximumCumulativeEnergyCapacity <: MaximumCumulativeInvestmentConstraint end
@@ -69,6 +71,8 @@ struct MinimumDownTimeConstraint <: OperationVariableLimitsConstraintType end
 struct RampRateConstraint <: OperationVariableLimitsConstraintType end
 
 struct CommittedCapacityTrackingConstraint <: OperationVariableLimitsConstraintType end
+
+struct NodalBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
 
 ### Requirement Constraints ###
 

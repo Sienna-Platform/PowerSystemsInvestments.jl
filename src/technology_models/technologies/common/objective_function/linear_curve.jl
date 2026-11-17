@@ -269,18 +269,13 @@ function _add_linearcurve_cost!(
     inflation_rate = get_inflation_rate(container)
     tech_base_year = PSIP.get_technology_base_year(PSIP.get_financial_data(technology))
 
-    discount_factor = 1 / (1 + discount_rate)
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
-        inv_tuple = inv_tuples[t]
-        year = Dates.value.(Dates.Year.(inv_tuple[1]))
-        future_to_present_value = discount_factor^(year - base_year)
-        period_payments =
-            proportional_term * investment_period_annuity_factor(discount_rate, inv_tuple)
-        npv_proportional_term =
-            period_payments * dollars_to_base_year * future_to_present_value
+        period_factor =
+            investment_period_present_value_factor(discount_rate, base_year, inv_tuples[t])
+        npv_proportional_term = proportional_term * dollars_to_base_year * period_factor
 
         _add_linearcurve_variable_term_to_model!(
             container,
@@ -507,25 +502,24 @@ function _add_linearcurve_cost!(
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     investment_time_stamps = get_investment_time_stamps(time_mapping)
 
-    discount_factor = 1.0 / (1.0 + discount_rate)
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
-    years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
 
     for op_ix in get_operational_indexes(time_mapping)
-        weight = get_cost_weight(container, T(), op_ix)
-        stage = inverse_invest_mapping[op_ix]
-        inv_tuple = investment_time_stamps[stage]
-        period_factor = investment_period_annuity_factor(discount_rate, inv_tuple)
+        inv_tuple = investment_time_stamps[inverse_invest_mapping[op_ix]]
+        period_factor =
+            investment_period_present_value_factor(discount_rate, base_year, inv_tuple)
+        npv_proportional_term =
+            proportional_term *
+            dollars_to_base_year *
+            period_factor *
+            get_cost_weight(container, T(), op_ix)
         for t in consecutive_slices[op_ix]
-            future_to_present_value = discount_factor^(years[t] - base_year)
-            npv_proportional_term =
-                proportional_term * dollars_to_base_year * future_to_present_value
             _add_linearcurve_variable_term_to_model!(
                 container,
                 T(),
                 S(),
                 technology,
-                period_factor * weight * npv_proportional_term,
+                npv_proportional_term,
                 t,
                 tech_model,
             )

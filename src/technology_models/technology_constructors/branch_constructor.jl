@@ -56,13 +56,19 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
-    T <: PSIP.AggregateTransportTechnology,
+    T <: Union{PSIP.AggregateTransportTechnology, PSIP.NodalACTransportTechnology},
     D <: FeasibilityTechnologyFormulation,
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
-
-    # TODO: Feasibility Models
+    add_to_expression!(
+        container,
+        FeasibilityImportCapacity(),
+        devices,
+        D(),
+        transport_model,
+        tech_model_vector,
+    )
     return
 end
 
@@ -134,13 +140,10 @@ function construct_technologies!(
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
 ) where {
-    T <: PSIP.AggregateTransportTechnology,
+    T <: Union{PSIP.AggregateTransportTechnology, PSIP.NodalACTransportTechnology},
     D <: FeasibilityTechnologyFormulation,
     X <: TechnologyModel,
 }
-    devices = [PSIP.get_technology(T, p, n) for n in names]
-
-    # TODO: Feasibility Models
     return
 end
 

@@ -42,7 +42,6 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
     multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
@@ -51,7 +50,6 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(
                     expression[SINGLE_REGION, t],
@@ -80,7 +78,6 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
     multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
@@ -91,7 +88,6 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(expression[region, t], multiplier * ts_data[ix])
             end
@@ -116,7 +112,6 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
     multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
@@ -127,7 +122,6 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(expression[region, t], multiplier * ts_data[ix])
             end
@@ -156,7 +150,6 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
 
     for d in devices
         for op_ix in operational_indexes
@@ -165,7 +158,6 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             _add_to_jump_expression!(
                 expression[SINGLE_REGION, op_ix],
                 weight * sum(ts_data),
@@ -192,7 +184,6 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
 
     for d in devices
         # Only 1 region supported
@@ -203,7 +194,6 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             _add_to_jump_expression!(expression[region, op_ix], weight * sum(ts_data))
         end
     end
@@ -226,7 +216,6 @@ function add_to_expression!(
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
 
     for d in devices
         # Only 1 region (node) supported
@@ -237,7 +226,6 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             _add_to_jump_expression!(expression[region, op_ix], weight * sum(ts_data))
         end
     end
@@ -260,7 +248,6 @@ function add_to_expression!(
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
     multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
@@ -269,7 +256,6 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(
                     expression[SINGLE_REGION, t],
@@ -291,14 +277,13 @@ function add_to_expression!(
 ) where {
     T <: FeasibilitySurplus,
     U <: Vector{D},
-    V <: MultiRegionBalanceModel,
+    V <: Union{MultiRegionBalanceModel, NodalBalanceModel},
 } where {D <: PSIP.DemandRequirement}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-    time_stamps = get_time_stamps(time_mapping)
     multiplier = get_variable_multiplier(ActivePowerVariable(), D)
 
     for d in devices
@@ -309,7 +294,6 @@ function add_to_expression!(
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             # Load Data is in MW
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (ix, t) in enumerate(time_slices)
                 _add_to_jump_expression!(expression[region, t], multiplier * ts_data[ix])
             end

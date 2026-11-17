@@ -109,7 +109,14 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Feasibility Surplus
-    add_to_expression!(container, FeasibilitySurplus(), devices, D(), transport_model)
+    add_to_expression!(
+        container,
+        FeasibilitySurplus(),
+        devices,
+        D(),
+        transport_model,
+        tech_model_vector,
+    )
     return
 end
 
@@ -137,6 +144,13 @@ function construct_technologies!(
     add_constraints!(
         container,
         MaximumCumulativeCapacity(),
+        CumulativeCapacity(),
+        devices,
+        B(),
+    )
+    add_constraints!(
+        container,
+        MinimumCumulativeCapacity(),
         CumulativeCapacity(),
         devices,
         B(),

@@ -624,11 +624,91 @@ end
     @test status == PSIN.RunStatus.FAILED
     conflict = get_infeasibility_conflict(container)
     @test !isempty(conflict)
+    # The conflict search leaves the optimizer silent again.
+    @test MOI.get(jump_model, MOI.Silent())
 
     # The conflict table must print with the installed PrettyTables version.
     key, indices = first(conflict)
     table = sprint(PSIN._print_conflict_table, key, indices)
     @test occursin(string(key), table)
+end
+
+@testset "Results of a technology named time_index" begin
+    p_5bus, op_days = test_2_zone_portfolio()
+    thermal_type = PSIP.SupplyTechnology{ThermalStandard}
+    expensive = PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal")
+    PSIP.add_technology!(
+        p_5bus,
+        thermal_type(;
+            prime_mover_type=PrimeMovers.ST,
+            capital_costs=PSIP.get_capital_costs(expensive),
+            id=1000,
+            available=true,
+            name="time_index",
+            fuel=[ThermalFuels.COAL],
+            power_systems_type="ThermalStandard",
+            operation_costs=PSIP.get_operation_costs(expensive),
+            capacity_limits=(0.0, 1e8),
+            outage_factors=(planned=0.0, forced=0.05),
+            region=PSIP.get_region(expensive),
+            unit_size=75.0,
+            financial_data=PSIP.get_financial_data(expensive),
+        ),
+    )
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{Dates}}()),
+        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1", "demand2"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["wind"],
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal", "time_index"],
+        thermal_type,
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+
+    dispatch = read_variable(
+        m,
+        PSIN.VariableKey(ActivePowerVariable, thermal_type, string(BasicDispatch)),
+    )
+    @test names(dispatch) == ["time_index", "name", "value"]
+    rows = filter(r -> r.name == "time_index", dispatch)
+    @test rows.time_index == 1:48
+    @test sort(unique(dispatch.name)) ==
+          ["cheap_thermal", "expensive_thermal", "time_index"]
 end
 
 @testset "Build and solve hydro portfolio with BasicDispatchWithBudget" begin
@@ -1112,8 +1192,17 @@ end
     @test isapprox(wesd_1, weight_1 * total_demand_2030; atol=1e-2)
 end
 
-function _build_thermal_investment_model(investment_formulation)
+function _build_thermal_investment_model(investment_formulation; min_capacity=nothing)
     p_5bus, op_days = test_2_zone_portfolio()
+    if !isnothing(min_capacity)
+        thermal = PSIP.get_technology(
+            PSIP.SupplyTechnology{PSY.ThermalStandard},
+            p_5bus,
+            "expensive_thermal",
+        )
+        max_capacity = PSIP.get_capacity_limits(thermal).max
+        PSIP.set_capacity_limits!(thermal, (min=min_capacity, max=max_capacity))
+    end
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -1235,6 +1324,55 @@ end
     )
 end
 
+@testset "Minimum cumulative capacity" begin
+    # "expensive_thermal" has no existing capacity and units of 75 MW. Its minimum is more than
+    # the system needs, and applies to its total capacity in every period, not to what it
+    # builds in each period.
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    min_capacity = 3000.0
+    for (formulation, mw_per_unit) in
+        ((ContinuousInvestment, 1.0), (IntegerInvestment, 75.0))
+        m, _ = _build_thermal_investment_model(formulation; min_capacity=min_capacity)
+        container = PSIN.get_optimization_container(m)
+        meta = string(formulation)
+        build = PSIN.get_variable(container, PSIN.BuildCapacity(), thermal_type, meta)
+        min_cap = PSIN.get_constraint(
+            container,
+            PSIN.MinimumCumulativeCapacity(),
+            thermal_type,
+            meta,
+        )
+        @test axes(min_cap)[1] == ["expensive_thermal"]
+        for t in PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+            @test JuMP.lower_bound(build["expensive_thermal", t]) == 0.0
+            @test JuMP.normalized_rhs(min_cap["expensive_thermal", t]) == min_capacity
+            @test JuMP.normalized_coefficient(
+                min_cap["expensive_thermal", t],
+                build["expensive_thermal", 1],
+            ) == mw_per_unit
+        end
+
+        @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        capacity = filter(
+            r -> r.name == "expensive_thermal",
+            read_expression(m, PSIN.ExpressionKey(CumulativeCapacity, thermal_type, meta)),
+        )
+        @test all(capacity.value .>= min_capacity - 1e-6)
+        builds =
+            sort!(
+                filter(
+                    r -> r.name == "expensive_thermal",
+                    read_variable(m, PSIN.VariableKey(BuildCapacity, thermal_type, meta)),
+                ),
+                :time_index,
+            ).value
+        # The capacity built in the first period also counts in the second, so nothing else
+        # has to be built.
+        @test builds[2] ≈ 0.0 atol = 1e-6
+        @test builds[1] * mw_per_unit >= min_capacity - 1e-6
+    end
+end
+
 @testset "Storage technology with IntegerInvestment" begin
     p_5bus, op_days = test_2_zone_portfolio()
     periods = [
@@ -1337,5 +1475,74 @@ end
         @test read_variable(saved_results, build_key) == raw_builds
         @test read_expression(saved_results, additions_key).value ≈
               unit_size .* raw_builds.value
+    end
+end
+
+@testset "Operation costs are discounted from the start of the investment period" begin
+    # The first investment period starts in 2028, but its representative day is in 2030.
+    # Its annual operation costs are valued at the start of 2028 and discounted from there.
+    p_5bus, op_days = test_2_zone_portfolio()
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    periods = [
+        (Date(Month(1), Year(2028)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{DateTime}}()),
+        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal"],
+        thermal_type,
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    r = PSIN.get_discount_rate(container)
+    base_year = PSIN.get_base_year(container)
+    thermal = PSIP.get_technology(thermal_type, p_5bus, "cheap_thermal")
+    cost_per_mwh = PSY.get_proportional_term(
+        PSY.get_value_curve(PSY.get_variable(PSIP.get_operation_costs(thermal))),
+    )
+    tech_base_year = PSIP.get_technology_base_year(PSIP.get_financial_data(thermal))
+    dollars_to_base_year =
+        (1.0 + PSIN.get_inflation_rate(container))^(-(tech_base_year - base_year))
+    # Seven annual payments, 2028 to 2034, valued at the start of 2028
+    annuity = sum((1.0 + r)^(-k) for k in 0:6)
+    expected =
+        cost_per_mwh * dollars_to_base_year * 365 * annuity / (1.0 + r)^(2028 - base_year)
+
+    dispatch = PSIN.get_variable(
+        container,
+        PSIN.ActivePowerVariable(),
+        thermal_type,
+        "BasicDispatch",
+    )
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    for t in (1, 12, 24)
+        @test JuMP.coefficient(objective, dispatch["cheap_thermal", t]) ≈ expected
     end
 end

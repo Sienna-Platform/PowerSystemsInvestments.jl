@@ -24,5 +24,6 @@ function construct_transport!(
     transport_model::TransportModel{NodalBalanceModel},
 )
     add_constraints!(container, NodalBalanceConstraint, p, get_use_slacks(transport_model))
+    add_constraints!(container, NodalBalanceFeasibilityConstraint, p)
     return
 end
