@@ -188,9 +188,14 @@ function _add_linearcurve_cost!(
     proportional_term::Float64,
     tech_model::String,
 ) where {T <: InvestmentVariableType}
-    amortized_proportional_term, discount_factor, base_year =
-        amortize_overnight_term_to_base_year_dollars(port, technology, proportional_term)
     time_mapping = IOM.get_time_mapping(container)
+    base_year = get_base_year(time_mapping)
+    amortized_proportional_term, discount_factor =
+        amortize_overnight_term_to_base_year_dollars(
+            technology,
+            proportional_term,
+            base_year,
+        )
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
@@ -221,9 +226,14 @@ function _add_linearcurve_cost!(
     proportional_term::Float64,
     tech_model::String,
 ) where {T <: InvestmentVariableType}
-    amortized_proportional_term, discount_factor, base_year =
-        amortize_overnight_term_to_base_year_dollars(port, technology, proportional_term)
     time_mapping = IOM.get_time_mapping(container)
+    base_year = get_base_year(time_mapping)
+    amortized_proportional_term, discount_factor =
+        amortize_overnight_term_to_base_year_dollars(
+            technology,
+            proportional_term,
+            base_year,
+        )
     inv_tuples = get_investment_time_stamps(time_mapping)
 
     for t in get_investment_time_steps(time_mapping)
@@ -255,10 +265,11 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: InvestmentExpressionType}
     time_mapping = IOM.get_time_mapping(container)
-    base_year = PSIP.get_base_year(port)
-    discount_rate = PSIP.get_discount_rate(port)
-    inflation_rate = PSIP.get_inflation_rate(port)
-    tech_base_year = PSIP.get_technology_base_year(technology)
+    base_year = get_base_year(time_mapping)
+    financials = PSIP.get_financial_data(technology)
+    discount_rate = PSIP.get_discount_rate(financials)
+    inflation_rate = PSIP.get_inflation_rate(financials)
+    tech_base_year = PSIP.get_technology_base_year(financials)
 
     discount_factor = 1 / (1 + discount_rate)
     dollars_to_base_year = (1.0 + inflation_rate)^(-(tech_base_year - base_year))
@@ -295,11 +306,11 @@ function _add_linearcurve_cost!(
     tech_model::String,
 ) where {T <: OperationsVariableType}
     financials = PSIP.get_financial_data(technology)
-    base_year = PSIP.get_base_year(port)
-    discount_rate = PSIP.get_discount_rate(port)
-    inflation_rate = PSIP.get_inflation_rate(port)
+    discount_rate = PSIP.get_discount_rate(financials)
+    inflation_rate = PSIP.get_inflation_rate(financials)
     tech_base_year = PSIP.get_technology_base_year(financials)
     time_mapping = IOM.get_time_mapping(container)
+    base_year = get_base_year(time_mapping)
     operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
 

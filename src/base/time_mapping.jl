@@ -18,12 +18,14 @@ end
 struct InvestmentTimeMapping <: IOM.AbstractTimeMapping
     investment::InvestmentIntervals
     operation::OperationalPeriods
+    base_year::Int
 end
 
 function InvestmentTimeMapping(
     investment_intervals::Vector{NTuple{2, Dates.Date}},
     operational_periods::Vector{Vector{Dates.DateTime}},
     feasibility_periods::Vector{Vector{Dates.DateTime}};
+    base_year::Int,
     operational_weights::Vector{Float64}=ones(length(operational_periods)),
 )
     if length(operational_weights) != length(operational_periods)
@@ -85,6 +87,7 @@ function InvestmentTimeMapping(
             collect(1:op_index_last_slice),
             [operational_weights; zeros(length(feasibility_periods))],
         ),
+        base_year,
     )
     IOM.validate_time_mapping(tm)
     return tm
@@ -96,6 +99,7 @@ function InvestmentTimeMapping(template::InvestmentModelTemplate)
         template.capital_model.investment_years,
         operation_model.representative_series,
         template.feasibility_model.sample_periods;
+        base_year=Dates.value(template.capital_model.base_year),
         operational_weights=operation_model.series_weights,
     )
 end
@@ -120,6 +124,7 @@ get_feasibility_indexes(tm::InvestmentTimeMapping) = tm.operation.feasibility_in
 get_all_indexes(tm::InvestmentTimeMapping) =
     [tm.operation.operational_indexes; tm.operation.feasibility_indexes]
 get_investment_time_stamps(tm::InvestmentTimeMapping) = tm.investment.time_stamps
+get_base_year(tm::InvestmentTimeMapping) = tm.base_year
 get_investment_map_to_operational_slices(tm::InvestmentTimeMapping) =
     tm.investment.map_to_operational_slices
 is_feasibility_empty(tm::InvestmentTimeMapping) = isempty(tm.operation.feasibility_indexes)

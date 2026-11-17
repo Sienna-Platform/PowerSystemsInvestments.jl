@@ -28,32 +28,28 @@ TimeSeries = "9e3dc215-6440-5c97-bce1-76c03772f85e"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [sources]
-InfrastructureCoreOpenAPIModels = {rev = "main", subdir = "InfrastructureCoreOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
 InfrastructureOptimizationModels = {path = "../InfrastructureOptimizationModels.jl"}
 InfrastructureSystems = {rev = "IS4", url = "https://github.com/Sienna-Platform/InfrastructureSystems.jl.git"}
-InfrastructureTimeSeriesOpenAPIModels = {rev = "main", subdir = "InfrastructureTimeSeriesOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
-PowerCoreOpenAPIModels = {rev = "main", subdir = "PowerCoreOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
-PowerInvestmentsOpenAPIModels = {rev = "main", subdir = "PowerInvestmentsOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
-PowerOperationsOpenAPIModels = {rev = "main", subdir = "PowerOperationsOpenAPIModels.jl", url = "https://github.com/Sienna-Platform/PowerOpenAPIModels.git"}
 PowerSystems = {rev = "psy6", url = "https://github.com/Sienna-Platform/PowerSystems.jl.git"}
+PowerSystemsInvestmentsPortfolios = {rev = "jd/sdk-0.5", url = "https://github.com/Sienna-Platform/PowerSystemsInvestmentsPortfolios.jl"}
 
 [compat]
 DataFrames = "1"
 DataStructures = "~0.18, ~0.19"
 Dates = "1"
 DocStringExtensions = "~v0.9"
-InfrastructureCoreOpenAPIModels = "0.1, 0.2"
+InfrastructureCoreOpenAPIModels = "0.5"
 InfrastructureOptimizationModels = "0.1.0"
 InfrastructureSystems = "3.6.0"
-InfrastructureTimeSeriesOpenAPIModels = "0.1, 0.2"
+InfrastructureTimeSeriesOpenAPIModels = "0.5"
 JSON3 = "v1.14.0"
 JuMP = "1"
 Logging = "1"
 MathOptInterface = "1"
 OrderedCollections = "1"
-PowerCoreOpenAPIModels = "0.1, 0.2"
-PowerInvestmentsOpenAPIModels = "0.1, 0.2"
-PowerOperationsOpenAPIModels = "0.1, 0.2"
+PowerCoreOpenAPIModels = "0.5"
+PowerInvestmentsOpenAPIModels = "0.5"
+PowerOperationsOpenAPIModels = "0.5"
 PowerSystems = "5.10.0"
 PowerSystemsInvestmentsPortfolios = "0.1.0"
 PrettyTables = "3"

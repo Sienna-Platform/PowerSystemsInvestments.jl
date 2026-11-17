@@ -8,10 +8,11 @@
             [DateTime(2030, 1, 1, 0), DateTime(2030, 1, 1, 1)],
             [DateTime(2040, 1, 1, 0), DateTime(2040, 1, 1, 1)],
         ]
-        tm = PSIN.InvestmentTimeMapping(invest, ops, no_feasibility)
+        tm = PSIN.InvestmentTimeMapping(invest, ops, no_feasibility; base_year=2025)
 
         @test tm isa IOM.AbstractTimeMapping
         @test IOM.get_base_date(tm) == Date(2030, 1, 1)
+        @test PSIN.get_base_year(tm) == 2025
         @test PSIN.get_investment_time_stamps(tm) == invest
         @test IOM.get_period_count(tm) == 2
         @test PSIN.get_investment_time_steps(tm) == 1:2
@@ -42,7 +43,7 @@
         invest = [(Date(2030, 1, 1), Date(2030, 12, 31))]
         ops = [[DateTime(2030, 1, 1, 0), DateTime(2030, 1, 1, 1)]]
         feas = [[DateTime(2030, 6, 1, 0)]]
-        tm = PSIN.InvestmentTimeMapping(invest, ops, feas)
+        tm = PSIN.InvestmentTimeMapping(invest, ops, feas; base_year=2025)
 
         @test !PSIN.is_feasibility_empty(tm)
         @test PSIN.get_operational_indexes(tm) == [1]
@@ -58,13 +59,18 @@
         ops = [[DateTime(2030, 1, 1, 0)], [DateTime(2030, 6, 1, 0)]]
 
         # Default: 1.0 per operational slice
-        tm = PSIN.InvestmentTimeMapping(invest, ops, no_feasibility)
+        tm = PSIN.InvestmentTimeMapping(invest, ops, no_feasibility; base_year=2025)
         @test PSIN.get_operational_weights(tm) == [1.0, 1.0]
 
         # Feasibility slices weigh 0.0 and follow the operational slices
         feas = [[DateTime(2030, 9, 1, 0)]]
-        tm_w =
-            PSIN.InvestmentTimeMapping(invest, ops, feas; operational_weights=[90.0, 275.0])
+        tm_w = PSIN.InvestmentTimeMapping(
+            invest,
+            ops,
+            feas;
+            base_year=2025,
+            operational_weights=[90.0, 275.0],
+        )
         @test IOM.get_block_weights(tm_w) == [90.0, 275.0, 0.0]
         w = PSIN.get_operational_weights(tm_w)
         @test [w[op_ix] for op_ix in PSIN.get_operational_indexes(tm_w)] == [90.0, 275.0]
@@ -73,6 +79,7 @@
             invest,
             ops,
             no_feasibility;
+            base_year=2025,
             operational_weights=[1.0],
         )
     end
@@ -85,12 +92,14 @@
         @test_throws r"Operational period 2 .* does not fall within any investment interval" PSIN.InvestmentTimeMapping(
             invest,
             [inside, outside],
-            no_feasibility,
+            no_feasibility;
+            base_year=2025,
         )
         @test_throws r"Feasibility period 1 .* does not fall within any investment interval" PSIN.InvestmentTimeMapping(
             invest,
             [inside],
-            [outside],
+            [outside];
+            base_year=2025,
         )
     end
 end
