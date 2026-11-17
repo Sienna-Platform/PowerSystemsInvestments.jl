@@ -411,7 +411,6 @@ function add_constraints!(
     operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
 
     for (ix, d) in enumerate(devices)
         tech_model = tech_model_vector[ix]
@@ -421,7 +420,6 @@ function add_constraints!(
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             time_step_inv = inverse_invest_mapping[op_ix]
             for (ix, t) in enumerate(time_slices)
                 con_ub[name, t] = JuMP.@constraint(
