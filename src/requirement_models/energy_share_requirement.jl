@@ -182,7 +182,6 @@ function add_expression!(
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
 
     requirement_names = [PSIP.get_name(r) for r in requirements]
     expression = add_expression_container!(
@@ -204,12 +203,6 @@ function add_expression!(
                 time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
                 # Load Data is in MW
                 ts_data = TimeSeries.values(time_series.data)
-                check_initial_timestamp(
-                    time_series,
-                    d,
-                    time_stamps[first(time_slices)],
-                    op_ix,
-                )
                 _add_to_jump_expression!(demand_expr, weight * sum(ts_data))
             end
             expression[req_name, op_ix] = demand_expr

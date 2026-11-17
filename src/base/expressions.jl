@@ -17,6 +17,10 @@ struct WeightedEnergyDemand <: OperationsExpressionType end
 struct WeightedEnergyShareGeneration <: OperationsExpressionType end
 struct WeightedEnergyShareDemand <: OperationsExpressionType end
 
+struct CapacityAdditions <: InvestmentExpressionType end
+struct PowerCapacityAdditions <: InvestmentExpressionType end
+struct EnergyCapacityAdditions <: InvestmentExpressionType end
+
 struct CumulativeCapacity <: CumulativeInvestmentExpressionType end
 
 struct CumulativePowerCapacity <: CumulativeInvestmentExpressionType end
@@ -25,7 +29,7 @@ struct CumulativeWindCapacity <: CumulativeInvestmentExpressionType end
 struct CumulativeSolarCapacity <: CumulativeInvestmentExpressionType end
 struct CumulativeInverterCapacity <: CumulativeInvestmentExpressionType end
 
-struct CapitalCost <: InvestmentExpressionType end
+struct CapitalCostExpression <: InvestmentExpressionType end
 struct FixedOperationModelCost <: InvestmentExpressionType end
 
 struct TotalCapitalCost <: ISOPT.ExpressionType end
@@ -41,6 +45,13 @@ struct StartUpCost <: OperationsExpressionType end
 struct ShutDownCost <: OperationsExpressionType end
 
 struct FeasibilitySurplus <: FeasibilityExpressionType end
+
+# Capacity of the branches connected to a region, which can import over them
+struct FeasibilityImportCapacity <: FeasibilityExpressionType end
+
+should_write_resulting_value(::Type{CapacityAdditions}) = true
+should_write_resulting_value(::Type{PowerCapacityAdditions}) = true
+should_write_resulting_value(::Type{EnergyCapacityAdditions}) = true
 
 should_write_resulting_value(::Type{CumulativeCapacity}) = true
 should_write_resulting_value(::Type{CumulativePowerCapacity}) = true

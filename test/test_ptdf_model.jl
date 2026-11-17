@@ -77,10 +77,11 @@ function _nodal_test_model(
         RepresentativePeriods(Vector{Vector{Dates}}()),
         TransportModel(transport; use_slacks=use_slacks, attributes=attributes),
     )
+    first_id = next_region_id(p_5bus)
     regions = Dict(
         n => PSIP.Node(;
             name=n,
-            id=i,
+            id=first_id + i - 1,
             bus_type=(i == 1 ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ),
         ) for (i, n) in enumerate(nodes)
     )
@@ -139,7 +140,7 @@ function _nodal_test_model(
         PSIP.add_supplemental_attribute!(
             p_5bus,
             line,
-            PSIP.ExistingDevices(; existing_devices=[device]),
+            PSIP.ExistingDevices(; id=1, existing_devices=[device]),
         )
     end
     set_technology_model!(
@@ -271,10 +272,11 @@ function _ptdf_network_data(lines; tol=0.0)
     sys = build_system(PSITestSystems, "c_sys5_re")
     set_units_base_system!(sys, "NATURAL_UNITS")
     PSIP.set_base_system!(portfolio, sys)
+    first_id = next_region_id(portfolio)
     nodes = Dict(
         n => PSIP.Node(;
             name=n,
-            id=i,
+            id=first_id + i - 1,
             bus_type=(n == "A" ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ),
         ) for (i, n) in enumerate(("A", "B", "C", "D"))
     )
@@ -289,7 +291,7 @@ function _ptdf_network_data(lines; tol=0.0)
             PSIP.add_supplemental_attribute!(
                 portfolio,
                 line,
-                PSIP.ExistingDevices(; existing_devices=["1"]),
+                PSIP.ExistingDevices(; id=1, existing_devices=["1"]),
             )
         end
         push!(get!(names_by_formulation, formulation, String[]), name)
@@ -368,7 +370,8 @@ end
     @test_throws ErrorException _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (max_capacity=1e8,)),
     ])
-    @test_throws ErrorException _ptdf_network_data([
+    # PSIP rejects a line with a non-positive unit size when it is added to the portfolio
+    @test_logs (:error, r"unit size must be finite and positive") match_mode = :any @test_throws IS.InvalidValue _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (unit_size=0.0,)),
     ])
     @test_logs (:warn, r"susceptance per MW") match_mode = :any _ptdf_network_data([

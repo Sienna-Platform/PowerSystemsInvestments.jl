@@ -165,7 +165,7 @@ function add_to_expression!(
         rate, constant = _loss_terms(d)
         inv_model = string(get_investment_formulation(tech_model_vector[ix]))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
-        for op_ix in get_operational_indexes(time_mapping)
+        for op_ix in get_all_indexes(time_mapping)
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in consecutive_slices[op_ix],
                 (node, sent, received) in ((from, from_to, to_from), (to, to_from, from_to))
@@ -181,6 +181,61 @@ function add_to_expression!(
         end
     end
 
+    return
+end
+
+# Branches are internal to a single region and add no imports
+function add_to_expression!(
+    ::SingleOptimizationContainer,
+    ::T,
+    ::U,
+    ::S,
+    ::TransportModel{V},
+    ::Vector{X},
+) where {
+    T <: FeasibilityImportCapacity,
+    S <: BasicDispatchFeasibility,
+    U <: Vector{D},
+    V <: SingleRegionBalanceModel,
+    X <: TechnologyModel,
+} where {D <: PSIP.TransmissionTechnology}
+    return
+end
+
+# Either end of a branch can import over its cumulative capacity in the feasibility periods
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    devices::U,
+    formulation::S,
+    transport_model::TransportModel{V},
+    tech_model_vector::Vector{X},
+) where {
+    T <: FeasibilityImportCapacity,
+    S <: BasicDispatchFeasibility,
+    U <: Vector{D},
+    V <: Union{MultiRegionBalanceModel, NodalBalanceModel},
+    X <: TechnologyModel,
+} where {D <: PSIP.TransmissionTechnology}
+    IS.@assert_op length(devices) > 0
+    time_mapping = get_time_mapping(container)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    for (ix, d) in enumerate(devices)
+        name = PSIP.get_name(d)
+        inv_model = string(get_investment_formulation(tech_model_vector[ix]))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        for op_ix in get_feasibility_indexes(time_mapping), t in consecutive_slices[op_ix]
+            for region in _arc(d)
+                _add_to_jump_expression!(
+                    expression[region, t],
+                    installed_cap[name, inverse_invest_mapping[op_ix]],
+                    1.0,
+                )
+            end
+        end
+    end
     return
 end
 
@@ -220,7 +275,7 @@ function add_constraints!(
     )
 
     active_power = get_variable(container, V(), D, tech_model)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     for (ix, d) in enumerate(devices)
@@ -279,7 +334,7 @@ function add_constraints!(
         name = PSIP.get_name(d)
         inv_model = string(get_investment_formulation(tech_model_vector[ix]))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
-        for op_ix in get_operational_indexes(time_mapping)
+        for op_ix in get_all_indexes(time_mapping)
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in consecutive_slices[op_ix]
                 con[name, t] = JuMP.@constraint(
@@ -389,7 +444,7 @@ function add_constraints!(
     )
 
     variable = get_variable(container, FlowActivePowerVariable(), D, tech_model)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
 

@@ -64,6 +64,9 @@ function construct_technologies!(
         devices,
         B(),
     )
+
+    add_expression!(container, CapitalCostExpression(), devices, B())
+    add_expression!(container, FixedOperationModelCost(), devices, B())
     return
 end
 
@@ -116,6 +119,7 @@ function construct_technologies!(
     # WeightedEnergyGeneration
     add_expression!(container, WeightedEnergyGeneration(), devices, C())
 
+    add_expression!(container, VariableOMCost(), devices, C())
     return
 end
 

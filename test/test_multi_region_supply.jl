@@ -55,6 +55,16 @@ function _test_multi_region_wind(model::InvestmentModel, region_names::Vector{St
         PSIN.get_variable(container, PSIN.ActivePowerVariable(), wind_type, "BasicDispatch")
     @test sort(axes(build)[1]) == sort(wind_names)
     @test sort(axes(dispatch)[1]) == sort(wind_names)
+    additions = PSIN.get_expression(
+        container,
+        PSIN.CapacityAdditions(),
+        wind_type,
+        "ContinuousInvestment",
+    )
+    @test sort(axes(additions)[1]) == sort(wind_names)
+    for t in PSIN.get_investment_time_steps(time_mapping), wind_name in wind_names
+        @test JuMP.coefficient(additions[wind_name, t], build[wind_name, t]) == 1.0
+    end
 
     balance = PSIN.get_expression(container, PSIN.EnergyBalance(), PSIP.Portfolio)
     for t in PSIN.get_time_steps(time_mapping)
@@ -78,6 +88,37 @@ function _test_multi_region_wind(model::InvestmentModel, region_names::Vector{St
         @test JuMP.normalized_coefficient(max_capacity["wind", t], build[wind_name, 1]) ==
               1.0
     end
+
+    # Costs are reported per region, like the variables they are the cost of.
+    cost_expression(expression_type, meta) =
+        PSIN.get_expression(container, expression_type(), wind_type, meta)
+    capital_cost = cost_expression(PSIN.CapitalCostExpression, "ContinuousInvestment")
+    fixed_cost = cost_expression(FixedOperationModelCost, "ContinuousInvestment")
+    for (expression_type, meta) in (
+        (PSIN.CapitalCostExpression, "ContinuousInvestment"),
+        (FixedOperationModelCost, "ContinuousInvestment"),
+        (VariableOMCost, "BasicDispatch"),
+    )
+        @test sort(axes(cost_expression(expression_type, meta))[1]) == sort(wind_names)
+    end
+    # The capacity built in the first period pays its capital cost once and its fixed cost
+    # in every period. Together they are its cost in the objective function, and the costs
+    # of a region only include the capacity built in that region.
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    investment_steps = PSIN.get_investment_time_steps(time_mapping)
+    for wind_name in wind_names, other_name in wind_names
+        reported =
+            JuMP.coefficient(capital_cost[wind_name, 1], build[other_name, 1]) + sum(
+                JuMP.coefficient(fixed_cost[wind_name, t], build[other_name, 1]) for
+                t in investment_steps
+            )
+        expected = 0.0
+        if other_name == wind_name
+            expected = JuMP.coefficient(objective, build[wind_name, 1])
+        end
+        @test reported ≈ expected
+    end
+    @test JuMP.coefficient(objective, build[first(wind_names), 1]) > 0.0
     return
 end
 
@@ -138,9 +179,11 @@ end
     p_5bus, op_days = test_2_zone_portfolio()
     capital, weights, feasibility = _multi_region_supply_models()
 
-    nodes = [PSIP.Node(; name="Node_1", id=1), PSIP.Node(; name="Node_2", id=2)]
-    for node in nodes
+    nodes = PSIP.Node[]
+    for i in 1:2
+        node = PSIP.Node(; name="Node_$i", id=next_region_id(p_5bus))
         PSIP.add_region!(p_5bus, node)
+        push!(nodes, node)
     end
     node_names = PSIP.get_name.(nodes)
 

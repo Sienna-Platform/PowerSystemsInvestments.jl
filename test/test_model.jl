@@ -116,7 +116,291 @@
     res = OptimizationProblemResults(m)
     @test length(IS.Optimization.list_variable_names(res)) == 23
     @test length(IS.Optimization.list_dual_names(res)) == 0
-    @test length(PSIN.get_timestamps(res)) == 48
+    @test length(get_timestamps(res)) == 48
+    @test get_model_base_power(res) == 1.0
+    @test isapprox(get_objective_value(res), JuMP.objective_value(PSIN.get_jump_model(m)))
+    @test size(get_optimizer_stats(res), 1) == 1
+
+    # Result dictionaries and listings
+    for (values_getter, keys_getter, names_getter) in (
+        (get_variable_values, list_variable_keys, list_variable_names),
+        (get_expression_values, list_expression_keys, list_expression_names),
+        (get_aux_variable_values, list_aux_variable_keys, list_aux_variable_names),
+        (get_dual_values, list_dual_keys, list_dual_names),
+    )
+        expected_keys = Set(keys_getter(m))
+        @test Set(keys_getter(res)) == expected_keys
+        @test Set(keys(values_getter(res))) == expected_keys
+        @test Set(names_getter(res)) == Set(names_getter(m))
+    end
+    @test isempty(get_parameter_values(res))
+    @test isempty(list_parameter_keys(res))
+    @test isempty(list_parameter_names(res))
+
+    # Result export
+    export_results(res)
+    output_dir = PSIN.get_output_dir(m)
+    variable_name = first(list_variable_names(res))
+    @test isfile(joinpath(output_dir, "variables", variable_name * ".csv"))
+    @test isfile(joinpath(output_dir, "optimizer_stats.csv"))
+
+    # Portfolio access
+    @test get_portfolio(m) === p_5bus
+    @test get_portfolio(res) === p_5bus
+
+    # Portfolio reattachment after reload
+    result_dir = mktempdir(; cleanup=true)
+    serialize_results(res, result_dir)
+    reloaded = OptimizationProblemResults(result_dir)
+    @test isnothing(get_portfolio(reloaded))
+
+    @test isnothing(set_portfolio!(reloaded, p_5bus))
+    @test get_portfolio(reloaded) === p_5bus
+
+    # Investment time mapping and result interfaces
+    investment_results = InvestmentProblemResults(m)
+    @test investment_results isa IS.Results
+    @test get_investment_time_stamps(investment_results) == periods
+    @test get_timestamps(investment_results) == get_timestamps(res)
+    @test get_timestamps(investment_results) !== get_timestamps(res)
+    @test get_portfolio(investment_results) === p_5bus
+    @test get_objective_value(investment_results) == get_objective_value(res)
+    @test get_model_base_power(investment_results) == get_model_base_power(res)
+    @test isequal(get_optimizer_stats(investment_results), get_optimizer_stats(res))
+    time_mapping = PSIN.get_time_mapping(container)
+    saved_mapping = PSIN.get_time_mapping(investment_results)
+    @test PSIN.get_consecutive_slices(saved_mapping) ==
+          PSIN.get_consecutive_slices(time_mapping)
+    @test first(PSIN.get_consecutive_slices(saved_mapping)) !==
+          first(PSIN.get_consecutive_slices(time_mapping))
+    for (values_getter, keys_getter, names_getter) in (
+        (get_variable_values, list_variable_keys, list_variable_names),
+        (get_expression_values, list_expression_keys, list_expression_names),
+        (get_aux_variable_values, list_aux_variable_keys, list_aux_variable_names),
+        (get_parameter_values, list_parameter_keys, list_parameter_names),
+        (get_dual_values, list_dual_keys, list_dual_names),
+    )
+        @test values_getter(investment_results) == values_getter(res)
+        @test Set(keys_getter(investment_results)) == Set(keys_getter(res))
+        @test Set(names_getter(investment_results)) == Set(names_getter(res))
+    end
+    @testset "text/plain InvestmentProblemResults" begin
+        buf = IOBuffer()
+        show(buf, MIME("text/plain"), investment_results)
+        out = String(take!(buf))
+
+        @test occursin("Investment Periods", out)
+        @test occursin("Operational Slices", out)
+    end
+
+    @testset "text/html InvestmentProblemResults" begin
+        buf = IOBuffer()
+        show(buf, MIME("text/html"), investment_results)
+        out = String(take!(buf))
+
+        @test occursin("Investment Periods", out)
+        @test occursin("Operational Slices", out)
+    end
+    dispatch_key = PSIN.VariableKey(
+        ActivePowerVariable,
+        PSIP.SupplyTechnology{ThermalStandard},
+        string(BasicDispatch),
+    )
+    thermal_type = PSIP.SupplyTechnology{ThermalStandard}
+    build_key = PSIN.VariableKey(BuildCapacity, thermal_type, string(ContinuousInvestment))
+    @testset "Test investment result readers" begin
+        @test read_variable(investment_results, dispatch_key) ==
+              read_variable(res, dispatch_key)
+
+        capacity_key = PSIN.ExpressionKey(
+            CumulativeCapacity,
+            thermal_type,
+            string(ContinuousInvestment),
+        )
+        for (reader, bulk_reader, key) in (
+            (read_variable, IS.Optimization.read_variables, build_key),
+            (read_expression, IS.Optimization.read_expressions, capacity_key),
+        )
+            full = reader(investment_results, key; table_format=IS.TableFormat.WIDE)
+            raw = IS.Optimization.get_result_values(res, key)[key]
+            @test full.DateTime == DateTime.(first.(periods))
+            @test full.expensive_thermal == raw[raw.name .== "expensive_thermal", :value]
+            @test reader(investment_results, key; len=2) == reader(investment_results, key)
+            @test reader(
+                investment_results,
+                key;
+                start_time=DateTime(2035, 1, 1),
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            ) == full[2:2, :]
+            name = PSIN.encode_key_as_string(key)
+            entry = IS.Optimization.get_entry_type(key)
+            @test reader(
+                investment_results,
+                name;
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            ) == full[1:1, :]
+            @test reader(
+                investment_results,
+                entry,
+                thermal_type,
+                key.meta;
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            ) == full[1:1, :]
+            for entries in ([key], [name], [(entry, thermal_type, key.meta)])
+                @test bulk_reader(
+                    investment_results,
+                    entries;
+                    len=1,
+                    table_format=IS.TableFormat.WIDE,
+                )[name] == full[1:1, :]
+            end
+            @test bulk_reader(
+                investment_results;
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            )[name] == full[1:1, :]
+        end
+        mixed = PSIN.read_results_with_keys(
+            investment_results,
+            PSIN.OptimizationContainerKey[build_key, dispatch_key, capacity_key];
+            len=2,
+            table_format=IS.TableFormat.WIDE,
+        )
+        @test mixed[build_key].DateTime ==
+              mixed[capacity_key].DateTime ==
+              DateTime.(first.(periods))
+        @test mixed[dispatch_key].DateTime == get_timestamps(res)[1:2]
+        weighted_key = PSIN.ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio)
+        weighted = read_expression(
+            investment_results,
+            weighted_key;
+            len=2,
+            table_format=IS.TableFormat.WIDE,
+        )
+        @test weighted.DateTime == first.(op_days)
+        @test read_expression(
+            investment_results,
+            weighted_key;
+            start_time=DateTime(2035, 1, 1),
+            len=1,
+            table_format=IS.TableFormat.WIDE,
+        ) == weighted[2:2, :]
+        @test_throws ArgumentError read_variable(investment_results, build_key; len=0)
+        @test_throws ArgumentError read_variable(investment_results, build_key; len=3)
+        @test_throws ArgumentError read_variable(
+            investment_results,
+            build_key;
+            start_time=DateTime(2030, 1, 1, 1),
+        )
+        malformed = InvestmentProblemResults(m)
+        malformed_builds = get_variable_values(malformed)[build_key]
+        rows = findall(==("expensive_thermal"), malformed_builds.name)
+        malformed_builds[rows[2], :time_index] = 1
+        @test_throws ArgumentError read_variable(
+            malformed,
+            build_key;
+            cols=["expensive_thermal"],
+            len=1,
+        )
+    end
+
+    @testset "Test investment result column selection" begin
+        capacity_key = PSIN.ExpressionKey(
+            CumulativeCapacity,
+            thermal_type,
+            string(ContinuousInvestment),
+        )
+        for (reader, key) in
+            ((read_variable, dispatch_key), (read_expression, capacity_key))
+            full = reader(investment_results, key)
+            @test reader(investment_results, key; cols=["expensive_thermal"]) ==
+                  full[full.name .== "expensive_thermal", :]
+            full_wide = reader(investment_results, key; table_format=IS.TableFormat.WIDE)
+            @test reader(
+                investment_results,
+                key;
+                cols=["expensive_thermal", "cheap_thermal"],
+                table_format=IS.TableFormat.WIDE,
+            ) == full_wide[!, ["DateTime", "expensive_thermal", "cheap_thermal"]]
+            @test reader(
+                investment_results,
+                key;
+                cols=["expensive_thermal"],
+                start_time=DateTime(2035, 1, 1),
+                len=1,
+                table_format=IS.TableFormat.WIDE,
+            ) == full_wide[
+                full_wide.DateTime .== DateTime(2035, 1, 1),
+                ["DateTime", "expensive_thermal"],
+            ]
+            @test reader(investment_results, key) == full
+        end
+        @test_throws ArgumentError read_variable(
+            investment_results,
+            build_key;
+            cols=String[],
+        )
+        @test_throws KeyError read_variable(
+            investment_results,
+            build_key;
+            cols=["missing_technology"],
+        )
+    end
+
+    # Investment results after reload
+    saved_results = InvestmentProblemResults(output_dir)
+    @test isnothing(get_portfolio(saved_results))
+    @test get_investment_time_stamps(saved_results) == periods
+    @test get_variable_values(saved_results) == get_variable_values(res)
+    @test get_expression_values(saved_results) == get_expression_values(res)
+    for (variable_type, expression_type, technology_type) in (
+        (BuildCapacity, CapacityAdditions, thermal_type),
+        (BuildPowerCapacity, PowerCapacityAdditions, storage_type),
+        (BuildEnergyCapacity, EnergyCapacityAdditions, storage_type),
+    )
+        @test read_expression(
+            saved_results,
+            PSIN.ExpressionKey(
+                expression_type,
+                technology_type,
+                string(ContinuousInvestment),
+            ),
+        ) == read_variable(
+            investment_results,
+            PSIN.VariableKey(variable_type, technology_type, string(ContinuousInvestment)),
+        )
+    end
+    @test read_variable(
+        saved_results,
+        build_key;
+        cols=["expensive_thermal"],
+        start_time=DateTime(2035, 1, 1),
+        len=1,
+        table_format=IS.TableFormat.WIDE,
+    ) == read_variable(
+        investment_results,
+        build_key;
+        cols=["expensive_thermal"],
+        start_time=DateTime(2035, 1, 1),
+        len=1,
+        table_format=IS.TableFormat.WIDE,
+    )
+    @test isnothing(set_portfolio!(saved_results, p_5bus))
+    @test get_portfolio(saved_results) === p_5bus
+    empty!(get_investment_time_stamps(saved_results))
+    @test get_investment_time_stamps(saved_results) == periods
+    @test_throws ArgumentError InvestmentProblemResults(result_dir)
+    serialize_results(investment_results, result_dir)
+    @test get_investment_time_stamps(InvestmentProblemResults(result_dir)) == periods
+    @test get_variable_values(OptimizationProblemResults(result_dir)) ==
+          get_variable_values(res)
+    mismatched = OptimizationProblemResults(m)
+    get_variable_values(mismatched)[dispatch_key][1, :value] += 1.0
+    serialize_results(mismatched, result_dir)
+    @test_throws ArgumentError InvestmentProblemResults(result_dir)
 
     template = InvestmentModelTemplate(
         capital,
@@ -190,7 +474,11 @@
 
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
-    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test solve!(m; export_optimization_problem=false) ==
+          PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test !isfile(joinpath(PSIN.get_output_dir(m), "model.bin"))
+    @test get_investment_time_stamps(InvestmentProblemResults(PSIN.get_output_dir(m))) ==
+          periods
 
     res = OptimizationProblemResults(m)
     @test length(IS.Optimization.list_variable_names(res)) == 23
@@ -328,18 +616,99 @@ end
     balance_con = PSIN.get_constraints(container)[balance_key]
     JuMP.set_normalized_rhs(first(balance_con), 1e18)
 
-    @test solve!(
-        m;
-        export_optimization_problem=false,
-        console_level=Logging.AboveMaxLevel,
-    ) == PSIN.RunStatus.FAILED
+    # The failure is expected, so neither the logged errors nor the solver's conflict search
+    # are printed to the console.
+    status = redirect_stdout(devnull) do
+        solve!(m; export_optimization_problem=false, console_level=Logging.AboveMaxLevel)
+    end
+    @test status == PSIN.RunStatus.FAILED
     conflict = get_infeasibility_conflict(container)
     @test !isempty(conflict)
+    # The conflict search leaves the optimizer silent again.
+    @test MOI.get(jump_model, MOI.Silent())
 
     # The conflict table must print with the installed PrettyTables version.
     key, indices = first(conflict)
     table = sprint(PSIN._print_conflict_table, key, indices)
     @test occursin(string(key), table)
+end
+
+@testset "Results of a technology named time_index" begin
+    p_5bus, op_days = test_2_zone_portfolio()
+    thermal_type = PSIP.SupplyTechnology{ThermalStandard}
+    expensive = PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal")
+    PSIP.add_technology!(
+        p_5bus,
+        thermal_type(;
+            prime_mover_type=PrimeMovers.ST,
+            capital_costs=PSIP.get_capital_costs(expensive),
+            id=1000,
+            available=true,
+            name="time_index",
+            fuel=[ThermalFuels.COAL],
+            power_systems_type="ThermalStandard",
+            operation_costs=PSIP.get_operation_costs(expensive),
+            capacity_limits=(0.0, 1e8),
+            outage_factors=(planned=0.0, forced=0.05),
+            region=PSIP.get_region(expensive),
+            unit_size=75.0,
+            financial_data=PSIP.get_financial_data(expensive),
+        ),
+    )
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{Dates}}()),
+        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1", "demand2"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["wind"],
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal", "time_index"],
+        thermal_type,
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+
+    dispatch = read_variable(
+        m,
+        PSIN.VariableKey(ActivePowerVariable, thermal_type, string(BasicDispatch)),
+    )
+    @test names(dispatch) == ["time_index", "name", "value"]
+    rows = filter(r -> r.name == "time_index", dispatch)
+    @test rows.time_index == 1:48
+    @test sort(unique(dispatch.name)) ==
+          ["cheap_thermal", "expensive_thermal", "time_index"]
 end
 
 @testset "Build and solve hydro portfolio with BasicDispatchWithBudget" begin
@@ -865,8 +1234,17 @@ end
     @test isapprox(wesd_1, weight_1 * total_demand_2030; atol=1e-2)
 end
 
-function _build_thermal_investment_model(investment_formulation)
+function _build_thermal_investment_model(investment_formulation; min_capacity=nothing)
     p_5bus, op_days = test_2_zone_portfolio()
+    if !isnothing(min_capacity)
+        thermal = PSIP.get_technology(
+            PSIP.SupplyTechnology{PSY.ThermalStandard},
+            p_5bus,
+            "expensive_thermal",
+        )
+        max_capacity = PSIP.get_capacity_limits(thermal).max
+        PSIP.set_capacity_limits!(thermal, (min=min_capacity, max=max_capacity))
+    end
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -941,13 +1319,22 @@ end
         build = PSIN.get_variable(container, PSIN.BuildCapacity(), thermal_type, meta)
         capacity =
             PSIN.get_expression(container, PSIN.CumulativeCapacity(), thermal_type, meta)
-        for t in PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+        additions =
+            PSIN.get_expression(container, PSIN.CapacityAdditions(), thermal_type, meta)
+        time_steps = PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+        for t in time_steps
             @test is_discrete(build["expensive_thermal", t])
             # Each unit built adds unit_size MW of capacity.
-            @test JuMP.coefficient(
-                capacity["expensive_thermal", t],
-                build["expensive_thermal", 1],
-            ) == unit_size
+            for build_t in time_steps
+                @test JuMP.coefficient(
+                    capacity["expensive_thermal", t],
+                    build["expensive_thermal", build_t],
+                ) == (build_t <= t ? unit_size : 0.0)
+                @test JuMP.coefficient(
+                    additions["expensive_thermal", t],
+                    build["expensive_thermal", build_t],
+                ) == (t == build_t ? unit_size : 0.0)
+            end
         end
 
         # The cost of building one unit is the per-MW cost of the continuous formulation
@@ -962,6 +1349,14 @@ end
         if formulation == BinaryInvestment
             @test sum(JuMP.value.(build["expensive_thermal", :])) <= 1.0 + 1e-6
         end
+        results = InvestmentProblemResults(m)
+        saved_results = InvestmentProblemResults(PSIN.get_output_dir(m))
+        build_key = PSIN.VariableKey(BuildCapacity, thermal_type, meta)
+        additions_key = PSIN.ExpressionKey(CapacityAdditions, thermal_type, meta)
+        raw_builds = read_variable(results, build_key)
+        @test read_variable(saved_results, build_key) == raw_builds
+        @test read_expression(saved_results, additions_key).value ≈
+              unit_size .* raw_builds.value
     end
 
     # A discrete investment needs a positive unit size.
@@ -972,6 +1367,55 @@ end
         thermal,
         IntegerInvestment(),
     )
+end
+
+@testset "Minimum cumulative capacity" begin
+    # "expensive_thermal" has no existing capacity and units of 75 MW. Its minimum is more than
+    # the system needs, and applies to its total capacity in every period, not to what it
+    # builds in each period.
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    min_capacity = 3000.0
+    for (formulation, mw_per_unit) in
+        ((ContinuousInvestment, 1.0), (IntegerInvestment, 75.0))
+        m, _ = _build_thermal_investment_model(formulation; min_capacity=min_capacity)
+        container = PSIN.get_optimization_container(m)
+        meta = string(formulation)
+        build = PSIN.get_variable(container, PSIN.BuildCapacity(), thermal_type, meta)
+        min_cap = PSIN.get_constraint(
+            container,
+            PSIN.MinimumCumulativeCapacity(),
+            thermal_type,
+            meta,
+        )
+        @test axes(min_cap)[1] == ["expensive_thermal"]
+        for t in PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+            @test JuMP.lower_bound(build["expensive_thermal", t]) == 0.0
+            @test JuMP.normalized_rhs(min_cap["expensive_thermal", t]) == min_capacity
+            @test JuMP.normalized_coefficient(
+                min_cap["expensive_thermal", t],
+                build["expensive_thermal", 1],
+            ) == mw_per_unit
+        end
+
+        @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        capacity = filter(
+            r -> r.name == "expensive_thermal",
+            read_expression(m, PSIN.ExpressionKey(CumulativeCapacity, thermal_type, meta)),
+        )
+        @test all(capacity.value .>= min_capacity - 1e-6)
+        builds =
+            sort!(
+                filter(
+                    r -> r.name == "expensive_thermal",
+                    read_variable(m, PSIN.VariableKey(BuildCapacity, thermal_type, meta)),
+                ),
+                :time_index,
+            ).value
+        # The capacity built in the first period also counts in the second, so nothing else
+        # has to be built.
+        @test builds[2] ≈ 0.0 atol = 1e-6
+        @test builds[1] * mw_per_unit >= min_capacity - 1e-6
+    end
 end
 
 @testset "Storage technology with IntegerInvestment" begin
@@ -1022,19 +1466,24 @@ end
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
 
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    results = InvestmentProblemResults(m)
+    saved_results = InvestmentProblemResults(PSIN.get_output_dir(m))
     container = PSIN.get_optimization_container(m)
     storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
     # Power capacity is built in units of the discharge size and energy capacity in units of
     # the energy size.
-    for (variable_type, expression_type, unit_size) in (
+    for (variable_type, expression_type, additions_type, unit_size) in (
         (
             PSIN.BuildPowerCapacity,
             PSIN.CumulativePowerCapacity,
+            PSIN.PowerCapacityAdditions,
             PSIP.get_unit_size_discharge(storage),
         ),
         (
             PSIN.BuildEnergyCapacity,
             PSIN.CumulativeEnergyCapacity,
+            PSIN.EnergyCapacityAdditions,
             PSIP.get_unit_size_energy(storage),
         ),
     )
@@ -1047,9 +1496,103 @@ end
             "IntegerInvestment",
         )
         @test JuMP.is_integer(build["test_storage", 1])
-        @test JuMP.coefficient(capacity["test_storage", 1], build["test_storage", 1]) ==
-              unit_size
+        additions = PSIN.get_expression(
+            container,
+            additions_type(),
+            storage_type,
+            "IntegerInvestment",
+        )
+        time_steps = PSIN.get_investment_time_steps(PSIN.get_time_mapping(container))
+        for t in time_steps, build_t in time_steps
+            @test JuMP.coefficient(
+                capacity["test_storage", t],
+                build["test_storage", build_t],
+            ) == (build_t <= t ? unit_size : 0.0)
+            @test JuMP.coefficient(
+                additions["test_storage", t],
+                build["test_storage", build_t],
+            ) == (t == build_t ? unit_size : 0.0)
+        end
+        build_key = PSIN.VariableKey(variable_type, storage_type, "IntegerInvestment")
+        additions_key =
+            PSIN.ExpressionKey(additions_type, storage_type, "IntegerInvestment")
+        raw_builds = read_variable(results, build_key)
+        @test read_variable(saved_results, build_key) == raw_builds
+        @test read_expression(saved_results, additions_key).value ≈
+              unit_size .* raw_builds.value
     end
+end
 
-    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+@testset "Operation costs are discounted from the start of the investment period" begin
+    # The first investment period starts in 2028, but its representative day is in 2030.
+    # Its annual operation costs are valued at the start of 2028 and discounted from there.
+    p_5bus, op_days = test_2_zone_portfolio()
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    # The capex time series have no value for 2028; capital costs are not tested here.
+    for name in ("cheap_thermal", "expensive_thermal")
+        technology = PSIP.get_technology(thermal_type, p_5bus, name)
+        PSIP.remove_time_series!(p_5bus, IS.SingleTimeSeries, technology, "inv_capex")
+    end
+    periods = [
+        (Date(Month(1), Year(2028)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{DateTime}}()),
+        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.DemandRequirement{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal"],
+        thermal_type,
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    r = PSIN.get_discount_rate(container)
+    base_year = PSIN.get_base_year(container)
+    thermal = PSIP.get_technology(thermal_type, p_5bus, "cheap_thermal")
+    cost_per_mwh = PSY.get_proportional_term(
+        PSY.get_value_curve(PSY.get_variable(PSIP.get_operation_costs(thermal))),
+    )
+    tech_base_year = PSIP.get_technology_base_year(PSIP.get_financial_data(thermal))
+    dollars_to_base_year =
+        (1.0 + PSIN.get_inflation_rate(container))^(-(tech_base_year - base_year))
+    # Seven annual payments, 2028 to 2034, valued at the start of 2028
+    annuity = sum((1.0 + r)^(-k) for k in 0:6)
+    expected =
+        cost_per_mwh * dollars_to_base_year * 365 * annuity / (1.0 + r)^(2028 - base_year)
+
+    dispatch = PSIN.get_variable(
+        container,
+        PSIN.ActivePowerVariable(),
+        thermal_type,
+        "BasicDispatch",
+    )
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    for t in (1, 12, 24)
+        @test JuMP.coefficient(objective, dispatch["cheap_thermal", t]) ≈ expected
+    end
 end

@@ -17,7 +17,12 @@ function construct_technologies!(
 
     add_variable!(container, BuildCapacity(), devices, B())
 
+    add_expression!(container, CapacityAdditions(), devices, B())
+
     add_expression!(container, p, CumulativeCapacity(), devices, B())
+
+    add_expression!(container, CapitalCostExpression(), devices, B())
+    add_expression!(container, FixedOperationModelCost(), devices, B())
     return
 end
 
@@ -42,8 +47,10 @@ function construct_technologies!(
     # WeightedEnergyGeneration
     add_expression!(container, WeightedEnergyGeneration(), devices, C())
 
-    # FuelConsumptionExpression
     add_expression!(container, FuelConsumptionExpression(), devices, C())
+
+    add_expression!(container, VariableOMCost(), devices, C())
+    add_expression!(container, FuelCost(), devices, C())
     return
 end
 
@@ -70,17 +77,15 @@ function construct_technologies!(
     add_variable!(container, StartUpCapacityVariable(), devices, C())
     add_variable!(container, ShutDownCapacityVariable(), devices, C())
 
-    # EnergyBalance
     add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
 
-    # WeightedEnergyGeneration
     add_expression!(container, WeightedEnergyGeneration(), devices, C())
 
-    # FuelConsumptionExpression
     add_expression!(container, FuelConsumptionExpression(), devices, C())
     add_to_expression!(container, FuelConsumptionExpression(), devices, C())
 
-    # Start-up and shut-down costs
+    add_expression!(container, VariableOMCost(), devices, C())
+    add_expression!(container, FuelCost(), devices, C())
     add_expression!(container, StartUpCost(), devices, C())
     add_expression!(container, ShutDownCost(), devices, C())
     return
@@ -104,7 +109,14 @@ function construct_technologies!(
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
     # Feasibility Surplus
-    add_to_expression!(container, FeasibilitySurplus(), devices, D(), transport_model)
+    add_to_expression!(
+        container,
+        FeasibilitySurplus(),
+        devices,
+        D(),
+        transport_model,
+        tech_model_vector,
+    )
     return
 end
 
@@ -143,6 +155,13 @@ function construct_technologies!(
         devices,
         B(),
     )
+    add_constraints!(
+        container,
+        MinimumCumulativeCapacity(),
+        CumulativeCapacity(),
+        devices,
+        B(),
+    )
     return
 end
 
@@ -184,13 +203,15 @@ function construct_technologies!(
     tech_formulation::Type{C},
     transport_model::TransportModel{<:AbstractTransportAggregation},
     tech_model_vector::Vector{X},
-) where {T <: PSIP.SupplyTechnology, C <: ContinuousThermalCommitment, X <: TechnologyModel}
+) where {
+    T <: PSIP.SupplyTechnology{PSY.ThermalStandard},
+    C <: ContinuousThermalCommitment,
+    X <: TechnologyModel,
+}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    # Operations Component of objective function
     objective_function!(container, devices, C())
 
-    # Dispatch constraint
     add_constraints!(
         container,
         ActivePowerLimitsConstraint(),
@@ -200,7 +221,6 @@ function construct_technologies!(
         tech_model_vector,
     )
 
-    # Unit commitment constraints
     add_constraints!(
         container,
         CommittedCapacityLimitConstraint(),
@@ -290,8 +310,10 @@ function construct_technologies!(
     # WeightedEnergyGeneration
     add_expression!(container, WeightedEnergyGeneration(), devices, C())
 
-    # FuelConsumptionExpression
     add_expression!(container, FuelConsumptionExpression(), devices, C())
+
+    add_expression!(container, VariableOMCost(), devices, C())
+    add_expression!(container, FuelCost(), devices, C())
     return
 end
 

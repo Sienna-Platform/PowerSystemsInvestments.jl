@@ -20,6 +20,8 @@ function construct_technologies!(
 
     # CumulativeCapacity
     add_expression!(container, p, CumulativeCapacity(), devices, B())
+
+    add_expression!(container, CapitalCostExpression(), devices, B())
     return
 end
 
@@ -93,7 +95,15 @@ function construct_technologies!(
     D <: FeasibilityTechnologyFormulation,
     X <: TechnologyModel,
 }
-    # TODO: Feasibility Models
+    devices = [PSIP.get_technology(T, p, n) for n in names]
+    add_to_expression!(
+        container,
+        FeasibilityImportCapacity(),
+        devices,
+        D(),
+        transport_model,
+        tech_model_vector,
+    )
     return
 end
 
@@ -202,7 +212,6 @@ function construct_technologies!(
     D <: FeasibilityTechnologyFormulation,
     X <: TechnologyModel,
 }
-    # TODO: Feasibility Models
     return
 end
 

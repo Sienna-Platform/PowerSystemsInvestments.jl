@@ -38,10 +38,10 @@ function _get_time_step_length(time_stamps::Vector{Dates.DateTime})
         return 1.0
     end
     steps = diff(time_stamps)
-    if !all(==(first(steps)), steps)
+    if first(steps) <= Dates.Millisecond(0) || !all(==(first(steps)), steps)
         error(
             "The time stamps of the representative period starting at " *
-            "$(first(time_stamps)) are not evenly spaced.",
+            "$(first(time_stamps)) must be strictly increasing and evenly spaced.",
         )
     end
     return Dates.value(Dates.Millisecond(first(steps))) / MILLISECONDS_IN_HOUR
