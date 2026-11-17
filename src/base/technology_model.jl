@@ -65,12 +65,14 @@ get_feasibility_formulation(
 } = C
 
 _supported_investment_formulations(::Type{<:PSIP.Technology}) = nothing
+_supported_operation_formulations(::Type{<:PSIP.Technology}) = nothing
 
-function _check_investment_formulation(
+function _check_formulation(
     ::Type{D},
     ::Type{A},
-) where {D <: PSIP.Technology, A <: InvestmentTechnologyFormulation}
-    supported_formulations = _supported_investment_formulations(D)
+    supported_formulations,
+    formulation_kind::String,
+) where {D <: PSIP.Technology, A <: AbstractTechnologyFormulation}
     isnothing(supported_formulations) && return
     any(A <: formulation for formulation in supported_formulations) && return
 
@@ -83,7 +85,7 @@ function _check_investment_formulation(
     throw(
         ArgumentError(
             "$(nameof(A)) is currently not supported for $(nameof(D)). " *
-            "Supported investment formulations: $supported_names.",
+            "Supported $formulation_kind formulations: $supported_names.",
         ),
     )
 end
@@ -102,7 +104,8 @@ function TechnologyModel(
     B <: OperationsTechnologyFormulation,
     C <: FeasibilityTechnologyFormulation,
 }
-    _check_investment_formulation(D, A)
+    _check_formulation(D, A, _supported_investment_formulations(D), "investment")
+    _check_formulation(D, B, _supported_operation_formulations(D), "operation")
 
     attributes_ = get_default_attributes(D, A, B, C)
     for (k, v) in attributes

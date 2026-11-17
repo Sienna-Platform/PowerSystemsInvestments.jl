@@ -29,6 +29,22 @@ end
     )
 end
 
+@testset "Operation Formulation Validation" begin
+    # Unit commitment is only implemented for thermal technologies.
+    @test_throws ArgumentError PSIN.TechnologyModel(
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIN.ContinuousInvestment,
+        PSIN.ContinuousThermalCommitment,
+        PSIN.BasicDispatchFeasibility,
+    )
+    @test PSIN.TechnologyModel(
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        PSIN.ContinuousInvestment,
+        PSIN.ContinuousThermalCommitment,
+        PSIN.BasicDispatchFeasibility,
+    ) isa PSIN.TechnologyModel
+end
+
 @testset "Operational weights check" begin
     _, op_days = test_2_zone_portfolio()
     periods = [
@@ -205,8 +221,10 @@ end
         [vre_model],
     )
 
-    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for wind.
-    @test length(container.expressions) == 6
+    # + CapacityAdditions, CumulativeCapacity, CapitalCostExpression, FixedOperationModelCost,
+    # WeightedEnergyGeneration and VariableOMCost for the wind supply tech. It has no fuel
+    # curve, so there is no FuelConsumptionExpression or FuelCost.
+    @test length(container.expressions) == 9
     @test length(container.variables) == 2
 
     v = PSIN.get_variable(
@@ -258,8 +276,8 @@ end
         [thermal_model, thermal_model],
     )
 
-    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for thermal.
-    @test length(container.expressions) == 9
+    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for the thermal supply tech.
+    @test length(container.expressions) == 15
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(

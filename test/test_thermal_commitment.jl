@@ -1,0 +1,345 @@
+# "expensive_thermal" has a minimum output of 0.35 and, unless given, minimum up and down times
+# of 3 and 2 hours.
+_commitment_test_model(operation_cost=nothing; time_limits=(up=3.0, down=2.0), kwargs...) =
+    thermal_test_model(
+        ContinuousThermalCommitment;
+        operation_cost=operation_cost,
+        time_limits=time_limits,
+        min_generation_fraction=0.35,
+        kwargs...,
+    )
+
+@testset "Thermal commitment constraints" begin
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    name = "expensive_thermal"
+    m = _commitment_test_model(; ramp_limits=(up=0.3, down=0.4))
+    thermal = PSIP.get_technology(thermal_type, PSIN.get_portfolio(m), name)
+    forced_outage = PSIP.get_outage_factors(thermal).forced
+    @test forced_outage > 0.0
+
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    meta = string(ContinuousThermalCommitment)
+    variable(variable_type) =
+        PSIN.get_variable(container, variable_type, thermal_type, meta)
+    constraint(constraint_type, constraint_meta=meta) =
+        PSIN.get_constraint(container, constraint_type, thermal_type, constraint_meta)
+    dispatch = variable(PSIN.ActivePowerVariable())
+    committed = variable(PSIN.CommittedCapacityVariable())
+    start_up = variable(PSIN.StartUpCapacityVariable())
+    shut_down = variable(PSIN.ShutDownCapacityVariable())
+    build = PSIN.get_variable(
+        container,
+        PSIN.BuildCapacity(),
+        thermal_type,
+        "ContinuousInvestment",
+    )
+    coefficient = JuMP.normalized_coefficient
+
+    # Dispatch is limited by the committed capacity, and the committed capacity by the
+    # installed capacity that is not on outage.
+    dispatch_limit = constraint(PSIN.ActivePowerLimitsConstraint())
+    @test coefficient(dispatch_limit[name, 5], dispatch[name, 5]) == 1.0
+    @test coefficient(dispatch_limit[name, 5], committed[name, 5]) == -1.0
+    # Committed capacity produces at least its minimum output.
+    min_dispatch_limit = constraint(PSIN.ActivePowerLimitsConstraint(), "$(meta)_lb")
+    @test coefficient(min_dispatch_limit[name, 5], dispatch[name, 5]) == 1.0
+    @test coefficient(min_dispatch_limit[name, 5], committed[name, 5]) ≈ -0.35
+    # A technology without a minimum output only has to be non-negative.
+    @test coefficient(
+        min_dispatch_limit["cheap_thermal", 5],
+        committed["cheap_thermal", 5],
+    ) == 0.0
+    committed_limit = constraint(PSIN.CommittedCapacityLimitConstraint())
+    @test coefficient(committed_limit[name, 5], build[name, 1]) ≈ -(1.0 - forced_outage)
+    # Time step 30 is in the second investment period.
+    @test coefficient(committed_limit[name, 30], build[name, 2]) ≈ -(1.0 - forced_outage)
+
+    # Committed capacity follows the capacity started up and shut down. The time step
+    # before the first one of a representative day is the last one of that day.
+    tracking = constraint(PSIN.CommittedCapacityTrackingConstraint())
+    @test coefficient(tracking[name, 5], committed[name, 4]) == -1.0
+    @test coefficient(tracking[name, 5], start_up[name, 5]) == -1.0
+    @test coefficient(tracking[name, 5], shut_down[name, 5]) == 1.0
+    @test coefficient(tracking[name, 1], committed[name, 24]) == -1.0
+    @test coefficient(tracking[name, 25], committed[name, 48]) == -1.0
+    @test coefficient(tracking[name, 25], committed[name, 24]) == 0.0
+
+    # A minimum up time of 3 hours covers the start ups of the time step and the two
+    # before it.
+    min_up = constraint(PSIN.MinimumUpTimeConstraint())
+    for t in (10, 9, 8)
+        @test coefficient(min_up[name, 10], start_up[name, t]) == -1.0
+    end
+    @test coefficient(min_up[name, 10], start_up[name, 7]) == 0.0
+    for t in (1, 24, 23)
+        @test coefficient(min_up[name, 1], start_up[name, t]) == -1.0
+    end
+    @test coefficient(min_up[name, 1], start_up[name, 22]) == 0.0
+
+    # A minimum down time of 2 hours covers the shut downs of the time step and the one
+    # before it.
+    min_down = constraint(PSIN.MinimumDownTimeConstraint())
+    @test coefficient(min_down[name, 1], shut_down[name, 1]) == 1.0
+    @test coefficient(min_down[name, 1], shut_down[name, 24]) == 1.0
+    @test coefficient(min_down[name, 1], shut_down[name, 23]) == 0.0
+    # The capacity that can be committed is the installed capacity that is not on outage.
+    @test coefficient(min_down[name, 1], build[name, 1]) ≈ -(1.0 - forced_outage)
+
+    # The other thermal technology keeps the default minimum times of one hour.
+    @test coefficient(min_up["cheap_thermal", 10], start_up["cheap_thermal", 10]) == -1.0
+    @test coefficient(min_up["cheap_thermal", 10], start_up["cheap_thermal", 9]) == 0.0
+
+    # Ramp limits: 0.3 up and 0.4 down per hour, with a minimum output of 0.35.
+    # Up:   P[t] - P[t-1] <= 0.3 (u - v) + max(0.35, 0.3) v - 0.35 w
+    # Down: P[t-1] - P[t] <= 0.4 (u - v) + max(0.35, 0.4) w - 0.35 v
+    ramp_up = constraint(PSIN.RampRateConstraint(), "$(meta)_up")
+    ramp_down = constraint(PSIN.RampRateConstraint(), "$(meta)_dn")
+    @test coefficient(ramp_up[name, 1], dispatch[name, 1]) == 1.0
+    @test coefficient(ramp_up[name, 1], dispatch[name, 24]) == -1.0
+    @test coefficient(ramp_up[name, 1], committed[name, 1]) ≈ -0.3
+    @test coefficient(ramp_up[name, 1], start_up[name, 1]) ≈ 0.3 - 0.35
+    @test coefficient(ramp_up[name, 1], shut_down[name, 1]) ≈ 0.35
+    @test coefficient(ramp_down[name, 1], dispatch[name, 24]) == 1.0
+    @test coefficient(ramp_down[name, 1], dispatch[name, 1]) == -1.0
+    @test coefficient(ramp_down[name, 1], committed[name, 1]) ≈ -0.4
+    @test coefficient(ramp_down[name, 1], start_up[name, 1]) ≈ 0.4 + 0.35
+    @test coefficient(ramp_down[name, 1], shut_down[name, 1]) ≈ -0.4
+
+    # Without a minimum output, the output can change by the ramp limit times the committed
+    # capacity, whether or not capacity starts up.
+    @test coefficient(ramp_up["cheap_thermal", 1], committed["cheap_thermal", 1]) ≈ -1.0
+    @test coefficient(ramp_up["cheap_thermal", 1], start_up["cheap_thermal", 1]) == 0.0
+    @test coefficient(ramp_up["cheap_thermal", 1], shut_down["cheap_thermal", 1]) == 0.0
+
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+
+    values(variable_type) =
+        sort!(
+            filter(
+                r -> r.name == name,
+                read_variable(m, PSIN.VariableKey(variable_type, thermal_type, meta)),
+            ),
+            :time_index,
+        ).value
+    dispatch_values = values(PSIN.ActivePowerVariable)
+    committed_values = values(PSIN.CommittedCapacityVariable)
+    start_up_values = values(PSIN.StartUpCapacityVariable)
+    shut_down_values = values(PSIN.ShutDownCapacityVariable)
+    tol = 1e-4
+    @test all(dispatch_values .<= committed_values .+ tol)
+    @test all(dispatch_values .>= 0.35 .* committed_values .- tol)
+    for t in 2:24
+        continuing = committed_values[t] - start_up_values[t]
+        @test dispatch_values[t] - dispatch_values[t - 1] <=
+              0.3 * continuing + 0.35 * start_up_values[t] - 0.35 * shut_down_values[t] +
+              tol
+        @test dispatch_values[t - 1] - dispatch_values[t] <=
+              0.4 * continuing + 0.4 * shut_down_values[t] - 0.35 * start_up_values[t] + tol
+    end
+end
+
+@testset "Thermal commitment start-up, shut-down and no-load costs" begin
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    name = "expensive_thermal"
+    heat_rate = 10.0
+    no_load_fuel = 4.0
+    fuel_price = 3.0
+    start_up_fuel = 2.0
+    start_up_cost = 50.0
+    shut_down_cost = 20.0
+    m = _commitment_test_model(
+        ThermalGenerationCost(;
+            variable=FuelCurve(;
+                value_curve=LinearCurve(heat_rate, no_load_fuel),
+                fuel_cost=fuel_price,
+                startup_fuel_offtake=LinearCurve(start_up_fuel),
+            ),
+            fixed=0.0,
+            start_up=start_up_cost,
+            shut_down=shut_down_cost,
+        ),
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    meta = string(ContinuousThermalCommitment)
+    variable(variable_type) =
+        PSIN.get_variable(container, variable_type, thermal_type, meta)
+    dispatch = variable(PSIN.ActivePowerVariable())
+    committed = variable(PSIN.CommittedCapacityVariable())
+    start_up = variable(PSIN.StartUpCapacityVariable())
+    shut_down = variable(PSIN.ShutDownCapacityVariable())
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    cost(v) = JuMP.coefficient(objective, v)
+
+    # Time steps are one hour long, so the weighting and discounting of a time step is the
+    # same for every cost. It is recovered from the cost of dispatch, which is the heat rate
+    # times the fuel price per MWh.
+    for t in (1, 30)
+        weighting = cost(dispatch[name, t]) / (heat_rate * fuel_price)
+        @test weighting > 0.0
+        # No-load fuel of the committed capacity
+        @test cost(committed[name, t]) ≈ no_load_fuel * fuel_price * weighting
+        # Start-up cost plus the cost of the start-up fuel
+        @test cost(start_up[name, t]) ≈
+              (start_up_cost + start_up_fuel * fuel_price) * weighting
+        @test cost(shut_down[name, t]) ≈ shut_down_cost * weighting
+        # A technology with a cost curve and no start-up or shut-down cost
+        @test cost(committed["cheap_thermal", t]) == 0.0
+        @test cost(start_up["cheap_thermal", t]) == 0.0
+        @test cost(shut_down["cheap_thermal", t]) == 0.0
+    end
+
+    # Fuel consumption includes the no-load and the start-up fuel.
+    consumption =
+        PSIN.get_expression(container, FuelConsumptionExpression(), thermal_type, meta)
+    @test axes(consumption)[1] == [name]
+    @test JuMP.coefficient(consumption[name, 5], dispatch[name, 5]) == heat_rate
+    @test JuMP.coefficient(consumption[name, 5], committed[name, 5]) == no_load_fuel
+    @test JuMP.coefficient(consumption[name, 5], start_up[name, 5]) == start_up_fuel
+    @test JuMP.coefficient(consumption[name, 5], shut_down[name, 5]) == 0.0
+
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+
+    # Results: the start-up and shut-down costs are the objective function costs of the
+    # capacity started up and shut down, without the cost of the start-up fuel.
+    function result_values(df)
+        return sort!(filter(r -> r.name == name, df), :time_index).value
+    end
+    variable_values(variable_type) =
+        result_values(read_variable(m, PSIN.VariableKey(variable_type, thermal_type, meta)))
+    expression_values(expression_type) = result_values(
+        read_expression(m, PSIN.ExpressionKey(expression_type, thermal_type, meta)),
+    )
+    weighting = [cost(dispatch[name, t]) / (heat_rate * fuel_price) for t in 1:48]
+    start_up_values = variable_values(PSIN.StartUpCapacityVariable)
+    shut_down_values = variable_values(PSIN.ShutDownCapacityVariable)
+    committed_values = variable_values(PSIN.CommittedCapacityVariable)
+    dispatch_values = variable_values(PSIN.ActivePowerVariable)
+    @test expression_values(StartUpCost) ≈ start_up_cost .* weighting .* start_up_values
+    @test expression_values(ShutDownCost) ≈ shut_down_cost .* weighting .* shut_down_values
+    @test expression_values(FuelConsumptionExpression) ≈
+          heat_rate .* dispatch_values .+ no_load_fuel .* committed_values .+
+          start_up_fuel .* start_up_values
+    @test expression_values(FuelCost) ≈
+          fuel_price .* weighting .* expression_values(FuelConsumptionExpression)
+end
+
+@testset "Thermal commitment no-load cost of a cost curve" begin
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    name = "expensive_thermal"
+    cost_per_mwh = 30.0
+    no_load_cost = 4.0
+    m = _commitment_test_model(
+        ThermalGenerationCost(;
+            variable=CostCurve(LinearCurve(cost_per_mwh, no_load_cost)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        ),
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    meta = string(ContinuousThermalCommitment)
+    variable(variable_type) =
+        PSIN.get_variable(container, variable_type, thermal_type, meta)
+    objective = JuMP.objective_function(PSIN.get_jump_model(container))
+    vom_cost = PSIN.get_expression(container, VariableOMCost(), thermal_type, meta)
+    for t in (1, 30)
+        # The constant term is a cost per hour and MW committed, weighted like the cost of
+        # dispatch.
+        dispatch_cost =
+            JuMP.coefficient(objective, variable(PSIN.ActivePowerVariable())[name, t])
+        committed = variable(PSIN.CommittedCapacityVariable())[name, t]
+        @test JuMP.coefficient(objective, committed) ≈
+              dispatch_cost * no_load_cost / cost_per_mwh
+        # The no-load cost is reported with the variable OM cost.
+        @test JuMP.coefficient(vom_cost[name, t], committed) ≈
+              JuMP.coefficient(objective, committed)
+        @test JuMP.coefficient(
+            objective,
+            variable(PSIN.StartUpCapacityVariable())[name, t],
+        ) == 0.0
+    end
+    # A cost curve has no fuel.
+    @test !haskey(
+        PSIN.get_expressions(container),
+        PSIN.ExpressionKey(FuelConsumptionExpression, thermal_type, meta),
+    )
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+end
+
+@testset "Minimum up and down times longer than the representative period" begin
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    name = "expensive_thermal"
+    # Representative days have 24 hourly time steps. A 30-hour up time covers the day once
+    # plus 6 more steps, and a 50-hour down time covers it twice plus 2 more steps.
+    m = _commitment_test_model(
+        ThermalGenerationCost(;
+            variable=CostCurve(LinearCurve(30.0)),
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
+        );
+        time_limits=(up=30.0, down=50.0),
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+
+    container = PSIN.get_optimization_container(m)
+    meta = string(ContinuousThermalCommitment)
+    variable(variable_type) =
+        PSIN.get_variable(container, variable_type, thermal_type, meta)
+    constraint(constraint_type) =
+        PSIN.get_constraint(container, constraint_type, thermal_type, meta)
+    start_up = variable(PSIN.StartUpCapacityVariable())
+    shut_down = variable(PSIN.ShutDownCapacityVariable())
+    coefficient = JuMP.normalized_coefficient
+
+    # The start ups of the time step and the 5 before it are in the window twice, the rest of
+    # the day once.
+    min_up = constraint(PSIN.MinimumUpTimeConstraint())
+    for t in 5:10
+        @test coefficient(min_up[name, 10], start_up[name, t]) == -2.0
+    end
+    for t in (4, 11, 24)
+        @test coefficient(min_up[name, 10], start_up[name, t]) == -1.0
+    end
+    # The window of the first time step wraps to the end of the day.
+    for t in (1, 24, 20)
+        @test coefficient(min_up[name, 1], start_up[name, t]) == -2.0
+    end
+    @test coefficient(min_up[name, 1], start_up[name, 19]) == -1.0
+    # Time steps of the second representative day only cover that day.
+    @test coefficient(min_up[name, 30], start_up[name, 30]) == -2.0
+    @test coefficient(min_up[name, 30], start_up[name, 10]) == 0.0
+
+    min_down = constraint(PSIN.MinimumDownTimeConstraint())
+    for t in (1, 24)
+        @test coefficient(min_down[name, 1], shut_down[name, t]) == 3.0
+    end
+    for t in (2, 23)
+        @test coefficient(min_down[name, 1], shut_down[name, t]) == 2.0
+    end
+
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+end
+
+@testset "Start-up costs by stages are not supported" begin
+    m = _commitment_test_model(
+        ThermalGenerationCost(;
+            variable=CostCurve(LinearCurve(30.0)),
+            fixed=0.0,
+            start_up=(hot=10.0, warm=20.0, cold=30.0),
+            shut_down=0.0,
+        ),
+    )
+    build_log = build_expecting_failure(m)
+    @test occursin("defines its start-up cost by stages", build_log)
+end

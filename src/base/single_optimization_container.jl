@@ -175,19 +175,19 @@ function _finalize_jump_model!(container::SingleOptimizationContainer, settings:
     return
 end
 
-"""
-Warn when the operational weights of an investment period do not represent one year.
+# Hours of a year that each time step of the representative period stands for
+function get_time_step_weight(container::SingleOptimizationContainer, op_ix::Int)
+    return get_operational_weights(container)[op_ix] *
+           get_time_step_length(get_time_mapping(container), op_ix)
+end
 
-Weights are the number of times each representative slice occurs per year. Operation costs
-are multiplied by the number of years of the investment period when they are discounted, so
-weights that already include the period length would count those costs more than once.
-"""
+# Weights are per year: the period length is applied when costs are discounted, so weights
+# that include it would count operation costs more than once.
 function check_operational_weights(
     time_mapping::TimeMapping,
     operational_weights::Vector{Float64},
 )
     consecutive_slices = get_consecutive_slices(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
     investment_time_stamps = get_investment_time_stamps(time_mapping)
     investment_to_operational_ixs = get_investment_map_to_operational_slices(time_mapping)
     for stage in get_investment_time_steps(time_mapping)
@@ -195,15 +195,10 @@ function check_operational_weights(
         isempty(stage_operational_indexes) && continue
         represented_hours = 0.0
         for op_ix in stage_operational_indexes
-            time_slices = consecutive_slices[op_ix]
-            # A slice with a single time step is assumed to last one hour.
-            hours_per_step = 1.0
-            if length(time_slices) > 1
-                step = time_stamps[time_slices[2]] - time_stamps[time_slices[1]]
-                hours_per_step = Dates.value(Dates.Millisecond(step)) / 3.6e6
-            end
             represented_hours +=
-                operational_weights[op_ix] * length(time_slices) * hours_per_step
+                operational_weights[op_ix] *
+                length(consecutive_slices[op_ix]) *
+                get_time_step_length(time_mapping, op_ix)
         end
         represented_years = represented_hours / HOURS_PER_YEAR
         if abs(represented_years - 1.0) > OPERATIONAL_WEIGHTS_TOLERANCE

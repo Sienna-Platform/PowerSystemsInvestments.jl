@@ -25,6 +25,9 @@ function construct_technologies!(
     # CumulativeCapacity expressions
     add_expression!(container, p, CumulativePowerCapacity(), devices, B())
     add_expression!(container, p, CumulativeEnergyCapacity(), devices, B())
+
+    add_expression!(container, CapitalCostExpression(), devices, B())
+    add_expression!(container, FixedOperationModelCost(), devices, B())
     return
 end
 
@@ -73,6 +76,7 @@ function construct_technologies!(
     # WeightedEnergyGeneration
     add_expression!(container, WeightedEnergyGeneration(), devices, C())
 
+    add_expression!(container, VariableOMCost(), devices, C())
     return
 end
 

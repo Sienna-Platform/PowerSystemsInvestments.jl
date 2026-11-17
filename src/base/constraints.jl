@@ -33,6 +33,7 @@ struct MultiRegionBalanceConstraint <: ISOPT.ConstraintType end
 struct NodalBalanceConstraint <: ISOPT.ConstraintType end
 
 struct ActivePowerLimitsConstraint <: OperationVariableLimitsConstraintType end
+
 struct HydroEnergyBudgetConstraint <: OperationVariableLimitsConstraintType end
 
 struct FlowActivePowerLowerBoundConstraint <: OperationVariableLimitsConstraintType end
@@ -60,6 +61,16 @@ struct EnergyBalanceConstraint <: ISOPT.ConstraintType end
 struct SingleRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
 
 struct MultiRegionBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
+
+struct CommittedCapacityLimitConstraint <: OperationVariableLimitsConstraintType end
+
+struct MinimumUpTimeConstraint <: OperationVariableLimitsConstraintType end
+
+struct MinimumDownTimeConstraint <: OperationVariableLimitsConstraintType end
+
+struct RampRateConstraint <: OperationVariableLimitsConstraintType end
+
+struct CommittedCapacityTrackingConstraint <: OperationVariableLimitsConstraintType end
 
 struct NodalBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
 
