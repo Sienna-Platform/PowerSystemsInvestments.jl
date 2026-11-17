@@ -129,7 +129,7 @@ function set_technology_model!(
     },
 ) where {T <: PSIP.Technology}
     names = PSIP.get_name.(PSIP.get_technologies(PSIP.get_available, T, portfolio))
-    _set_model!(template.technology_models, names, model)
+    set_technology_model!(template, names, model)
     return
 end
 
@@ -137,7 +137,7 @@ function set_technology_model!(
     template::InvestmentModelTemplate,
     names::Vector{String},
     model::TechnologyModel{
-        <:PSIP.AggregateTransportTechnology,
+        <:PSIP.TransmissionTechnology,
         <:InvestmentTechnologyFormulation,
         <:OperationsTechnologyFormulation,
         <:FeasibilityTechnologyFormulation,

@@ -60,6 +60,14 @@ end
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 100.0) == 50
     # Exact multiples of the time step do not round up an extra step.
     @test PSIN.get_commitment_time_steps(mixed, 1, 0.9 + 0.6) == 3
+    six_minute_day = collect(DateTime(2030, 1, 1, 0):Minute(6):DateTime(2030, 1, 1, 23, 54))
+    six_minute = PSIN.TimeMapping(
+        TIME_STEP_TEST_PERIODS,
+        [six_minute_day, single_step],
+        no_feasibility,
+    )
+    @test (0.1 + 0.2) / PSIN.get_time_step_length(six_minute, 1) > 3
+    @test PSIN.get_commitment_time_steps(six_minute, 1, 0.1 + 0.2) == 3
 end
 
 # One zone with a gas technology defined by a fuel curve, wind, storage and a demand. The

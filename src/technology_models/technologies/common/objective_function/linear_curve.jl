@@ -233,12 +233,14 @@ function _add_linearcurve_cost!(
         )
     time_mapping = get_time_mapping(container)
     inv_tuples = get_investment_time_stamps(time_mapping)
+    capex_multipliers = get_capex_multipliers(technology, T(), inv_tuples)
 
     for t in get_investment_time_steps(time_mapping)
         inv_date = inv_tuples[t]
         year = Dates.value.(Dates.Year.(inv_date[1]))
         future_to_present_value = discount_factor^(year - base_year)
-        npv_proportional_term = amortized_proportional_term * future_to_present_value
+        npv_proportional_term =
+            amortized_proportional_term * capex_multipliers[t] * future_to_present_value
         _add_linearcurve_variable_term_to_model!(
             container,
             T(),
