@@ -101,7 +101,8 @@ _first_feasibility_step(container) =
         op_days,
         TransportModel(SingleRegionBalanceModel, use_slacks=false),
         ["demand1"],
-        [],
+        # The branch is internal to the region and adds no import capacity.
+        [(["test_branch"], PSIP.AggregateTransportTechnology{PSY.ACBranch})],
     )
     container = PSIN.get_optimization_container(m)
     t = _first_feasibility_step(container)
@@ -167,6 +168,14 @@ end
     @test JuMP.normalized_rhs(system[t]) == 2 * FEASIBILITY_DEMAND
     # Operational time steps have no import capacity.
     @test JuMP.coefficient(imports[first(zones), 1], branch_build) == 0.0
+    # The flow over the branch is limited by its installed capacity in the feasibility periods.
+    flow_limit = PSIN.get_constraint(
+        container,
+        PSIN.ActivePowerLimitsConstraint(),
+        branch_type,
+        "BasicDispatch",
+    )
+    @test JuMP.normalized_coefficient(flow_limit["test_branch", t], branch_build) == -1.0
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 end
 
@@ -237,6 +246,13 @@ end
     )
     @test JuMP.normalized_coefficient(feasibility["Node_2", t], line_build) == 1.0
     @test JuMP.normalized_rhs(feasibility["Node_2", t]) == FEASIBILITY_DEMAND
+    flow_limit = PSIN.get_constraint(
+        container,
+        PSIN.FlowActivePowerUpperBoundConstraint(),
+        branch_type,
+        "BasicDispatch",
+    )
+    @test JuMP.normalized_coefficient(flow_limit["line", t], line_build) == -1.0
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     line_capacity = filter(

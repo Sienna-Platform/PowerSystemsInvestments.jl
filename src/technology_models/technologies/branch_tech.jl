@@ -158,6 +158,24 @@ function add_to_expression!(
     return
 end
 
+# Branches are internal to a single region and add no imports
+function add_to_expression!(
+    ::SingleOptimizationContainer,
+    ::T,
+    ::U,
+    ::S,
+    ::TransportModel{V},
+    ::Vector{X},
+) where {
+    T <: FeasibilityImportCapacity,
+    S <: BasicDispatchFeasibility,
+    U <: Vector{D},
+    V <: SingleRegionBalanceModel,
+    X <: TechnologyModel,
+} where {D <: PSIP.TransmissionTechnology}
+    return
+end
+
 # Either end of a branch can import over its cumulative capacity in the feasibility periods
 function add_to_expression!(
     container::SingleOptimizationContainer,
@@ -231,7 +249,7 @@ function add_constraints!(
     )
 
     active_power = get_variable(container, V(), D, tech_model)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     for (ix, d) in enumerate(devices)
@@ -440,7 +458,7 @@ function add_constraints!(
     )
 
     variable = get_variable(container, FlowActivePowerVariable(), D, tech_model)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
 
