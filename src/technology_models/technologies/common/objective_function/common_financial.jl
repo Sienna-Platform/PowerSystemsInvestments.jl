@@ -1,12 +1,11 @@
 function amortize_overnight_term_to_base_year_dollars(
-    container::SingleOptimizationContainer,
     technology::PSIP.Technology,
     proportional_term::Float64,
+    base_year::Int,
 )
     financials = PSIP.get_financial_data(technology)
-    base_year = get_base_year(container)
-    discount_rate = get_discount_rate(container)
-    inflation_rate = get_inflation_rate(container)
+    discount_rate = PSIP.get_discount_rate(financials)
+    inflation_rate = PSIP.get_inflation_rate(financials)
     wacc = PSIP.get_wacc(financials)
     tech_base_year = PSIP.get_technology_base_year(financials)
     capital_recovery_period = PSIP.get_capital_recovery_period(financials)
@@ -20,5 +19,5 @@ function amortize_overnight_term_to_base_year_dollars(
         capital_recovery_factor *
         lump_amortized_payments *
         dollars_to_base_year
-    return amortized_proportional_term, discount_factor, base_year
+    return amortized_proportional_term, discount_factor
 end

@@ -1,20 +1,11 @@
 """
 Establishes the model for a particular requirement (policy) specified by type and
-formulation. Mirrors `ServiceModel` in PowerSimulations.jl and `TechnologyModel`
-in this package.
-
-# Arguments
-
-  - `::Type{D}`: A `PSIP.Requirement` subtype (e.g. `PSIP.EnergyShareRequirements`)
-  - `::Type{B}`: A `RequirementFormulation` subtype (e.g. `RequirementEnergyShare`)
-
-# Example
-
-```julia
-requirement = RequirementModel(PSIP.EnergyShareRequirements, RequirementEnergyShare)
-```
+formulation. Mirrors `ServiceModel` in PowerSimulations.jl and `TechnologyModel`.
 """
-mutable struct RequirementModel{D <: PSIP.Requirement, B <: RequirementFormulation}
+mutable struct RequirementModel{
+    D <: IS.InfrastructureSystemsComponent,
+    B <: RequirementFormulation,
+}
     use_slacks::Bool
     duals::Vector{DataType}
     attributes::Dict{String, Any}
@@ -22,11 +13,11 @@ end
 
 get_requirement_type(
     ::RequirementModel{D, B},
-) where {D <: PSIP.Requirement, B <: RequirementFormulation} = D
+) where {D <: IS.InfrastructureSystemsComponent, B <: RequirementFormulation} = D
 
 get_requirement_formulation(
     ::RequirementModel{D, B},
-) where {D <: PSIP.Requirement, B <: RequirementFormulation} = B
+) where {D <: IS.InfrastructureSystemsComponent, B <: RequirementFormulation} = B
 
 get_use_slacks(m::RequirementModel) = m.use_slacks
 get_duals(m::RequirementModel) = m.duals
@@ -36,8 +27,10 @@ get_attributes(m::RequirementModel) = m.attributes
 Default (empty) attributes for a requirement model. Override per
 `(requirement_type, formulation)` pair where needed.
 """
-get_default_attributes(::Type{<:PSIP.Requirement}, ::Type{<:RequirementFormulation}) =
-    Dict{String, Any}()
+get_default_attributes(
+    ::Type{<:IS.InfrastructureSystemsComponent},
+    ::Type{<:RequirementFormulation},
+) = Dict{String, Any}()
 
 function RequirementModel(
     ::Type{D},
@@ -45,7 +38,7 @@ function RequirementModel(
     use_slacks=false,
     duals=Vector{DataType}(),
     attributes=Dict{String, Any}(),
-) where {D <: PSIP.Requirement, B <: RequirementFormulation}
+) where {D <: IS.InfrastructureSystemsComponent, B <: RequirementFormulation}
     attributes_ = get_default_attributes(D, B)
     for (k, v) in attributes
         attributes_[k] = v
@@ -57,7 +50,7 @@ function _set_model!(
     dict::Dict,
     names::Vector{String},
     model::RequirementModel{D, B},
-) where {D <: PSIP.Requirement, B <: RequirementFormulation}
+) where {D <: IS.InfrastructureSystemsComponent, B <: RequirementFormulation}
     key = model
     if haskey(dict, key)
         @warn "Overwriting $(D) existing requirement model"

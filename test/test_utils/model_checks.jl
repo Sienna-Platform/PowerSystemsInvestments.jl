@@ -2,7 +2,7 @@ const GAEVF = JuMP.GenericAffExpr{Float64, VariableRef}
 const GQEVF = JuMP.GenericQuadExpr{Float64, VariableRef}
 
 function moi_tests(
-    model::InvestmentModel,
+    model::DecisionModel{<:PSIN.AbstractInvestmentProblem},
     vars::Int,
     interval::Int,
     lessthan::Int,
@@ -23,10 +23,10 @@ function moi_tests(
 end
 
 function psin_constraint_test(
-    model::InvestmentModel,
+    model::DecisionModel{<:PSIN.AbstractInvestmentProblem},
     constraint_keys::Vector{<:PSIN.ConstraintKey},
 )
-    constraints = PSIN.get_constraints(model)
+    constraints = IOM.get_constraints(model)
     for con in constraint_keys
         if get(constraints, con, nothing) !== nothing
             @test true
@@ -38,7 +38,12 @@ function psin_constraint_test(
     return
 end
 
-function psin_checksolve_test(model::InvestmentModel, status, expected_result, tol=0.0)
+function psin_checksolve_test(
+    model::DecisionModel{<:PSIN.AbstractInvestmentProblem},
+    status,
+    expected_result,
+    tol=0.0,
+)
     res = solve!(model)
     model = PSIN.get_jump_model(model)
     @test termination_status(model) in status
@@ -47,15 +52,21 @@ function psin_checksolve_test(model::InvestmentModel, status, expected_result, t
 end
 
 function check_variable_unbounded(
-    model::InvestmentModel,
+    model::DecisionModel{<:PSIN.AbstractInvestmentProblem},
     ::Type{T},
     ::Type{U},
 ) where {T <: PSIN.VariableType, U <: PSIP.Technology}
-    return check_variable_unbounded(model::InvestmentModel, PSIN.VariableKey(T, U))
+    return check_variable_unbounded(
+        model::DecisionModel{<:PSIN.AbstractInvestmentProblem},
+        PSIN.VariableKey(T, U),
+    )
 end
 
-function check_variable_unbounded(model::InvestmentModel, var_key::PSIN.VariableKey)
-    psi_cont = PSIN.get_optimization_container(model)
+function check_variable_unbounded(
+    model::DecisionModel{<:PSIN.AbstractInvestmentProblem},
+    var_key::PSIN.VariableKey,
+)
+    psi_cont = PSIN.IOM.get_optimization_container(model)
     variable = PSIN.get_variable(psi_cont, var_key)
     for var in variable
         if JuMP.has_lower_bound(var) || JuMP.has_upper_bound(var)
@@ -66,15 +77,18 @@ function check_variable_unbounded(model::InvestmentModel, var_key::PSIN.Variable
 end
 
 function check_variable_bounded(
-    model::InvestmentModel,
+    model::DecisionModel{<:PSIN.AbstractInvestmentProblem},
     ::Type{T},
     ::Type{U},
 ) where {T <: PSIN.VariableType, U <: PSIP.Technology}
     return check_variable_bounded(model, PSIN.VariableKey(T, U))
 end
 
-function check_variable_bounded(model::InvestmentModel, var_key::PSIN.VariableKey)
-    psi_cont = PSIN.get_optimization_container(model)
+function check_variable_bounded(
+    model::DecisionModel{<:PSIN.AbstractInvestmentProblem},
+    var_key::PSIN.VariableKey,
+)
+    psi_cont = PSIN.IOM.get_optimization_container(model)
     variable = PSIN.get_variable(psi_cont, var_key)
     for var in variable
         if !JuMP.has_lower_bound(var) || !JuMP.has_upper_bound(var)
@@ -85,17 +99,17 @@ function check_variable_bounded(model::InvestmentModel, var_key::PSIN.VariableKe
 end
 
 function check_flow_variable_values(
-    model::InvestmentModel,
+    model::DecisionModel{<:PSIN.AbstractInvestmentProblem},
     ::Type{T},
     ::Type{U},
     device_name::String,
     limit::Float64,
 ) where {T <: PSIN.VariableType, U <: PSIP.Technology}
-    psi_cont = PSIN.get_optimization_container(model)
+    psi_cont = IOM.get_optimization_container(model)
     variable = PSIN.get_variable(psi_cont, T(), U)
     for var in variable[device_name, :]
-        if !(PSIN.jump_value(var) <= (limit + 1e-2))
-            @error "$device_name out of bounds $(PSIN.jump_value(var))"
+        if !(IOM.jump_value(var) <= (limit + 1e-2))
+            @error "$device_name out of bounds $(IOM.jump_value(var))"
             return false
         end
     end

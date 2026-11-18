@@ -1,5 +1,5 @@
 function construct_requirements!(
-    container::SingleOptimizationContainer,
+    container::OptimizationContainer,
     p::PSIP.Portfolio,
     stage::Union{ArgumentConstructStage, ModelConstructStage},
     requirement_models::Dict,
