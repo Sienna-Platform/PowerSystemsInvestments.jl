@@ -144,8 +144,6 @@ function add_expression!(
     return
 end
 
-# Weighted (representative-day) energy generation per operational index. Created
-# for every supply technology regardless of whether any requirement uses it.
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -372,8 +370,6 @@ function add_to_expression!(
     return
 end
 
-# The installed capacity counts toward the feasibility surplus. It is the cumulative capacity
-# of the investment formulation of each technology.
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -416,7 +412,6 @@ function add_to_expression!(
     return
 end
 
-# Each region, zone or node, counts the capacity installed in it
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -458,9 +453,9 @@ function add_to_expression!(
 
     return
 end
+
 ################### Constraints ##################
 
-# Limits for technologies with ops_variable_cap_factor time series #
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -519,7 +514,6 @@ function add_constraints!(
     return
 end
 
-# Limits for thermals #
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -608,14 +602,12 @@ function add_constraints!(
     return
 end
 
-# Fraction of the installed capacity of a technology that is not on a planned or forced outage.
 function get_availability(d::PSIP.SupplyTechnology)
     outage_factors = PSIP.get_outage_factors(d)
     return (1.0 - outage_factors.forced) * (1.0 - outage_factors.planned)
 end
 
-# Number of time steps covered by a minimum up or down time, rounded up and at least one.
-# It can be longer than the representative period.
+# Number of time steps covered by a minimum up or down time, minimum one.
 function get_commitment_time_steps(time_mapping::TimeMapping, op_ix::Int, duration::Float64)
     num_time_steps = ceil(
         Int,
@@ -624,8 +616,7 @@ function get_commitment_time_steps(time_mapping::TimeMapping, op_ix::Int, durati
     return max(num_time_steps, 1)
 end
 
-# Sum of a variable over the `num_time_steps` time steps ending at `t`. Representative periods
-# are cyclic, so a window longer than the period counts each time step once per repetition.
+# Sum of a variable over the `num_time_steps` time steps ending at `t`
 function get_cyclic_window_sum(var, name, time_mapping, op_ix, t, num_time_steps)
     time_slices = get_consecutive_slices(time_mapping)[op_ix]
     full_periods, partial = divrem(num_time_steps, length(time_slices))
@@ -642,7 +633,6 @@ function get_cyclic_window_sum(var, name, time_mapping, op_ix, t, num_time_steps
     return window_sum
 end
 
-# Dispatch of the committed capacity is between its minimum output and its full output
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -695,7 +685,6 @@ function add_constraints!(
     return
 end
 
-# Committed capacity is limited by the installed capacity that is not on outage
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -743,7 +732,6 @@ function add_constraints!(
     return
 end
 
-# Capacity started up within the minimum up time must still be committed
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -795,7 +783,6 @@ function add_constraints!(
     return
 end
 
-# Capacity shut down within the minimum down time cannot be committed
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -854,8 +841,6 @@ function add_constraints!(
     return
 end
 
-# Capacity that stays committed can ramp by the ramp limit. Capacity that starts up or shuts
-# down moves between zero and the larger of its minimum output and one time step of ramp.
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -926,7 +911,6 @@ function add_constraints!(
     return
 end
 
-# Committed capacity changes with the capacity that starts up and shuts down
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -971,7 +955,6 @@ function add_constraints!(
     return
 end
 
-# Maximum cumulative capacity
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -1002,7 +985,6 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        # The limit applies to the total capacity over all the regions of the technology.
         variable_names = get_variable_names(d)
         max_capacity = PSIP.get_capacity_limits(d).max
         for t in time_steps
@@ -1069,7 +1051,8 @@ function objective_function!(
     return
 end
 
-# ActivePowerLimitsConstraint for HydroDispatch + BasicDispatchWithBudget
+################ Hydro Dispatch + BasicDispatchWithBudget Constraints ################
+
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -1120,7 +1103,6 @@ function add_constraints!(
     return
 end
 
-# HydroEnergyBudgetConstraint for HydroDispatch + BasicDispatchWithBudget
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,

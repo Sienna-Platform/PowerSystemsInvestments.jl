@@ -204,9 +204,8 @@ function check_operational_weights(
         if abs(represented_years - 1.0) > OPERATIONAL_WEIGHTS_TOLERANCE
             @warn "The operational weights of investment period $(investment_time_stamps[stage]) " *
                   "represent $(round(represented_years; digits=3)) years of operation. " *
-                  "Weights must be per-year: the weighted duration of the representative " *
-                  "slices of each investment period should add up to one year. The length " *
-                  "of the period is applied separately when costs are discounted."
+                  "The weighted duration of the representative slices of each investment " *
+                  "period should add up to one year."
         end
     end
     return
