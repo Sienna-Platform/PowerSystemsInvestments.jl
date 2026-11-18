@@ -35,6 +35,8 @@ end
 # Hours per time step. A period with a single time step is assumed to last one hour.
 function _get_time_step_length(time_stamps::Vector{Dates.DateTime})
     if length(time_stamps) == 1
+        @warn "The representative period starting at $(first(time_stamps)) has a single " *
+              "time stamp and is assumed to last one hour."
         return 1.0
     end
     steps = diff(time_stamps)
