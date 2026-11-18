@@ -1,6 +1,3 @@
-# Nodal power balance model: energy balance constraint at each bus (node).
-# Structure mirrors multiregion_model.jl but uses PSIP.Node instead of PSIP.Zone.
-
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::Type{T},
@@ -22,13 +19,6 @@ function add_constraints!(
     end
 
     # Soft power balance: expressions[n,t] + slack_up - slack_dn == 0
-    #   slack_up  > 0  → unserved energy (deficit)
-    #   slack_dn  > 0  → over-supply (surplus)
-    # Both are penalized in the objective so they stay at zero wherever the
-    # balance can feasibly be met; any nonzero slack pinpoints an unservable node.
-    # The penalty is weighted like a variable cost: by the representative-day weight, over
-    # the years of the investment period, discounted to the base year.
-    operational_weights = get_operational_weights(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     investment_time_stamps = get_investment_time_stamps(time_mapping)
@@ -40,7 +30,10 @@ function add_constraints!(
         period_factor =
             investment_period_present_value_factor(discount_rate, base_year, inv_tuple)
         for t in consecutive_slices[op_ix]
-            penalty[t] = BALANCE_SLACK_PENALTY * period_factor * operational_weights[op_ix]
+            penalty[t] =
+                BALANCE_SLACK_PENALTY *
+                period_factor *
+                get_time_step_weight(container, op_ix)
         end
     end
     store_names = get_store_variable_names(get_settings(container))

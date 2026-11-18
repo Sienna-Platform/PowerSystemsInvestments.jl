@@ -26,10 +26,6 @@ function add_constraints!(
     return
 end
 
-# In the feasibility periods each region covers its demand with the capacity installed in it
-# and the capacity it can import over its branches. The system as a whole must cover its
-# demand with installed capacity, so that the same branch capacity does not serve both of its
-# ends.
 function _add_feasibility_constraints!(
     container::SingleOptimizationContainer,
     ::Type{T},
