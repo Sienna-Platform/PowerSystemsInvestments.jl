@@ -6,7 +6,7 @@ investment models for power systems. Julia compat: `^1.10`.
 ## Data Models
 
 - **PowerSystems.jl** — provides the core power system component data model (generators, buses, lines, etc.).
-- **PowerInvestmentPortfolios.jl** — provides the investment portfolio data model (candidate technologies, investment options, etc.).
+- **PowerSystemsInvestmentPortfolios.jl** — provides the investment portfolio data model (candidate technologies, investment options, etc.).
 
 ## Optimization Infrastructure
 
