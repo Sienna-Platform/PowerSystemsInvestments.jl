@@ -253,18 +253,24 @@ function PTDFNetworkData(
     )
 end
 
-initialize_network!(::TransportModel, ::InvestmentModelTemplate, ::PSIP.Portfolio) = nothing
+initialize_network!(
+    ::TransportModel,
+    ::InvestmentModelTemplate,
+    ::PSIP.Portfolio,
+    ::Union{Nothing, Vector{String}},
+) = nothing
 
 function initialize_network!(
     transport_model::TransportModel{NodalPTDFModel},
     template::InvestmentModelTemplate,
     portfolio::PSIP.Portfolio,
+    default_monitored::Union{Nothing, Vector{String}},
 )
     transport_model.network_data = PTDFNetworkData(
         portfolio,
         template;
         tol=get(transport_model.attributes, "tol", 0.0),
-        monitored=get(transport_model.attributes, "monitored", nothing),
+        monitored=get(transport_model.attributes, "monitored", default_monitored),
         min_voltage=Float64(get(transport_model.attributes, "min_voltage", 0.0)),
     )
     return

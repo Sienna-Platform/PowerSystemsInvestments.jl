@@ -5,8 +5,7 @@ _check_monitoring_transport(::TransportModel{T}) where {T} =
 function build_impl!(model::InvestmentModel{IterativeMonitoring})
     transport_model = get_transport_model(get_template(model))
     _check_monitoring_transport(transport_model)
-    get!(transport_model.attributes, "monitored", String[])
-    build_single_instance!(model)
+    build_single_instance!(model; default_monitored=String[])
     return
 end
 
@@ -161,18 +160,27 @@ end
 _constraint_refs(jump_model::JuMP.Model) =
     JuMP.all_constraints(jump_model; include_variable_in_set_constraints=false)
 
+# `nothing` when the solver has no basis, such as an interior point solve without crossover
 function _get_basis(jump_model::JuMP.Model)
     variables = JuMP.all_variables(jump_model)
     constraints = _constraint_refs(jump_model)
-    return (
-        Dict(zip(variables, MOI.get.(jump_model, MOI.VariableBasisStatus(), variables))),
-        Dict(
-            zip(
-                constraints,
-                MOI.get.(jump_model, MOI.ConstraintBasisStatus(), constraints),
+    try
+        return (
+            Dict(
+                zip(variables, MOI.get.(jump_model, MOI.VariableBasisStatus(), variables)),
             ),
-        ),
-    )
+            Dict(
+                zip(
+                    constraints,
+                    MOI.get.(jump_model, MOI.ConstraintBasisStatus(), constraints),
+                ),
+            ),
+        )
+    catch err
+        err isa Union{MOI.GetAttributeNotAllowed, MOI.UnsupportedAttribute} || rethrow()
+        @info "The solver has no basis, so the next solves are not warm-started" maxlog = 1
+        return nothing
+    end
 end
 
 # New flow variables are basic, so the equalities that set them are nonbasic

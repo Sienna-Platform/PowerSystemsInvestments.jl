@@ -45,6 +45,25 @@ get_requirement_models(template::InvestmentModelTemplate) = template.requirement
 get_transport_model(template::InvestmentModelTemplate) = template.transport_model
 get_transport_formulation(::TransportModel{T}) where {T <: AbstractTransportAggregation} = T
 
+# Copy with its own transport model, which holds the network data of one model
+function copy_for_model(template::InvestmentModelTemplate)
+    transport_model = get_transport_model(template)
+    new_template = InvestmentModelTemplate(
+        get_capital_model(template),
+        get_operation_model(template),
+        get_feasibility_model(template),
+        TransportModel(
+            get_transport_formulation(transport_model);
+            use_slacks=get_use_slacks(transport_model),
+            attributes=copy(transport_model.attributes),
+        ),
+    )
+    new_template.technology_models = copy(template.technology_models)
+    new_template.branch_models = copy(template.branch_models)
+    new_template.requirement_models = copy(template.requirement_models)
+    return new_template
+end
+
 get_capital_model(template::InvestmentModelTemplate) = template.capital_model
 get_operation_model(template::InvestmentModelTemplate) = template.operation_model
 get_feasibility_model(template::InvestmentModelTemplate) = template.feasibility_model

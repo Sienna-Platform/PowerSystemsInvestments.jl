@@ -19,7 +19,7 @@ function InvestmentModel(
 
     model = InvestmentModel{M}(
         :CEM,
-        template,
+        copy_for_model(template),
         portfolio,
         internal,
         SimulationInfo(),

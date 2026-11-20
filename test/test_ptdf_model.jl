@@ -62,6 +62,7 @@ function _nodal_test_model(
     attributes=Dict{String, Any}(),
     algorithm=SingleInstanceSolve,
     voltages=Dict{String, Float64}(),
+    optimizer=HiGHS.Optimizer,
 )
     p_5bus, op_days = test_2_zone_portfolio()
     sys = build_system(PSITestSystems, "c_sys5_re")
@@ -204,7 +205,7 @@ function _nodal_test_model(
         template,
         algorithm,
         p_5bus;
-        optimizer=HiGHS.Optimizer,
+        optimizer=optimizer,
         portfolio_to_file=false,
         store_variable_names=true,
     )
@@ -469,6 +470,7 @@ function _triangle_model(
     attributes=Dict{String, Any}(),
     algorithm=SingleInstanceSolve,
     voltages=Dict{String, Float64}(),
+    optimizer=HiGHS.Optimizer,
 )
     m = _nodal_test_model(
         transport;
@@ -487,6 +489,7 @@ function _triangle_model(
         attributes=attributes,
         algorithm=algorithm,
         voltages=voltages,
+        optimizer=optimizer,
     )
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
@@ -960,6 +963,44 @@ end
         output_dir=mktempdir(; cleanup=true),
         console_level=Logging.AboveMaxLevel,
     ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+end
+
+@testset "Iterative monitoring leaves the template unchanged" begin
+    full_objective = _solved_objective(_triangle_model(NodalPTDFModel))
+    iterative = _triangle_model(NodalPTDFModel; algorithm=IterativeMonitoring)
+    @test isapprox(_solved_objective(iterative), full_objective; rtol=1e-6)
+    monitored = PSIN.get_monitored_corridors(iterative)
+    template = PSIN.get_template(iterative)
+    @test !haskey(PSIN.get_transport_model(template).attributes, "monitored")
+
+    # A model built from the same template monitors every corridor
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        PSIN.get_portfolio(iterative);
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    @test PSIN.get_monitored_corridors(m) == ["n1_n2", "n1_n3", "n2_n3"]
+    @test isapprox(_solved_objective(m), full_objective; rtol=1e-6)
+    @test PSIN.get_monitored_corridors(iterative) == monitored
+end
+
+@testset "Iterative monitoring without a basis" begin
+    full_objective = _solved_objective(_triangle_model(NodalPTDFModel))
+    m = _triangle_model(
+        NodalPTDFModel;
+        algorithm=IterativeMonitoring,
+        optimizer=JuMP.optimizer_with_attributes(
+            HiGHS.Optimizer,
+            "solver" => "ipm",
+            "run_crossover" => "off",
+        ),
+    )
+    @test isapprox(_solved_objective(m), full_objective; rtol=1e-5)
+    @test size(get_monitoring_log(m), 1) >= 2
 end
 
 @testset "Iterative monitoring of a MIP" begin
