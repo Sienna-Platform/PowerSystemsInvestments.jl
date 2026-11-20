@@ -26,12 +26,14 @@ function _ptdf_line(
     unit_size=1.0,
     max_capacity=1000.0,
     capital_cost=5000.0,
+    voltage=230.0,
 )
     return PTDF_LINE_TYPE(;
         name=name,
         start_node=from,
         end_node=to,
         reactance=reactance,
+        voltage=voltage,
         unit_size=unit_size,
         capacity_limits=(min=0, max=max_capacity),
         capital_costs=PSIP.CapitalCost(LinearCurve(capital_cost), 0.0),
@@ -59,6 +61,7 @@ function _nodal_test_model(
     hvdc_lines=[],
     attributes=Dict{String, Any}(),
     algorithm=SingleInstanceSolve,
+    voltages=Dict{String, Float64}(),
 )
     p_5bus, op_days = test_2_zone_portfolio()
     sys = build_system(PSITestSystems, "c_sys5_re")
@@ -124,6 +127,7 @@ function _nodal_test_model(
                 regions[to];
                 reactance=reactance,
                 capital_cost=get(candidate_costs, name, candidate_cost),
+                voltage=get(voltages, name, 230.0),
             )
             PSIP.add_technology!(p_5bus, line)
             continue
@@ -135,6 +139,7 @@ function _nodal_test_model(
             regions[to];
             reactance=reactance,
             max_capacity=rating,
+            voltage=get(voltages, name, 230.0),
         )
         PSIP.add_technology!(p_5bus, line)
         PSIP.add_supplemental_attribute!(
@@ -463,6 +468,7 @@ function _triangle_model(
     transport;
     attributes=Dict{String, Any}(),
     algorithm=SingleInstanceSolve,
+    voltages=Dict{String, Float64}(),
 )
     m = _nodal_test_model(
         transport;
@@ -480,6 +486,7 @@ function _triangle_model(
         use_slacks=true,
         attributes=attributes,
         algorithm=algorithm,
+        voltages=voltages,
     )
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
@@ -1098,4 +1105,60 @@ end
     end
     results = PSIN.read_aux_variable(m, PSIN.AuxVarKey(LineFlow, PSIP.Portfolio))
     @test sort(unique(results.name)) == ["existing", "expansion", "units"]
+end
+
+# Lines below 38 kV are dispatched as transport links outside the PTDF
+@testset "Lines below the minimum voltage" begin
+    min_voltage = Dict{String, Any}("min_voltage" => 38.0)
+    nodal_objective = _solved_objective(_triangle_model(NodalBalanceModel))
+    ptdf_objective = _solved_objective(_triangle_model(NodalPTDFModel))
+
+    # Without l12 the PTDF lines form a tree, so KVL no longer binds; l13 at exactly the
+    # minimum voltage stays in the PTDF
+    m = _triangle_model(
+        NodalPTDFModel;
+        attributes=min_voltage,
+        voltages=Dict("l12" => 34.5, "l13" => 38.0),
+    )
+    container = PSIN.get_optimization_container(m)
+    network = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m)))
+    @test network.transport_lines == Set(["l12"])
+    @test network.ptdf.axes[2] == ["n1_n3", "n2_n3"]
+    line_flow = PSIN.get_variable(
+        container,
+        PSIN.FlowActivePowerVariable(),
+        PTDF_LINE_TYPE,
+        "BasicDispatch",
+    )
+    @test axes(line_flow, 1) == ["l12"]
+    objective = _solved_objective(m)
+    @test isapprox(objective, nodal_objective; rtol=1e-6)
+    @test objective < ptdf_objective * (1 - 1e-3)
+    @test maximum(abs.(JuMP.value.(line_flow["l12", :]))) <= 100.0 + 1e-6
+
+    # n1 is only reached by lines below the minimum voltage, so it is its own island
+    m = _triangle_model(
+        NodalPTDFModel;
+        attributes=min_voltage,
+        voltages=Dict("l12" => 34.5, "l13" => 34.5),
+    )
+    container = PSIN.get_optimization_container(m)
+    balance = PSIN.get_constraint(container, IslandBalanceConstraint(), PSIP.Portfolio)
+    @test length(axes(balance, 1)) == 2
+    @test isapprox(_solved_objective(m), nodal_objective; rtol=1e-6)
+
+    # A line below the minimum voltage cannot be monitored
+    m = _nodal_test_model(
+        NodalPTDFModel;
+        nodes=["Node_1", "Node_2"],
+        placement=TWO_NODE_PLACEMENT,
+        lines=[("nodal_line", "Node_1", "Node_2", 0.1, "1")],
+        voltages=Dict("nodal_line" => 34.5),
+        attributes=Dict{String, Any}("min_voltage" => 38.0, "monitored" => ["nodal_line"]),
+    )
+    @test build!(
+        m;
+        output_dir=mktempdir(; cleanup=true),
+        console_level=Logging.AboveMaxLevel,
+    ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end

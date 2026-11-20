@@ -39,6 +39,7 @@ struct PTDFNetworkData <: AbstractNetworkData
     ptdf::PTDF
     tol::Float64
     monitored::Set{String}
+    transport_lines::Set{String}
 end
 
 const CorridorLines =
@@ -52,14 +53,20 @@ _is_continuous(::Type{<:Union{IntegerInvestment, BinaryInvestment}}) = false
 
 function _collect_corridor_lines!(
     corridors::CorridorLines,
+    transport_lines::Set{String},
     portfolio::PSIP.Portfolio,
     model::TechnologyModel{D},
     names::Vector{String},
+    min_voltage::Float64,
 ) where {D <: PSIP.NodalACTransportTechnology}
     formulation = get_investment_formulation(model)
     for name in names
         technology = PSIP.get_technology(D, portfolio, name)
         PSIP.get_available(technology) || continue
+        if PSIP.get_voltage(technology) < min_voltage
+            push!(transport_lines, name)
+            continue
+        end
         push!(
             get!(corridors, minmax(_arc(technology)...), eltype(valtype(corridors))[]),
             (technology, LineKey(D, name, formulation)),
@@ -71,9 +78,11 @@ end
 # Other transmission technologies are not in the PTDF
 _collect_corridor_lines!(
     ::CorridorLines,
+    ::Set{String},
     ::PSIP.Portfolio,
     ::TechnologyModel,
     ::Vector{String},
+    ::Float64,
 ) = nothing
 
 function _unit_count(
@@ -121,10 +130,19 @@ function PTDFNetworkData(
     template::InvestmentModelTemplate;
     tol::Float64=0.0,
     monitored::Union{Nothing, Vector{String}}=nothing,
+    min_voltage::Float64=0.0,
 )
     corridors = CorridorLines()
+    transport_lines = Set{String}()
     for (model, names) in get_branch_models(template)
-        _collect_corridor_lines!(corridors, portfolio, model, names)
+        _collect_corridor_lines!(
+            corridors,
+            transport_lines,
+            portfolio,
+            model,
+            names,
+            min_voltage,
+        )
     end
 
     merged_corridors = MergedCorridor[]
@@ -203,6 +221,11 @@ function PTDFNetworkData(
     if isnothing(monitored)
         monitored_corridors = Set(c.name for c in merged_corridors)
     else
+        below_voltage = intersect(monitored, transport_lines)
+        isempty(below_voltage) || error(
+            "Monitored lines $below_voltage are below the minimum voltage of " *
+            "$(min_voltage) kV and are not in the PTDF",
+        )
         unknown = setdiff(monitored, Iterators.flatten(_names.(merged_corridors)))
         isempty(unknown) || error(
             "Monitored names $unknown are not merged corridors or lines on merged corridors",
@@ -226,6 +249,7 @@ function PTDFNetworkData(
         ptdf,
         tol,
         monitored_corridors,
+        transport_lines,
     )
 end
 
@@ -241,6 +265,7 @@ function initialize_network!(
         template;
         tol=get(transport_model.attributes, "tol", 0.0),
         monitored=get(transport_model.attributes, "monitored", nothing),
+        min_voltage=Float64(get(transport_model.attributes, "min_voltage", 0.0)),
     )
     return
 end

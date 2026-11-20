@@ -23,6 +23,10 @@ Attributes of the `TransportModel`:
     by `_`) or by the name of one of its lines. All are monitored by default.
   - `"flow_variables"`: limit a flow variable set equal to the PTDF flow instead of the PTDF
     expression itself (default `false`).
+  - `"min_voltage"`: lines with a voltage below this value (kV) are left out of the PTDF and
+    dispatched like `BasicDispatch` lines under `NodalBalanceModel`: their flow is only
+    limited by their capacity, and ignores their impedance (default 0, all lines in the
+    PTDF).
 """
 struct NodalPTDFModel <: AbstractNodalTransportAggregation end
 
