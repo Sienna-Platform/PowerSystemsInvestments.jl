@@ -39,6 +39,7 @@ struct PTDFNetworkData <: AbstractNetworkData
     ptdf::PTDF
     tol::Float64
     monitored::Set{String}
+    limited::Set{String}
     transport_lines::Set{String}
 end
 
@@ -131,6 +132,7 @@ function PTDFNetworkData(
     tol::Float64=0.0,
     monitored::Union{Nothing, Vector{String}}=nothing,
     min_voltage::Float64=0.0,
+    monitor_iteratively::Bool=false,
 )
     corridors = CorridorLines()
     transport_lines = Set{String}()
@@ -218,8 +220,9 @@ function PTDFNetworkData(
         end
     end
 
+    all_corridors = Set(c.name for c in merged_corridors)
     if isnothing(monitored)
-        monitored_corridors = Set(c.name for c in merged_corridors)
+        monitored_corridors = monitor_iteratively ? Set{String}() : copy(all_corridors)
     else
         below_voltage = intersect(monitored, transport_lines)
         isempty(below_voltage) || error(
@@ -249,29 +252,27 @@ function PTDFNetworkData(
         ptdf,
         tol,
         monitored_corridors,
+        monitor_iteratively ? all_corridors : copy(monitored_corridors),
         transport_lines,
     )
 end
 
-initialize_network!(
-    ::TransportModel,
-    ::InvestmentModelTemplate,
-    ::PSIP.Portfolio,
-    ::Union{Nothing, Vector{String}},
-) = nothing
+initialize_network!(::TransportModel, ::InvestmentModelTemplate, ::PSIP.Portfolio, ::Bool) =
+    nothing
 
 function initialize_network!(
     transport_model::TransportModel{NodalPTDFModel},
     template::InvestmentModelTemplate,
     portfolio::PSIP.Portfolio,
-    default_monitored::Union{Nothing, Vector{String}},
+    monitor_iteratively::Bool,
 )
     transport_model.network_data = PTDFNetworkData(
         portfolio,
         template;
         tol=get(transport_model.attributes, "tol", 0.0),
-        monitored=get(transport_model.attributes, "monitored", default_monitored),
+        monitored=get(transport_model.attributes, "monitored", nothing),
         min_voltage=Float64(get(transport_model.attributes, "min_voltage", 0.0)),
+        monitor_iteratively=monitor_iteratively,
     )
     return
 end

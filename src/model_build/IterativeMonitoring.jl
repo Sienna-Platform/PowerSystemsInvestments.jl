@@ -5,7 +5,7 @@ _check_monitoring_transport(::TransportModel{T}) where {T} =
 function build_impl!(model::InvestmentModel{IterativeMonitoring})
     transport_model = get_transport_model(get_template(model))
     _check_monitoring_transport(transport_model)
-    build_single_instance!(model; default_monitored=String[])
+    build_single_instance!(model; monitor_iteratively=true)
     return
 end
 

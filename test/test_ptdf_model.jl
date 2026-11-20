@@ -273,7 +273,7 @@ _terms_by_name(expression) =
 end
 
 # Four nodes A (reference) to D; lines are (name, from, to, formulation, keywords)
-function _ptdf_network_data(lines; tol=0.0)
+function _ptdf_network_data(lines; tol=0.0, kwargs...)
     portfolio, op_days = test_2_zone_portfolio()
     sys = build_system(PSITestSystems, "c_sys5_re")
     set_units_base_system!(sys, "NATURAL_UNITS")
@@ -293,7 +293,7 @@ function _ptdf_network_data(lines; tol=0.0)
     for (name, from, to, formulation, kwargs) in lines
         line = _ptdf_line(name, nodes[from], nodes[to]; kwargs...)
         PSIP.add_technology!(portfolio, line)
-        if name == "ab_existing"
+        if endswith(name, "_existing")
             PSIP.add_supplemental_attribute!(
                 portfolio,
                 line,
@@ -325,7 +325,7 @@ function _ptdf_network_data(lines; tol=0.0)
             BasicDispatchFeasibility,
         )
     end
-    return PSIN.PTDFNetworkData(portfolio, template; tol=tol), portfolio
+    return PSIN.PTDFNetworkData(portfolio, template; tol=tol, kwargs...), portfolio
 end
 
 @testset "PTDF network branches" begin
@@ -384,6 +384,54 @@ end
         ("ab_existing", "A", "B", ContinuousInvestment, (;)),
         ("ab_new", "A", "B", ContinuousInvestment, (reactance=0.2,)),
     ])
+end
+
+# Corridors A-B, B-C, C-D and A-C, a unit line D-A and a new corridor B-D
+@testset "Virtual transaction bounds" begin
+    lines = [
+        ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+        ("bc_existing", "B", "C", ContinuousInvestment, (reactance=0.2,)),
+        ("cd_existing", "C", "D", ContinuousInvestment, (reactance=0.3,)),
+        ("ac_existing", "A", "C", ContinuousInvestment, (reactance=0.4,)),
+        ("da_units", "D", "A", IntegerInvestment, (unit_size=100.0, max_capacity=100.0)),
+        ("bd_new", "B", "D", ContinuousInvestment, (;)),
+    ]
+    network, portfolio = _ptdf_network_data(lines)
+    nodes = network.ptdf.axes[1]
+    ix = Dict(n => i for (i, n) in enumerate(nodes))
+    distance = fill(Inf, length(nodes), length(nodes))
+    foreach(i -> distance[i, i] = 0.0, eachindex(nodes))
+    for c in network.merged_corridors
+        w = PSIN._max_flow(c, portfolio) / c.susceptance
+        distance[ix[c.arc[1]], ix[c.arc[2]]] = distance[ix[c.arc[2]], ix[c.arc[1]]] = w
+    end
+    for k in eachindex(nodes), i in eachindex(nodes), j in eachindex(nodes)
+        distance[i, j] = min(distance[i, j], distance[i, k] + distance[k, j])
+    end
+    bounds = PSIN._virtual_transaction_bounds(network, portfolio)
+    @test length(network.merged_corridors) == 4
+    for (name, arc, susceptance) in PSIN._virtual_branches(network)
+        @test bounds[name] ≈ susceptance * distance[ix[arc[1]], ix[arc[2]]]
+    end
+
+    # Iterative monitoring starts with no monitored corridors but limits them all in the end
+    iterative, _ = _ptdf_network_data(lines; monitor_iteratively=true)
+    @test isempty(iterative.monitored)
+    @test PSIN._virtual_transaction_bounds(iterative, portfolio) == bounds
+
+    # Only the monitored A-B corridor is limited, so no limited path joins B and D
+    partial, _ = _ptdf_network_data(lines; monitored=["A_B"])
+    @test partial.limited == Set(["A_B"])
+    corridor = only(c for c in partial.merged_corridors if c.name == "A_B")
+    longest_path =
+        PSIN._max_flow(corridor, portfolio) / corridor.susceptance + sum(
+            PSIN._max_flow(b, portfolio) / b.susceptance for
+            b in [partial.new_corridors; partial.unit_lines]
+        )
+    partial_bounds = PSIN._virtual_transaction_bounds(partial, portfolio)
+    for (name, _, susceptance) in PSIN._virtual_branches(partial)
+        @test partial_bounds[name] ≈ susceptance * longest_path
+    end
 end
 
 @testset "PTDF network data is built with the model" begin

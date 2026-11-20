@@ -740,11 +740,11 @@ function build_model!(
     container::SingleOptimizationContainer,
     template::InvestmentModelTemplate,
     port::PSIP.Portfolio;
-    default_monitored::Union{Nothing, Vector{String}}=nothing,
+    monitor_iteratively::Bool=false,
 )
     transport_model = get_transport_model(template)
     initialize_system_expressions!(container, transport_model, port)
-    initialize_network!(transport_model, template, port, default_monitored)
+    initialize_network!(transport_model, template, port, monitor_iteratively)
 
     tech_names = [
         collect(values(template.technology_models))

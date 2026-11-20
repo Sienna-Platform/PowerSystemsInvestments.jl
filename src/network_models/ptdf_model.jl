@@ -471,13 +471,14 @@ function add_constraints!(
 end
 
 # Big-M of each virtual transaction: its branch's susceptance times a bound on the angle
-# difference across it, the shortest path of Fmax / b over merged corridors (or the sum over
-# all branches when no merged corridors join its ends)
+# difference across it, the shortest path of Fmax / b over limited merged corridors (or the
+# sum over all limited branches when none join its ends)
 function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.Portfolio)
     nodes = network.ptdf.axes[1]
     node_lookup = network.ptdf.lookup[1]
     neighbors = [Tuple{Int, Float64}[] for _ in nodes]
     for corridor in network.merged_corridors
+        corridor.name in network.limited || continue
         weight = _max_flow(corridor, portfolio) / corridor.susceptance
         from, to = (node_lookup[n] for n in corridor.arc)
         push!(neighbors[from], (to, weight))
@@ -490,24 +491,32 @@ function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.P
             init=0.0,
         )
     bounds = Dict{String, Float64}()
+    distances = Dict{Int, Vector{Float64}}()
     for (name, arc, susceptance) in _virtual_branches(network)
         from, to = (node_lookup[n] for n in arc)
-        distance = fill(Inf, length(nodes))
-        distance[from] = 0.0
-        visited = falses(length(nodes))
-        while true
-            remaining = findall(!, visited)
-            isempty(remaining) && break
-            current = remaining[argmin(distance[remaining])]
-            isinf(distance[current]) && break
-            visited[current] = true
-            for (next, weight) in neighbors[current]
-                distance[next] = min(distance[next], distance[current] + weight)
-            end
-        end
+        distance = get!(() -> _shortest_distances(neighbors, from), distances, from)
         bounds[name] = susceptance * (isinf(distance[to]) ? longest_path : distance[to])
     end
     return bounds
+end
+
+# Dijkstra from `source`
+function _shortest_distances(neighbors::Vector{Vector{Tuple{Int, Float64}}}, source::Int)
+    distance = fill(Inf, length(neighbors))
+    distance[source] = 0.0
+    heap = DataStructures.BinaryMinHeap([(0.0, source)])
+    while !isempty(heap)
+        current_distance, current = pop!(heap)
+        current_distance > distance[current] && continue
+        for (next, weight) in neighbors[current]
+            next_distance = current_distance + weight
+            if next_distance < distance[next]
+                distance[next] = next_distance
+                push!(heap, (next_distance, next))
+            end
+        end
+    end
+    return distance
 end
 
 function add_constraints!(
