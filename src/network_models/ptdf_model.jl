@@ -166,12 +166,12 @@ function _add_branch_flow!(
     transactions = get_variable(container, VirtualTransactionVariable(), PSIP.Portfolio)
     ix = ptdf.lookup[2][branch]
     factors = [(nodes[n], ptdf.data[n, ix]) for n in eachindex(nodes)]
-    # Virtual branches keep every entry, so an unbuilt branch carries no flow
+
     virtual = any(name == branch for (name, _, _) in _virtual_branches(network))
     relative_tol = virtual ? 0.0 : network.relative_tol
     cutoff = max(PTDF_ZERO_TOL, relative_tol * maximum(abs(f) for (_, f) in factors))
     filter!(((_, factor),) -> abs(factor) > cutoff, factors)
-    # The branch's own transaction also removes its flow
+
     transfers = [
         (
             name,
@@ -330,9 +330,11 @@ function add_monitored_corridors!(
     union!(network.monitored, names)
     U = PSIP.Portfolio
     flow = _add_rows!(container.expressions, ExpressionKey(PTDFBranchFlow, U), names)
+    
     for name in names
         _add_branch_flow!(flow, container, network, name)
     end
+    
     if get(transport_model.attributes, "flow_variables", false)
         variable =
             _add_rows!(container.variables, VariableKey(FlowActivePowerVariable, U), names)
@@ -383,6 +385,7 @@ function add_constraints!(
         time_steps[2:end],
         meta="order",
     )
+    
     jump_model = get_jump_model(container)
     for corridor in network.new_corridors
         name = corridor.name
@@ -427,6 +430,7 @@ function add_constraints!(
         time_steps,
         meta="order",
     )
+    
     jump_model = get_jump_model(container)
     for line in lines
         units = [u for u in network.unit_lines if u.line.name == line.name]
@@ -456,6 +460,7 @@ function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.P
     nodes = network.ptdf.axes[1]
     node_lookup = network.ptdf.lookup[1]
     neighbors = [Tuple{Int, Float64}[] for _ in nodes]
+    
     for corridor in network.merged_corridors
         corridor.name in network.limited || continue
         weight = _max_flow(corridor, portfolio) / corridor.susceptance
@@ -470,6 +475,7 @@ function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.P
             init=0.0,
         )
     bounds = Dict{String, Float64}()
+    
     # Dijkstra, once per source node
     distances = Dict{Int, Vector{Float64}}()
     for (name, arc, susceptance) in _virtual_branches(network)
@@ -513,6 +519,7 @@ function add_constraints!(
     con_ub = add_constraints_container!(container, T(), U, names, time_steps, meta="ub")
     jump_model = get_jump_model(container)
     bounds = _virtual_transaction_bounds(network, portfolio)
+    
     for name in names, op_ix in get_operational_indexes(time_mapping)
         period = inverse_invest_mapping[op_ix]
         limit = bounds[name] * (1 - built[name, period])
@@ -557,6 +564,7 @@ calculate_aux_variable_value!(
 
 function _capacity_values(container::SingleOptimizationContainer, network::PTDFNetworkData)
     values = Dict{Tuple{DataType, DataType}, DenseAxisArray{Float64}}()
+    
     for corridor in network.merged_corridors, line in corridor.expandable_lines
         get!(values, (line.type, line.formulation)) do
             jump_value.(_capacity_expression(container, line))
@@ -576,6 +584,7 @@ function _corridor_loading(container::SingleOptimizationContainer, network::PTDF
     flow = get_aux_variables(container)[AuxVarKey(BranchFlow, PSIP.Portfolio)]
     capacities = _capacity_values(container, network)
     loading = Dict{String, Tuple{Float64, Float64}}()
+    
     for corridor in network.merged_corridors
         ratio, excess = 0.0, -Inf
         for op_ix in get_operational_indexes(time_mapping)
@@ -619,11 +628,13 @@ function calculate_network_values!(
     transactions = jump_value.(get_variable(container, VirtualTransactionVariable(), U))
     flow = get_aux_variables(container)[AuxVarKey(BranchFlow, U)]
     flow.data .= transpose(ptdf.data) * injection[nodes, :].data
+
     for (name, arc, _) in _virtual_branches(network)
         transfer = ptdf.data[node_lookup[arc[1]], :] .- ptdf.data[node_lookup[arc[2]], :]
         transfer[ptdf.lookup[2][name]] -= 1.0
         flow.data .+= transfer * transpose(transactions[name, :].data)
     end
+    
     line_flow = get_aux_variables(container)[AuxVarKey(LineFlow, U)]
     fill!(line_flow, 0.0)
     capacities = _capacity_values(container, network)
@@ -649,6 +660,7 @@ function calculate_network_values!(
             end
         end
     end
+    
     branches = [
         [(c.line.name, c.name) for c in network.new_corridors]
         [(l.line.name, l.name) for l in network.unit_lines]
@@ -656,5 +668,6 @@ function calculate_network_values!(
     for (line, branch) in branches, t in get_time_steps(time_mapping)
         line_flow[line, t] += flow[branch, t]
     end
+    
     return
 end

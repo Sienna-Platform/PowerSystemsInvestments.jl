@@ -1,11 +1,9 @@
-# A line (NodalACTransportTechnology) of the template
 struct LineKey
     type::DataType
     name::String
     formulation::DataType
 end
 
-# Limit: `fixed_capacity` plus the cumulative capacity of `expandable_lines`
 struct MergedCorridor
     name::String
     arc::Tuple{String, String}
@@ -75,7 +73,6 @@ function _collect_corridor_lines!(
     return
 end
 
-# Other transmission technologies are not in the PTDF
 _collect_corridor_lines!(
     ::CorridorLines,
     ::Set{String},
@@ -103,7 +100,6 @@ function _limit_units(
     return count
 end
 
-# New corridors and unit lines are always limited, since their limits decide what is built
 function PTDFNetworkData(
     portfolio::PSIP.Portfolio,
     template::InvestmentModelTemplate;

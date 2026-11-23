@@ -1,11 +1,8 @@
-# As in PowerNetworkMatrices; indexed ptdf[branch, node] and lodf[monitored, outaged]
-
 struct PTDF
     data::Matrix{Float64}
     axes::Tuple{Vector{String}, Vector{String}}
     lookup::Tuple{Dict{String, Int}, Dict{String, Int}}
     arcs::Vector{Tuple{String, String}}
-    # Reference node => nodes of its island
     subnetworks::Dict{String, Vector{String}}
 end
 
@@ -73,6 +70,7 @@ function PTDF(
     node_lookup = _make_lookup(nodes)
     A = _incidence_matrix(arcs, node_lookup)
     BA = SparseArrays.sparse(transpose(A)) * LinearAlgebra.Diagonal(susceptances)
+
     # Islands include candidate branches, which may join islands that each have a reference
     roots = _island_roots(arcs, node_lookup)
     fixed_roots = _island_roots(
@@ -120,7 +118,6 @@ function _susceptance(line::PSIP.NodalACTransportTechnology)
     return voltage^2 / x
 end
 
-# A branch whose outage splits its island keeps an unscaled row, as in PowerNetworkMatrices
 function LODF(ptdf::PTDF)
     branches = ptdf.axes[2]
     data = _incidence_matrix(ptdf.arcs, ptdf.lookup[1]) * ptdf.data

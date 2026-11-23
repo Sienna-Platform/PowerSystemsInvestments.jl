@@ -19,7 +19,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
     tolerance = get(attributes, "overload_tolerance", 1e-4)
     jump_model = get_jump_model(container)
     milp = is_milp(container)
-    # A MIP is first screened with integrality relaxed, and then with a looser gap
+
     undo_relax =
         milp && get(attributes, "relaxed_screening", true) ?
         JuMP.relax_integrality(jump_model) : nothing
@@ -29,7 +29,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         target_gap = JuMP.get_attribute(jump_model, MOI.RelativeGapTolerance())
         JuMP.set_attribute(jump_model, MOI.RelativeGapTolerance(), screening_gap)
     end
-    # Moves to the next stage, and returns false when already at the final one
+
     function next_stage!()
         if !isnothing(undo_relax)
             undo_relax()
@@ -52,7 +52,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         max_loading=Float64[],
         overloaded=Int[],
     )
-    # Undoes the screening changes if a solve fails
+
     try
         loading = Dict{String, Tuple{Float64, Float64}}()
         rounds = 0
@@ -94,7 +94,6 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
                 continue
             end
             if rounds == max_iterations
-                # The last solve is always a final one
                 capped = true
                 while next_stage!()
                 end
@@ -106,6 +105,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
             _add_corridors!(container, transport_model, portfolio, added)
             rounds += 1
         end
+
         # Only possible with a relative PTDF tolerance
         residual = [
             name for (name, (ratio, _)) in loading if
@@ -141,7 +141,6 @@ function _add_corridors!(
         JuMP.all_constraints(jump_model; include_variable_in_set_constraints=false)
     basis = nothing
     if is_milp(container)
-        # Values are read before any start is set, since setting one discards the solution
         values = JuMP.value.(variables)
         JuMP.set_start_value.(variables, values)
     else
@@ -200,13 +199,11 @@ function _add_corridors!(
         err isa Union{MOI.UnsupportedAttribute, MOI.SetAttributeNotAllowed} || rethrow()
         @info "The solver cannot set a basis, so the next solves are not warm-started" maxlog =
             1
-        # Drops any statuses already set
         MOI.Utilities.reset_optimizer(jump_model)
     end
     return
 end
 
-# New flow variables are basic, so the equalities that set them are nonbasic
 _new_row_status(::MOI.EqualTo) = MOI.NONBASIC
 _new_row_status(::MOI.AbstractScalarSet) = MOI.BASIC
 
