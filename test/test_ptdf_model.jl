@@ -26,12 +26,14 @@ function _ptdf_line(
     unit_size=1.0,
     max_capacity=1000.0,
     capital_cost=5000.0,
+    voltage=230.0,
 )
     return PTDF_LINE_TYPE(;
         name=name,
         start_node=from,
         end_node=to,
         reactance=reactance,
+        voltage=voltage,
         unit_size=unit_size,
         capacity_limits=(min=0, max=max_capacity),
         capital_costs=PSIP.CapitalCost(LinearCurve(capital_cost), 0.0),
@@ -59,6 +61,8 @@ function _nodal_test_model(
     hvdc_lines=[],
     attributes=Dict{String, Any}(),
     algorithm=SingleInstanceSolve,
+    voltages=Dict{String, Float64}(),
+    optimizer=HiGHS.Optimizer,
 )
     p_5bus, op_days = test_2_zone_portfolio()
     sys = build_system(PSITestSystems, "c_sys5_re")
@@ -77,10 +81,11 @@ function _nodal_test_model(
         RepresentativePeriods(Vector{Vector{Dates}}()),
         TransportModel(transport; use_slacks=use_slacks, attributes=attributes),
     )
+    first_id = next_region_id(p_5bus)
     regions = Dict(
         n => PSIP.Node(;
             name=n,
-            id=i,
+            id=first_id + i - 1,
             bus_type=(i == 1 ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ),
         ) for (i, n) in enumerate(nodes)
     )
@@ -123,6 +128,7 @@ function _nodal_test_model(
                 regions[to];
                 reactance=reactance,
                 capital_cost=get(candidate_costs, name, candidate_cost),
+                voltage=get(voltages, name, 230.0),
             )
             PSIP.add_technology!(p_5bus, line)
             continue
@@ -134,12 +140,13 @@ function _nodal_test_model(
             regions[to];
             reactance=reactance,
             max_capacity=rating,
+            voltage=get(voltages, name, 230.0),
         )
         PSIP.add_technology!(p_5bus, line)
         PSIP.add_supplemental_attribute!(
             p_5bus,
             line,
-            PSIP.ExistingDevices(; existing_devices=[device]),
+            PSIP.ExistingDevices(; id=1, existing_devices=[device]),
         )
     end
     set_technology_model!(
@@ -198,7 +205,7 @@ function _nodal_test_model(
         template,
         algorithm,
         p_5bus;
-        optimizer=HiGHS.Optimizer,
+        optimizer=optimizer,
         portfolio_to_file=false,
         store_variable_names=true,
     )
@@ -266,15 +273,16 @@ _terms_by_name(expression) =
 end
 
 # Four nodes A (reference) to D; lines are (name, from, to, formulation, keywords)
-function _ptdf_network_data(lines; tol=0.0)
+function _ptdf_network_data(lines; kwargs...)
     portfolio, op_days = test_2_zone_portfolio()
     sys = build_system(PSITestSystems, "c_sys5_re")
     set_units_base_system!(sys, "NATURAL_UNITS")
     PSIP.set_base_system!(portfolio, sys)
+    first_id = next_region_id(portfolio)
     nodes = Dict(
         n => PSIP.Node(;
             name=n,
-            id=i,
+            id=first_id + i - 1,
             bus_type=(n == "A" ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ),
         ) for (i, n) in enumerate(("A", "B", "C", "D"))
     )
@@ -285,11 +293,11 @@ function _ptdf_network_data(lines; tol=0.0)
     for (name, from, to, formulation, kwargs) in lines
         line = _ptdf_line(name, nodes[from], nodes[to]; kwargs...)
         PSIP.add_technology!(portfolio, line)
-        if name == "ab_existing"
+        if endswith(name, "_existing")
             PSIP.add_supplemental_attribute!(
                 portfolio,
                 line,
-                PSIP.ExistingDevices(; existing_devices=["1"]),
+                PSIP.ExistingDevices(; id=1, existing_devices=["1"]),
             )
         end
         push!(get!(names_by_formulation, formulation, String[]), name)
@@ -317,7 +325,7 @@ function _ptdf_network_data(lines; tol=0.0)
             BasicDispatchFeasibility,
         )
     end
-    return PSIN.PTDFNetworkData(portfolio, template; tol=tol), portfolio
+    return PSIN.PTDFNetworkData(portfolio, template; kwargs...), portfolio
 end
 
 @testset "PTDF network branches" begin
@@ -368,13 +376,104 @@ end
     @test_throws ErrorException _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (max_capacity=1e8,)),
     ])
-    @test_throws ErrorException _ptdf_network_data([
+    # PSIP rejects a line with a non-positive unit size when it is added to the portfolio
+    @test_logs (:error, r"unit size must be finite and positive") match_mode = :any @test_throws IS.InvalidValue _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (unit_size=0.0,)),
     ])
     @test_logs (:warn, r"susceptance per MW") match_mode = :any _ptdf_network_data([
         ("ab_existing", "A", "B", ContinuousInvestment, (;)),
         ("ab_new", "A", "B", ContinuousInvestment, (reactance=0.2,)),
     ])
+    # Susceptance per MW of rating: the existing capacity, or the maximum capacity of a line
+    # without one, whatever the unit size
+    sys = build_system(PSITestSystems, "c_sys5_re")
+    set_units_base_system!(sys, "NATURAL_UNITS")
+    rating = PSY.get_rating(PSY.get_component(PSY.Line, sys, "1"))
+    @test_logs (:warn, r"susceptance per MW") match_mode = :any _ptdf_network_data([
+        ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+        ("ab_new", "A", "B", ContinuousInvestment, (max_capacity=2 * rating,)),
+    ])
+    logs, _ = Test.collect_test_logs() do
+        _ptdf_network_data([
+            ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+            (
+                "ab_new",
+                "A",
+                "B",
+                ContinuousInvestment,
+                (reactance=0.2, max_capacity=rating / 2, unit_size=10.0),
+            ),
+        ])
+    end
+    @test !any(occursin("susceptance per MW", string(l.message)) for l in logs)
+
+    # Only HVDC and zonal links model losses
+    @test_throws ArgumentError TechnologyModel(
+        PTDF_LINE_TYPE,
+        ContinuousInvestment,
+        BasicDispatchWithLosses,
+        BasicDispatchFeasibility,
+    )
+    @test TechnologyModel(
+        HVDC_TYPE,
+        ContinuousInvestment,
+        BasicDispatchWithLosses,
+        BasicDispatchFeasibility,
+    ) isa TechnologyModel
+    @test_throws ArgumentError TechnologyModel(
+        HVDC_TYPE,
+        ContinuousInvestment,
+        BasicDispatchWithBudget,
+        BasicDispatchFeasibility,
+    )
+end
+
+# Corridors A-B, B-C, C-D and A-C, a unit line D-A and a new corridor B-D
+@testset "Virtual transaction bounds" begin
+    lines = [
+        ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+        ("bc_existing", "B", "C", ContinuousInvestment, (reactance=0.2,)),
+        ("cd_existing", "C", "D", ContinuousInvestment, (reactance=0.3,)),
+        ("ac_existing", "A", "C", ContinuousInvestment, (reactance=0.4,)),
+        ("da_units", "D", "A", IntegerInvestment, (unit_size=100.0, max_capacity=100.0)),
+        ("bd_new", "B", "D", ContinuousInvestment, (;)),
+    ]
+    network, portfolio = _ptdf_network_data(lines)
+    nodes = network.ptdf.axes[1]
+    ix = Dict(n => i for (i, n) in enumerate(nodes))
+    distance = fill(Inf, length(nodes), length(nodes))
+    foreach(i -> distance[i, i] = 0.0, eachindex(nodes))
+    for c in network.merged_corridors
+        w = PSIN._max_flow(c, portfolio) / c.susceptance
+        distance[ix[c.arc[1]], ix[c.arc[2]]] = distance[ix[c.arc[2]], ix[c.arc[1]]] = w
+    end
+    for k in eachindex(nodes), i in eachindex(nodes), j in eachindex(nodes)
+        distance[i, j] = min(distance[i, j], distance[i, k] + distance[k, j])
+    end
+    bounds = PSIN._virtual_transaction_bounds(network, portfolio)
+    @test length(network.merged_corridors) == 4
+    for (name, arc, susceptance) in PSIN._virtual_branches(network)
+        @test bounds[name] ≈ susceptance * distance[ix[arc[1]], ix[arc[2]]]
+    end
+
+    # Iterative monitoring starts with no monitored corridors but limits them all in the end
+    iterative, _ = _ptdf_network_data(lines; monitor_iteratively=true)
+    @test isempty(iterative.monitored)
+    @test PSIN._virtual_transaction_bounds(iterative, portfolio) == bounds
+
+    # Only the monitored A-B corridor is limited, so no limited path joins B and D
+    partial, _ = _ptdf_network_data(lines; monitored=["A_B"])
+    @test partial.limited == Set(["A_B"])
+    corridor = only(c for c in partial.merged_corridors if c.name == "A_B")
+    longest_path =
+        PSIN._max_flow(corridor, portfolio) / corridor.susceptance + sum(
+            PSIN._max_flow(b, portfolio) / b.susceptance for
+            b in [partial.new_corridors; partial.unit_lines]
+        )
+    partial_bounds = PSIN._virtual_transaction_bounds(partial, portfolio)
+    for (name, _, susceptance) in PSIN._virtual_branches(partial)
+        @test partial_bounds[name] ≈ susceptance * longest_path
+    end
 end
 
 @testset "PTDF network data is built with the model" begin
@@ -460,6 +559,8 @@ function _triangle_model(
     transport;
     attributes=Dict{String, Any}(),
     algorithm=SingleInstanceSolve,
+    voltages=Dict{String, Float64}(),
+    optimizer=HiGHS.Optimizer,
 )
     m = _nodal_test_model(
         transport;
@@ -477,6 +578,8 @@ function _triangle_model(
         use_slacks=true,
         attributes=attributes,
         algorithm=algorithm,
+        voltages=voltages,
+        optimizer=optimizer,
     )
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
@@ -869,13 +972,8 @@ end
     )
 end
 
-@testset "PTDF cutoff" begin
-    tol = 0.4
-    m = _triangle_model(NodalPTDFModel; attributes=Dict{String, Any}("tol" => tol))
+function _dispatch_coefficients(m, branch)
     container = PSIN.get_optimization_container(m)
-    network = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m)))
-    ptdf = network.ptdf
-    @test any(0.0 < abs(x) <= tol for x in ptdf.data)
     flow = PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio)
     dispatch = PSIN.get_variable(
         container,
@@ -883,18 +981,49 @@ end
         PSIP.SupplyTechnology{PSY.ThermalStandard},
         "BasicDispatch",
     )
-    for branch in ptdf.axes[2],
+    return Dict(
+        node => JuMP.coefficient(flow[branch, 1], dispatch[generator, 1]) for
         (generator, node) in (("cheap_thermal", "n1"), ("expensive_thermal", "n2"))
+    )
+end
 
-        factor = ptdf[branch, node]
-        expected = abs(factor) > tol ? factor : 0.0
-        @test JuMP.coefficient(flow[branch, 1], dispatch[generator, 1]) ≈ expected
+@testset "PTDF relative tolerance" begin
+    relative_tol = 0.7
+    m = _triangle_model(
+        NodalPTDFModel;
+        attributes=Dict{String, Any}("relative_tol" => relative_tol),
+    )
+    container = PSIN.get_optimization_container(m)
+    ptdf = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m))).ptdf
+    dropped = 0
+    for branch in ptdf.axes[2]
+        cutoff = relative_tol * maximum(abs, ptdf.data[:, ptdf.lookup[2][branch]])
+        for (node, coefficient) in _dispatch_coefficients(m, branch)
+            factor = ptdf[branch, node]
+            expected = abs(factor) > cutoff ? factor : 0.0
+            dropped += expected != factor
+            @test coefficient ≈ expected
+        end
     end
+    @test dropped > 0
     _solved_objective(m)
     # Reported flows use the whole PTDF
+    flow = PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio)
     model_flow = JuMP.value.(flow)
     reported = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
     @test maximum(abs.(model_flow.data .- reported[axes(model_flow, 1), :].data)) > 1.0
+
+    # Virtual branches keep every entry
+    ring = _ring_model(
+        [RING_LINES; RING_CANDIDATES];
+        attributes=Dict{String, Any}("relative_tol" => 0.99),
+    )
+    ptdf = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(ring))).ptdf
+    for branch in ("d13", "d24", "r45"),
+        (node, coefficient) in _dispatch_coefficients(ring, branch)
+
+        @test coefficient ≈ ptdf[branch, node]
+    end
 end
 
 @testset "Iterative monitoring" begin
@@ -950,6 +1079,92 @@ end
         output_dir=mktempdir(; cleanup=true),
         console_level=Logging.AboveMaxLevel,
     ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+end
+
+@testset "Iterative monitoring leaves the template unchanged" begin
+    full_objective = _solved_objective(_triangle_model(NodalPTDFModel))
+    iterative = _triangle_model(NodalPTDFModel; algorithm=IterativeMonitoring)
+    @test isapprox(_solved_objective(iterative), full_objective; rtol=1e-6)
+    monitored = PSIN.get_monitored_corridors(iterative)
+    template = PSIN.get_template(iterative)
+    @test !haskey(PSIN.get_transport_model(template).attributes, "monitored")
+
+    # A model built from the same template monitors every corridor
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        PSIN.get_portfolio(iterative);
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    @test PSIN.get_monitored_corridors(m) == ["n1_n2", "n1_n3", "n2_n3"]
+    @test isapprox(_solved_objective(m), full_objective; rtol=1e-6)
+    @test PSIN.get_monitored_corridors(iterative) == monitored
+end
+
+@testset "Iterative monitoring without a basis" begin
+    full_objective = _solved_objective(_triangle_model(NodalPTDFModel))
+    m = _triangle_model(
+        NodalPTDFModel;
+        algorithm=IterativeMonitoring,
+        optimizer=JuMP.optimizer_with_attributes(
+            HiGHS.Optimizer,
+            "solver" => "ipm",
+            "run_crossover" => "off",
+        ),
+    )
+    @test isapprox(_solved_objective(m), full_objective; rtol=1e-5)
+    @test size(get_monitoring_log(m), 1) >= 2
+end
+
+@testset "Iterative monitoring of a direct model" begin
+    full_objective = _solved_objective(_triangle_model(NodalPTDFModel))
+    base = _triangle_model(NodalPTDFModel; algorithm=IterativeMonitoring)
+    m = InvestmentModel(
+        PSIN.get_template(base),
+        IterativeMonitoring,
+        PSIN.get_portfolio(base),
+        JuMP.direct_model(HiGHS.Optimizer());
+        portfolio_to_file=false,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    # Exporting the problem needs an optimizer in the settings
+    @test solve!(m; export_optimization_problem=false) ==
+          PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test isapprox(JuMP.objective_value(PSIN.get_jump_model(m)), full_objective; rtol=1e-6)
+    @test size(get_monitoring_log(m), 1) >= 2
+end
+
+@testset "Adding monitored corridors" begin
+    m = _triangle_model(NodalPTDFModel; algorithm=IterativeMonitoring)
+    container = PSIN.get_optimization_container(m)
+    transport_model = PSIN.get_transport_model(PSIN.get_template(m))
+    portfolio = PSIN.get_portfolio(m)
+    PSIN.add_monitored_corridors!(container, transport_model, portfolio, ["n1_n2", "l12"])
+    PSIN.add_monitored_corridors!(container, transport_model, portfolio, ["n1_n2", "n2_n3"])
+    @test PSIN.get_monitored_corridors(m) == ["n1_n2", "n2_n3"]
+    flow = PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio)
+    @test axes(flow, 1) == ["n1_n2", "n2_n3"]
+    @test all(isassigned(flow.data, i) for i in eachindex(flow.data))
+end
+
+@testset "Failed iterative solve restores the screening changes" begin
+    lines = [RING_LINES; RING_CANDIDATES]
+    m = _ring_model(
+        lines;
+        candidate_cost=1.0,
+        attributes=Dict{String, Any}("screening_mip_gap" => 0.05),
+        algorithm=IterativeMonitoring,
+    )
+    jump_model = PSIN.get_jump_model(m)
+    gap = JuMP.get_attribute(jump_model, MOI.RelativeGapTolerance())
+    JuMP.set_time_limit_sec(jump_model, 0.0)
+    @test solve!(m; console_level=Logging.AboveMaxLevel) == PSIN.RunStatus.FAILED
+    @test PSIN.is_milp(PSIN.get_optimization_container(m))
+    @test JuMP.get_attribute(jump_model, MOI.RelativeGapTolerance()) == gap
 end
 
 @testset "Iterative monitoring of a MIP" begin
@@ -1186,4 +1401,60 @@ end
               capacity["cheap_thermal", 1] + flow["n1_n3", t] + flow["n2_n3", t] -
               1.3 * demand[t] atol = 1e-4
     end
+end
+
+# Lines below 38 kV are dispatched as transport links outside the PTDF
+@testset "Lines below the minimum voltage" begin
+    min_voltage = Dict{String, Any}("min_voltage" => 38.0)
+    nodal_objective = _solved_objective(_triangle_model(NodalBalanceModel))
+    ptdf_objective = _solved_objective(_triangle_model(NodalPTDFModel))
+
+    # Without l12 the PTDF lines form a tree, so KVL no longer binds; l13 at exactly the
+    # minimum voltage stays in the PTDF
+    m = _triangle_model(
+        NodalPTDFModel;
+        attributes=min_voltage,
+        voltages=Dict("l12" => 34.5, "l13" => 38.0),
+    )
+    container = PSIN.get_optimization_container(m)
+    network = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m)))
+    @test network.transport_lines == Set(["l12"])
+    @test network.ptdf.axes[2] == ["n1_n3", "n2_n3"]
+    line_flow = PSIN.get_variable(
+        container,
+        PSIN.FlowActivePowerVariable(),
+        PTDF_LINE_TYPE,
+        "BasicDispatch",
+    )
+    @test axes(line_flow, 1) == ["l12"]
+    objective = _solved_objective(m)
+    @test isapprox(objective, nodal_objective; rtol=1e-6)
+    @test objective < ptdf_objective * (1 - 1e-3)
+    @test maximum(abs.(JuMP.value.(line_flow["l12", :]))) <= 100.0 + 1e-6
+
+    # n1 is only reached by lines below the minimum voltage, so it is its own island
+    m = _triangle_model(
+        NodalPTDFModel;
+        attributes=min_voltage,
+        voltages=Dict("l12" => 34.5, "l13" => 34.5),
+    )
+    container = PSIN.get_optimization_container(m)
+    balance = PSIN.get_constraint(container, IslandBalanceConstraint(), PSIP.Portfolio)
+    @test length(axes(balance, 1)) == 2
+    @test isapprox(_solved_objective(m), nodal_objective; rtol=1e-6)
+
+    # A line below the minimum voltage cannot be monitored
+    m = _nodal_test_model(
+        NodalPTDFModel;
+        nodes=["Node_1", "Node_2"],
+        placement=TWO_NODE_PLACEMENT,
+        lines=[("nodal_line", "Node_1", "Node_2", 0.1, "1")],
+        voltages=Dict("nodal_line" => 34.5),
+        attributes=Dict{String, Any}("min_voltage" => 38.0, "monitored" => ["nodal_line"]),
+    )
+    @test build!(
+        m;
+        output_dir=mktempdir(; cleanup=true),
+        console_level=Logging.AboveMaxLevel,
+    ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end

@@ -313,12 +313,9 @@ function _add_demand_and_storage_losses!(
     op_ix::Int,
 )
     time_mapping = get_time_mapping(container)
-    first_time_stamp =
-        get_time_stamps(time_mapping)[first(get_consecutive_slices(time_mapping)[op_ix])]
     weight = get_time_step_weight(container, op_ix)
     for d in _contributing_demands(p, requirement)
         time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-        check_initial_timestamp(time_series, d, first_time_stamp, op_ix)
         # Load data is in MW
         JuMP.add_to_expression!(
             expression,

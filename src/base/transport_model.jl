@@ -8,21 +8,23 @@ abstract type AbstractNodalTransportAggregation <: AbstractTransportAggregation 
 struct NodalBalanceModel <: AbstractNodalTransportAggregation end
 
 """
-DC power flow between nodes using the PTDF of the AC lines, with one energy balance per
-island.
+DC power flow between nodes with the PTDF of the AC lines, and one energy balance per island.
 
-Continuous lines on a corridor (node pair) with existing capacity form one branch whose
-limit grows with the capacity built; its susceptance is that of the existing lines. A
-continuous line on a new corridor, and each unit of an integer or binary line, is a branch
-that only carries flow once built.
+Continuous lines on a corridor (node pair) with existing capacity form one branch, with the
+susceptance of the existing lines and a limit that grows with the capacity built. A continuous
+line on a new corridor, and each unit of an integer or binary line, is a branch that carries
+flow only once built.
 
 Attributes of the `TransportModel`:
 
-  - `"tol"`: PTDF entries at or below this magnitude are left out of the flows (default 0).
-  - `"monitored"`: corridors whose flow is limited, by corridor name (its node names joined
-    by `_`) or by the name of one of its lines. All are monitored by default.
+  - `"monitored"`: corridors with flow limits, by corridor name (its node names joined by `_`)
+    or line name (default: all).
   - `"flow_variables"`: limit a flow variable set equal to the PTDF flow instead of the PTDF
-    expression itself (default `false`).
+    expression (default `false`).
+  - `"min_voltage"`: lines below this voltage (kV) are left out of the PTDF and dispatched like
+    `BasicDispatch` lines under `NodalBalanceModel` (default 0).
+  - `"relative_tol"`: leave out of a branch's flow the PTDF entries below this share of its
+    largest entry (default 0; 1e-6 is safe). Reported flows use the whole PTDF.
 """
 struct NodalPTDFModel <: AbstractNodalTransportAggregation end
 

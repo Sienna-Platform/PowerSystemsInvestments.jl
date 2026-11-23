@@ -181,7 +181,6 @@ function get_time_step_weight(container::SingleOptimizationContainer, op_ix::Int
            get_time_step_length(get_time_mapping(container), op_ix)
 end
 
-# The objective is discounted with the discount rate and base year of the portfolio
 function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Portfolio)
     discount_rate = PSIP.get_discount_rate(portfolio)
     base_year = PSIP.get_base_year(portfolio)
@@ -219,9 +218,8 @@ function check_operational_weights(
         if abs(represented_years - 1.0) > OPERATIONAL_WEIGHTS_TOLERANCE
             @warn "The operational weights of investment period $(investment_time_stamps[stage]) " *
                   "represent $(round(represented_years; digits=3)) years of operation. " *
-                  "Weights must be per-year: the weighted duration of the representative " *
-                  "slices of each investment period should add up to one year. The length " *
-                  "of the period is applied separately when costs are discounted."
+                  "The weighted duration of the representative slices of each investment " *
+                  "period should add up to one year."
         end
     end
     return
@@ -647,6 +645,8 @@ function _make_system_expressions!(
             _make_container_array(regions, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
+        ExpressionKey(FeasibilityImportCapacity, PSIP.Portfolio) =>
+            _make_container_array(regions, time_steps),
         ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) =>
             _make_container_array(regions, operational_indexes),
     )
@@ -666,6 +666,8 @@ function _make_system_expressions!(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
+            _make_container_array(nodes, time_steps),
+        ExpressionKey(FeasibilityImportCapacity, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
         ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) =>
             _make_container_array(nodes, operational_indexes),
@@ -790,11 +792,12 @@ end
 function build_model!(
     container::SingleOptimizationContainer,
     template::InvestmentModelTemplate,
-    port::PSIP.Portfolio,
+    port::PSIP.Portfolio;
+    monitor_iteratively::Bool=false,
 )
     transport_model = get_transport_model(template)
     initialize_system_expressions!(container, transport_model, port)
-    initialize_network!(transport_model, template, port)
+    initialize_network!(transport_model, template, port, monitor_iteratively)
 
     tech_names = [
         collect(values(template.technology_models))
@@ -977,11 +980,10 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     model_status = JuMP.primal_status(jump_model)
 
     if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
+        @error "Optimizer returned $(model_status) (termination_status = $(JuMP.termination_status(jump_model)))"
         if get_calculate_conflict(get_settings(container))
-            @warn "Optimizer returned $model_status; computing conflict"
             compute_conflict!(container)
         end
-        @error "Optimizer returned $(model_status) (termination_status = $(JuMP.termination_status(jump_model)))"
         return RunStatus.FAILED
     end
 
@@ -1014,9 +1016,6 @@ function compute_conflict!(container::SingleOptimizationContainer)
         conflict_status = MOI.get(jump_model, MOI.ConflictStatus())
         if conflict_status != MOI.CONFLICT_FOUND
             @error "No conflict could be found for the model. Status: $conflict_status"
-            if !get_optimizer_solve_log_print(settings)
-                JuMP.set_silent(jump_model)
-            end
             return conflict_status
         end
 
@@ -1038,12 +1037,13 @@ function compute_conflict!(container::SingleOptimizationContainer)
 
         return conflict_status
     catch e
-        jump_model.is_model_dirty = true
         if isa(e, MethodError)
             @info "Can't compute conflict, check that your optimizer supports conflict refining/IIS"
         else
             @error "Can't compute conflict" exception = (e, catch_backtrace())
         end
+    finally
+        !get_optimizer_solve_log_print(settings) && JuMP.set_silent(jump_model)
     end
 
     return MOI.NO_CONFLICT_EXISTS

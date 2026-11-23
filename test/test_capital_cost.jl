@@ -30,7 +30,7 @@ function _capital_cost_template(op_days)
 end
 
 # Build a container and run only the capital-cost argument + model construction stages
-# for a single technology type, so the `CapitalCost` investment expression is populated.
+# for a single technology type, so `CapitalCostExpression` is populated.
 function _build_capital_container(p, template, capital, tech_type, tech_model, names)
     settings = PSIN.Settings(p)
     model = JuMP.Model(HiGHS.Optimizer)
@@ -138,6 +138,26 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
               EXPENSIVE_THERMAL_CAPEX
         @test coef_expensive ≈
               _hand_capital_coefficients(slope_expensive, EXPENSIVE_THERMAL_CAPEX)
+
+        capital_cost = PSIN.get_expression(
+            container,
+            PSIN.CapitalCostExpression(),
+            tech_type,
+            "ContinuousInvestment",
+        )
+        build = PSIN.get_variable(
+            container,
+            PSIN.BuildCapacity(),
+            tech_type,
+            "ContinuousInvestment",
+        )
+        for (t, coefficient) in
+            zip(PSIN.get_investment_time_steps(container.time_mapping), coef_cheap)
+            @test JuMP.coefficient(
+                capital_cost["cheap_thermal", t],
+                build["cheap_thermal", t],
+            ) ≈ coefficient
+        end
     end
 
     @testset "Supply interconnection cost adds to the per-MW capital term" begin

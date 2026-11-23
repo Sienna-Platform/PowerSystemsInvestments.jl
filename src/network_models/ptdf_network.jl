@@ -1,11 +1,9 @@
-# A line (NodalACTransportTechnology) of the template
 struct LineKey
     type::DataType
     name::String
     formulation::DataType
 end
 
-# Limit: `fixed_capacity` plus the cumulative capacity of `expandable_lines`
 struct MergedCorridor
     name::String
     arc::Tuple{String, String}
@@ -31,14 +29,15 @@ struct UnitLine
     line::LineKey
 end
 
-# The PTDF is kept whole; `tol` only drops injection terms from the flows
 struct PTDFNetworkData <: AbstractNetworkData
     merged_corridors::Vector{MergedCorridor}
     new_corridors::Vector{NewCorridor}
     unit_lines::Vector{UnitLine}
     ptdf::PTDF
-    tol::Float64
+    relative_tol::Float64
     monitored::Set{String}
+    limited::Set{String}
+    transport_lines::Set{String}
 end
 
 const CorridorLines =
@@ -52,14 +51,20 @@ _is_continuous(::Type{<:Union{IntegerInvestment, BinaryInvestment}}) = false
 
 function _collect_corridor_lines!(
     corridors::CorridorLines,
+    transport_lines::Set{String},
     portfolio::PSIP.Portfolio,
     model::TechnologyModel{D},
     names::Vector{String},
+    min_voltage::Float64,
 ) where {D <: PSIP.NodalACTransportTechnology}
     formulation = get_investment_formulation(model)
     for name in names
         technology = PSIP.get_technology(D, portfolio, name)
         PSIP.get_available(technology) || continue
+        if PSIP.get_voltage(technology) < min_voltage
+            push!(transport_lines, name)
+            continue
+        end
         push!(
             get!(corridors, minmax(_arc(technology)...), eltype(valtype(corridors))[]),
             (technology, LineKey(D, name, formulation)),
@@ -68,24 +73,14 @@ function _collect_corridor_lines!(
     return
 end
 
-# Other transmission technologies are not in the PTDF
 _collect_corridor_lines!(
     ::CorridorLines,
+    ::Set{String},
     ::PSIP.Portfolio,
     ::TechnologyModel,
     ::Vector{String},
+    ::Float64,
 ) = nothing
-
-function _unit_count(
-    technology::PSIP.NodalACTransportTechnology,
-    existing::Float64,
-    ::Type{F},
-) where {F}
-    unit_size = get_unit_size(BuildCapacity(), technology, F())
-    count =
-        floor(Int, (PSIP.get_capacity_limits(technology).max - existing) / unit_size + 1e-9)
-    return _limit_units(technology, max(count, 0), F)
-end
 
 _limit_units(::PSIP.NodalACTransportTechnology, count::Int, ::Type{BinaryInvestment}) =
     min(count, 1)
@@ -105,26 +100,25 @@ function _limit_units(
     return count
 end
 
-function _check_susceptance_per_mw(corridor_name, technologies)
-    per_mw = [_susceptance(t) / PSIP.get_unit_size(t) for t in technologies]
-    if length(per_mw) > 1 &&
-       maximum(per_mw) > (1 + SUSCEPTANCE_PER_MW_TOLERANCE) * minimum(per_mw)
-        @warn "Lines on corridor $corridor_name have different susceptance per MW; the corridor limit overstates what they can carry together" lines =
-            PSIP.get_name.(technologies)
-    end
-    return
-end
-
-# New corridors and unit lines are always limited, since their limits decide what is built
 function PTDFNetworkData(
     portfolio::PSIP.Portfolio,
     template::InvestmentModelTemplate;
-    tol::Float64=0.0,
+    relative_tol::Float64=0.0,
     monitored::Union{Nothing, Vector{String}}=nothing,
+    min_voltage::Float64=0.0,
+    monitor_iteratively::Bool=false,
 )
     corridors = CorridorLines()
+    transport_lines = Set{String}()
     for (model, names) in get_branch_models(template)
-        _collect_corridor_lines!(corridors, portfolio, model, names)
+        _collect_corridor_lines!(
+            corridors,
+            transport_lines,
+            portfolio,
+            model,
+            names,
+            min_voltage,
+        )
     end
 
     merged_corridors = MergedCorridor[]
@@ -144,15 +138,17 @@ function PTDFNetworkData(
             corridor_name = join(corridor, "_")
             existing_technologies =
                 [t for (t, mw) in zip(technologies, existing) if mw > 0.0]
-            _check_susceptance_per_mw(
-                corridor_name,
-                unique(
-                    [
-                        existing_technologies
-                        [t for (t, c) in zip(technologies, continuous) if c]
-                    ],
-                ),
-            )
+            # Per MW of rating: existing capacity, or maximum capacity for a new line
+            checked = [
+                (t, mw > 0.0 ? mw : PSIP.get_capacity_limits(t).max) for
+                (t, mw, c) in zip(technologies, existing, continuous) if mw > 0.0 || c
+            ]
+            per_mw = [_susceptance(t) / rating for (t, rating) in checked]
+            if length(per_mw) > 1 &&
+               maximum(per_mw) > (1 + SUSCEPTANCE_PER_MW_TOLERANCE) * minimum(per_mw)
+                @warn "Lines on corridor $corridor_name have different susceptance per MW; the corridor limit overstates what they can carry together" lines =
+                    PSIP.get_name.(first.(checked))
+            end
             fixed_lines = [
                 (line, mw) for
                 (line, mw, e) in zip(lines, existing, expandable) if !e && mw > 0.0
@@ -184,14 +180,21 @@ function PTDFNetworkData(
         end
         for (technology, line, mw, c) in zip(technologies, lines, existing, continuous)
             c && continue
-            for unit in 1:_unit_count(technology, mw, line.formulation)
+            unit_size = get_unit_size(BuildCapacity(), technology, line.formulation())
+            max_units = (PSIP.get_capacity_limits(technology).max - mw) / unit_size
+            count = _limit_units(
+                technology,
+                max(floor(Int, max_units + 1e-9), 0),
+                line.formulation,
+            )
+            for unit in 1:count
                 push!(
                     unit_lines,
                     UnitLine(
                         "$(line.name)_unit_$(unit)",
                         _arc(technology),
                         _susceptance(technology),
-                        PSIP.get_unit_size(technology),
+                        unit_size,
                         unit,
                         line,
                     ),
@@ -200,9 +203,15 @@ function PTDFNetworkData(
         end
     end
 
+    all_corridors = Set(c.name for c in merged_corridors)
     if isnothing(monitored)
-        monitored_corridors = Set(c.name for c in merged_corridors)
+        monitored_corridors = monitor_iteratively ? Set{String}() : copy(all_corridors)
     else
+        below_voltage = intersect(monitored, transport_lines)
+        isempty(below_voltage) || error(
+            "Monitored lines $below_voltage are below the minimum voltage of " *
+            "$(min_voltage) kV and are not in the PTDF",
+        )
         unknown = setdiff(monitored, Iterators.flatten(_names.(merged_corridors)))
         isempty(unknown) || error(
             "Monitored names $unknown are not merged corridors or lines on merged corridors",
@@ -217,30 +226,39 @@ function PTDFNetworkData(
         String[b.name for b in branches],
         Tuple{String, String}[b.arc for b in branches],
         Float64[b.susceptance for b in branches];
-        reference_nodes=_reference_nodes(nodes),
+        reference_nodes=Set(
+            PSIP.get_name(n) for n in nodes if PSIP.get_bus_type(n) == PSY.ACBusTypes.REF
+        ),
+        candidate_branches=Set{String}(b.name for b in [new_corridors; unit_lines]),
     )
     return PTDFNetworkData(
         merged_corridors,
         new_corridors,
         unit_lines,
         ptdf,
-        tol,
+        relative_tol,
         monitored_corridors,
+        monitor_iteratively ? all_corridors : copy(monitored_corridors),
+        transport_lines,
     )
 end
 
-initialize_network!(::TransportModel, ::InvestmentModelTemplate, ::PSIP.Portfolio) = nothing
+initialize_network!(::TransportModel, ::InvestmentModelTemplate, ::PSIP.Portfolio, ::Bool) =
+    nothing
 
 function initialize_network!(
     transport_model::TransportModel{NodalPTDFModel},
     template::InvestmentModelTemplate,
     portfolio::PSIP.Portfolio,
+    monitor_iteratively::Bool,
 )
     transport_model.network_data = PTDFNetworkData(
         portfolio,
         template;
-        tol=get(transport_model.attributes, "tol", 0.0),
         monitored=get(transport_model.attributes, "monitored", nothing),
+        relative_tol=Float64(get(transport_model.attributes, "relative_tol", 0.0)),
+        min_voltage=Float64(get(transport_model.attributes, "min_voltage", 0.0)),
+        monitor_iteratively=monitor_iteratively,
     )
     return
 end

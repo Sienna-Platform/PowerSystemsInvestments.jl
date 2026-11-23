@@ -1,13 +1,13 @@
 #! format: off
 _supported_investment_formulations(::Type{<:PSIP.SupplyTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment)
+_supported_operation_formulations(::Type{<:PSIP.SupplyTechnology}) = (BasicDispatch, BasicDispatchWithBudget)
+_supported_operation_formulations(::Type{<:PSIP.SupplyTechnology{PSY.ThermalStandard}}) = (BasicDispatch, BasicDispatchWithBudget, ContinuousThermalCommitment)
 
 get_variable_lower_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = 0.0
 get_variable_upper_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = nothing
 get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
-get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).min
-# Discrete investments count units, so the limits in MW do not apply to the variable
+# Discrete investments count units, so the limit in MW does not apply to the variable
 get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = nothing
-get_variable_lower_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = 0.0
 
 get_variable_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 get_expression_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
@@ -42,56 +42,13 @@ end
 
 function add_expression!(
     container::SingleOptimizationContainer,
-    portfolio::PSIP.Portfolio,
     expression_type::T,
     devices::U,
     formulation::V,
 ) where {
-    T <: CumulativeCapacity,
+    T <: CapacityAdditions,
     U <: Vector{D},
-    V <: ContinuousInvestment,
-} where {D <: PSIP.SupplyTechnology}
-    IS.@assert_op length(devices) > 0
-    time_mapping = get_time_mapping(container)
-    time_steps = get_investment_time_steps(time_mapping)
-    tech_model = string(V)
-
-    var = get_variable(container, BuildCapacity(), D, tech_model)
-
-    expression = add_expression_container!(
-        container,
-        expression_type,
-        D,
-        get_variable_names(devices),
-        time_steps,
-        meta=tech_model,
-    )
-
-    for d in devices
-        init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
-        check_multi_region_technology(d, init_cap)
-        for name in get_variable_names(d)
-            running = JuMP.AffExpr(init_cap)
-            for t in time_steps
-                JuMP.add_to_expression!(running, var[name, t])
-                expression[name, t] = copy(running)
-            end
-        end
-    end
-
-    return
-end
-
-function add_expression!(
-    container::SingleOptimizationContainer,
-    portfolio::PSIP.Portfolio,
-    expression_type::T,
-    devices::U,
-    formulation::V,
-) where {
-    T <: CumulativeCapacity,
-    U <: Vector{D},
-    V <: Union{IntegerInvestment, BinaryInvestment},
+    V <: Union{ContinuousInvestment, IntegerInvestment, BinaryInvestment},
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -111,12 +68,49 @@ function add_expression!(
 
     for d in devices
         unit_size = get_unit_size(BuildCapacity(), d, V())
+        for name in get_variable_names(d), t in time_steps
+            expression[name, t] =
+                JuMP.@expression(get_jump_model(container), unit_size * var[name, t])
+        end
+    end
+
+    return
+end
+
+function add_expression!(
+    container::SingleOptimizationContainer,
+    portfolio::PSIP.Portfolio,
+    expression_type::T,
+    devices::U,
+    formulation::V,
+) where {
+    T <: CumulativeCapacity,
+    U <: Vector{D},
+    V <: Union{ContinuousInvestment, IntegerInvestment, BinaryInvestment},
+} where {D <: PSIP.SupplyTechnology}
+    IS.@assert_op length(devices) > 0
+    time_mapping = get_time_mapping(container)
+    time_steps = get_investment_time_steps(time_mapping)
+    tech_model = string(V)
+
+    additions = get_expression(container, CapacityAdditions(), D, tech_model)
+
+    expression = add_expression_container!(
+        container,
+        expression_type,
+        D,
+        get_variable_names(devices),
+        time_steps,
+        meta=tech_model,
+    )
+
+    for d in devices
         init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
         check_multi_region_technology(d, init_cap)
         for name in get_variable_names(d)
             running = JuMP.AffExpr(init_cap)
             for t in time_steps
-                JuMP.add_to_expression!(running, var[name, t], unit_size)
+                JuMP.add_to_expression!(running, additions[name, t])
                 expression[name, t] = copy(running)
             end
         end
@@ -131,29 +125,25 @@ function add_expression!(
     devices::U,
     formulation::V,
 ) where {
-    T <: Union{VariableOMCost, StartUpCost, ShutDownCost},
+    T <: FuelCost,
     U <: Vector{D},
-    V <: AbstractTechnologyFormulation,
+    V <: OperationsTechnologyFormulation,
 } where {D <: PSIP.SupplyTechnology}
-    IS.@assert_op length(devices) > 0
-    time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
-    tech_model = string(V)
-
+    fuel_devices = filter(has_fuel_curve, devices)
+    if isempty(fuel_devices)
+        return
+    end
     add_expression_container!(
         container,
         expression_type,
         D,
-        [PSIP.get_name(d) for d in devices],
-        time_steps,
-        meta=tech_model,
+        get_variable_names(fuel_devices),
+        get_time_steps(get_time_mapping(container)),
+        meta=string(V),
     )
-
     return
 end
 
-# Weighted (representative-day) energy generation per operational index. Created
-# for every supply technology regardless of whether any requirement uses it.
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -196,7 +186,6 @@ function add_expression!(
     return
 end
 
-# Fuel consumption of the technologies with a fuel curve, and the container for its cost
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -222,14 +211,6 @@ function add_expression!(
         expression_type,
         D,
         get_variable_names(fuel_devices),
-        time_steps,
-        meta=tech_model,
-    )
-    add_expression_container!(
-        container,
-        FuelCost(),
-        D,
-        PSIP.get_name.(fuel_devices),
         time_steps,
         meta=tech_model,
     )
@@ -395,24 +376,26 @@ function add_to_expression!(
     devices::U,
     formulation::S,
     transport_model::TransportModel{V},
+    tech_model_vector::Vector{X},
 ) where {
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Vector{D},
     V <: SingleRegionBalanceModel,
+    X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
-    tech_model = string(S)
 
     W = CumulativeCapacity
-    installed_cap = get_expression(container, W(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
 
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    for d in devices, name in get_variable_names(d)
+    for (ix, d) in enumerate(devices), name in get_variable_names(d)
+        inv_model = string(get_investment_formulation(tech_model_vector[ix]))
+        installed_cap = get_expression(container, W(), D, inv_model)
         for op_ix in feasibility_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
@@ -435,24 +418,26 @@ function add_to_expression!(
     devices::U,
     formulation::S,
     transport_model::TransportModel{V},
+    tech_model_vector::Vector{X},
 ) where {
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Vector{D},
-    V <: MultiRegionBalanceModel,
+    V <: Union{MultiRegionBalanceModel, NodalBalanceModel},
+    X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
-    tech_model = string(S)
 
     W = CumulativeCapacity
-    installed_cap = get_expression(container, W(), D, tech_model)
     expression = get_expression(container, T(), PSIP.Portfolio)
 
     feasibility_indexes = get_feasibility_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    for d in devices, (name, region) in get_variable_names_and_regions(d)
+    for (ix, d) in enumerate(devices), (name, region) in get_variable_names_and_regions(d)
+        inv_model = string(get_investment_formulation(tech_model_vector[ix]))
+        installed_cap = get_expression(container, W(), D, inv_model)
         for op_ix in feasibility_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
@@ -468,9 +453,9 @@ function add_to_expression!(
 
     return
 end
+
 ################### Constraints ##################
 
-# Limits for technologies with ops_variable_cap_factor time series #
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -507,7 +492,6 @@ function add_constraints!(
     operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
 
     for (ix, d) in enumerate(devices)
         tech_model = tech_model_vector[ix]
@@ -518,7 +502,6 @@ function add_constraints!(
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             time_step_inv = inverse_invest_mapping[op_ix]
             for (ix, t) in enumerate(time_slices)
                 con_ub[name, t] = JuMP.@constraint(
@@ -532,7 +515,6 @@ function add_constraints!(
     return
 end
 
-# Limits for thermals #
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -584,23 +566,76 @@ function add_constraints!(
     return
 end
 
-# Fraction of the installed capacity of a technology that is not on a planned or forced outage.
+# Minimum cumulative capacity, in MW, for the technologies with a minimum capacity limit
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::T,
+    ::V,
+    devices::U,
+    formulation::S,
+) where {
+    T <: MinimumCumulativeCapacity,
+    S <: InvestmentTechnologyFormulation,
+    U <: Vector{D},
+    V <: CumulativeCapacity,
+} where {D <: PSIP.SupplyTechnology}
+    limited_devices = filter(d -> PSIP.get_capacity_limits(d).min > 0.0, devices)
+    if isempty(limited_devices)
+        return
+    end
+    time_steps = get_investment_time_steps(get_time_mapping(container))
+    tech_model = string(S)
+    con_lb = add_constraints_container!(
+        container,
+        T(),
+        D,
+        PSIP.get_name.(limited_devices),
+        time_steps,
+        meta=tech_model,
+    )
+    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
+    for d in limited_devices, t in time_steps
+        name = PSIP.get_name(d)
+        con_lb[name, t] = JuMP.@constraint(
+            get_jump_model(container),
+            sum(installed_cap[n, t] for n in get_variable_names(d)) >=
+            PSIP.get_capacity_limits(d).min
+        )
+    end
+    return
+end
+
 function get_availability(d::PSIP.SupplyTechnology)
     outage_factors = PSIP.get_outage_factors(d)
     return (1.0 - outage_factors.forced) * (1.0 - outage_factors.planned)
 end
 
-# Number of time steps of the representative period covered by a minimum up or down time,
-# rounded up and at least one
+# Number of time steps covered by a minimum up or down time, minimum one.
 function get_commitment_time_steps(time_mapping::TimeMapping, op_ix::Int, duration::Float64)
     num_time_steps = ceil(
         Int,
         duration / get_time_step_length(time_mapping, op_ix) - TIME_STEP_COUNT_TOLERANCE,
     )
-    return clamp(num_time_steps, 1, length(get_consecutive_slices(time_mapping)[op_ix]))
+    return max(num_time_steps, 1)
 end
 
-# Dispatch of the committed capacity is between its minimum output and its full output
+# Sum of a variable over the `num_time_steps` time steps ending at `t`
+function get_cyclic_window_sum(var, name, time_mapping, op_ix, t, num_time_steps)
+    time_slices = get_consecutive_slices(time_mapping)[op_ix]
+    full_periods, partial = divrem(num_time_steps, length(time_slices))
+    window_sum = JuMP.AffExpr(0.0)
+    if full_periods > 0
+        for s in time_slices
+            JuMP.add_to_expression!(window_sum, full_periods, var[name, s])
+        end
+    end
+    for i in 0:(partial - 1)
+        s = get_previous_time_step(time_mapping, op_ix, t, i)
+        JuMP.add_to_expression!(window_sum, var[name, s])
+    end
+    return window_sum
+end
+
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -653,7 +688,6 @@ function add_constraints!(
     return
 end
 
-# Committed capacity is limited by the installed capacity that is not on outage
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -701,7 +735,6 @@ function add_constraints!(
     return
 end
 
-# Capacity started up within the minimum up time must still be committed
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -738,11 +771,13 @@ function add_constraints!(
             for t in consecutive_slices[op_ix]
                 con_up[name, t] = JuMP.@constraint(
                     get_jump_model(container),
-                    committed_cap[name, t] >= sum(
-                        start_up_cap[
-                            name,
-                            get_previous_time_step(time_mapping, op_ix, t, i),
-                        ] for i in 0:(num_time_steps - 1)
+                    committed_cap[name, t] >= get_cyclic_window_sum(
+                        start_up_cap,
+                        name,
+                        time_mapping,
+                        op_ix,
+                        t,
+                        num_time_steps,
                     )
                 )
             end
@@ -751,7 +786,6 @@ function add_constraints!(
     return
 end
 
-# Capacity shut down within the minimum down time cannot be committed
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -794,11 +828,14 @@ function add_constraints!(
                 con_down[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     committed_cap[name, t] <=
-                    availability * installed_cap[name, time_step_inv] - sum(
-                        shut_down_cap[
-                            name,
-                            get_previous_time_step(time_mapping, op_ix, t, i),
-                        ] for i in 0:(num_time_steps - 1)
+                    availability * installed_cap[name, time_step_inv] -
+                    get_cyclic_window_sum(
+                        shut_down_cap,
+                        name,
+                        time_mapping,
+                        op_ix,
+                        t,
+                        num_time_steps,
                     )
                 )
             end
@@ -807,8 +844,6 @@ function add_constraints!(
     return
 end
 
-# Capacity that stays committed can ramp by the ramp limit. Capacity that starts up or shuts
-# down moves between zero and the larger of its minimum output and one time step of ramp.
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -879,7 +914,6 @@ function add_constraints!(
     return
 end
 
-# Committed capacity changes with the capacity that starts up and shuts down
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -924,7 +958,6 @@ function add_constraints!(
     return
 end
 
-# Maximum cumulative capacity
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -955,7 +988,6 @@ function add_constraints!(
 
     for d in devices
         name = PSIP.get_name(d)
-        # The limit applies to the total capacity over all the regions of the technology.
         variable_names = get_variable_names(d)
         max_capacity = PSIP.get_capacity_limits(d).max
         for t in time_steps
@@ -987,28 +1019,14 @@ function objective_function!(
     formulation::S,
 ) where {T <: PSIP.SupplyTechnology, S <: ThermalCommitmentFormulation}
     tech_model = string(S)
-    add_variable_cost!(container, ActivePowerVariable(), devices, formulation, tech_model)
-    add_commitment_cost!(
-        container,
+    for variable_type in (
+        ActivePowerVariable(),
         CommittedCapacityVariable(),
-        devices,
-        formulation,
-        tech_model,
-    )
-    add_commitment_cost!(
-        container,
         StartUpCapacityVariable(),
-        devices,
-        formulation,
-        tech_model,
-    )
-    add_commitment_cost!(
-        container,
         ShutDownCapacityVariable(),
-        devices,
-        formulation,
-        tech_model,
     )
+        add_variable_cost!(container, variable_type, devices, formulation, tech_model)
+    end
     return
 end
 
@@ -1036,7 +1054,8 @@ function objective_function!(
     return
 end
 
-# ActivePowerLimitsConstraint for HydroDispatch + BasicDispatchWithBudget
+################ Hydro Dispatch + BasicDispatchWithBudget Constraints ################
+
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -1089,7 +1108,6 @@ function add_constraints!(
     return
 end
 
-# HydroEnergyBudgetConstraint for HydroDispatch + BasicDispatchWithBudget
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,

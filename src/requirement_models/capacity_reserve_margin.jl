@@ -45,12 +45,6 @@ function _add_reserve_contribution!(
     capacity = get_expression(container, CumulativeCapacity(), D, investment_meta)
     time_slices = get_consecutive_slices(time_mapping)[op_ix]
     time_series = retrieve_ops_time_series(technology, op_ix, time_mapping)
-    check_initial_timestamp(
-        time_series,
-        technology,
-        get_time_stamps(time_mapping)[first(time_slices)],
-        op_ix,
-    )
     capacity_factors = TimeSeries.values(time_series.data)
     for (ix, t) in enumerate(time_slices), name in get_variable_names(technology)
         JuMP.add_to_expression!(reserve[t], capacity_factors[ix], capacity[name, period])
@@ -319,7 +313,6 @@ function add_constraints!(
 ) where {T <: PSIP.CapacityReserveMargin, X <: RequirementModel}
     time_mapping = get_time_mapping(container)
     time_steps = get_time_steps(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     map_to_op = get_investment_map_to_operational_slices(time_mapping)
     jump_model = get_jump_model(container)
@@ -388,7 +381,6 @@ function add_constraints!(
         for d in _contributing_demands(p, req), op_ix in op_indexes
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
             time_slices = consecutive_slices[op_ix]
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             for (t, value) in zip(time_slices, TimeSeries.values(time_series.data))
                 demand[t] += value
             end

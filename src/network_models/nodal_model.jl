@@ -8,23 +8,23 @@ function _add_balance_slacks!(
     time_steps = get_time_steps(time_mapping)
     expressions = get_expression(container, EnergyBalance(), U)
     jump_model = get_jump_model(container)
+    # The penalty is weighted like a variable cost: by the hours of the year each time step
+    # stands for, over the years of the investment period, discounted to the base year.
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     investment_time_stamps = get_investment_time_stamps(time_mapping)
     base_year = get_base_year(container)
     discount_rate = get_discount_rate(container)
-    discount_factor = 1.0 / (1.0 + discount_rate)
-    years = Dates.value.(Dates.Year.(get_time_stamps(time_mapping)))
     penalty = Dict{Int, Float64}()
     for op_ix in get_operational_indexes(time_mapping)
         inv_tuple = investment_time_stamps[inverse_invest_mapping[op_ix]]
-        period_factor = investment_period_annuity_factor(discount_rate, inv_tuple)
+        period_factor =
+            investment_period_present_value_factor(discount_rate, base_year, inv_tuple)
         for t in consecutive_slices[op_ix]
             penalty[t] =
                 BALANCE_SLACK_PENALTY *
                 period_factor *
-                get_time_step_weight(container, op_ix) *
-                discount_factor^(years[t] - base_year)
+                get_time_step_weight(container, op_ix)
         end
     end
     store_names = get_store_variable_names(get_settings(container))
@@ -51,7 +51,6 @@ function _add_balance_slacks!(
     return
 end
 
-# Nodal power balance model: energy balance constraint at each bus (node).
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::Type{T},
@@ -67,5 +66,15 @@ function add_constraints!(
     for t in time_steps, n in nodes
         constraint[n, t] = JuMP.@constraint(jump_model, expressions[n, t] == 0)
     end
+    return
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::Type{T},
+    port::U,
+) where {T <: NodalBalanceFeasibilityConstraint, U <: PSIP.Portfolio}
+    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    _add_feasibility_constraints!(container, T, U, nodes)
     return
 end

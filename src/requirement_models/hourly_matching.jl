@@ -92,7 +92,6 @@ function add_constraints!(
 ) where {T <: PSIP.HourlyMatching, X <: RequirementModel}
     time_mapping = get_time_mapping(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
     time_steps = [t for op_ix in operational_indexes for t in consecutive_slices[op_ix]]
@@ -136,12 +135,6 @@ function add_constraints!(
             demand = zeros(length(time_slices))
             for d in demands
                 time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-                check_initial_timestamp(
-                    time_series,
-                    d,
-                    time_stamps[first(time_slices)],
-                    op_ix,
-                )
                 demand .+= TimeSeries.values(time_series.data)
             end
             slack_cost = if req_name in slack_names
