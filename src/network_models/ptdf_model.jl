@@ -166,7 +166,7 @@ function _add_branch_flow!(
     transactions = get_variable(container, VirtualTransactionVariable(), PSIP.Portfolio)
     ix = ptdf.lookup[2][branch]
     factors = [(nodes[n], ptdf.data[n, ix]) for n in eachindex(nodes)]
-    filter!(((_, factor),) -> abs(factor) > network.tol, factors)
+    filter!(((_, factor),) -> !iszero(factor), factors)
     # The branch's own transaction also removes its flow
     transfers = [
         (
@@ -324,8 +324,12 @@ function add_monitored_corridors!(
     names::Vector{String},
 )
     network = get_network_data(transport_model)
-    corridors = [c for c in network.merged_corridors if c.name in names]
+    corridors = [
+        c for c in network.merged_corridors if
+        c.name in names && !(c.name in network.monitored)
+    ]
     isempty(corridors) && return
+    names = [c.name for c in corridors]
     union!(network.monitored, names)
     U = PSIP.Portfolio
     flow = _add_rows!(container.expressions, ExpressionKey(PTDFBranchFlow, U), names)

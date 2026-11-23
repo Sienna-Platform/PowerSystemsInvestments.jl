@@ -14,14 +14,14 @@ const GARVER_LINES = [
     ("4-6c", "4", "6", 0.3),
 ]
 
-function _ptdf_from_lines(nodes, lines; reference_nodes=Set{String}(), tol=0.0)
+function _ptdf_from_lines(nodes, lines; reference_nodes=Set{String}(), kwargs...)
     return PSIN.PTDF(
         nodes,
         [l[1] for l in lines],
         [(l[2], l[3]) for l in lines],
         [1.0 / l[4] for l in lines];
         reference_nodes=reference_nodes,
-        tol=tol,
+        kwargs...,
     )
 end
 
@@ -50,11 +50,6 @@ _flows(ptdf, injections) = transpose(ptdf.data) * injections
         @test ptdf["4-6a", node] ≈ ptdf["4-6c", node]
     end
     @test ptdf.subnetworks == Dict("1" => nodes)
-
-    cut = _ptdf_from_lines(nodes, GARVER_LINES; reference_nodes=Set(["1"]), tol=0.1)
-    @test cut["2-4", "3"] == 0.0
-    @test cut["2-3", "4"] == 0.0
-    @test cut["1-2", "2"] == ptdf["1-2", "2"]
 end
 
 @testset "PTDF flows balance at every node but the reference" begin
@@ -122,6 +117,20 @@ end
             reference_nodes=Set(["a1", "a2"]),
         )
     @test haskey(two_references.subnetworks, "a1")
+
+    # A candidate joining two islands with a reference node each does not warn
+    joined = [lines; ("a3b1", "a3", "b1", 0.1)]
+    @test_logs (:warn, r"reference nodes") match_mode = :any _ptdf_from_lines(
+        nodes,
+        joined;
+        reference_nodes=Set(["a1", "b1"]),
+    )
+    @test_logs min_level = Logging.Warn _ptdf_from_lines(
+        nodes,
+        joined;
+        reference_nodes=Set(["a1", "b1"]),
+        candidate_branches=Set(["a3b1"]),
+    )
     @test_throws ErrorException _ptdf_from_lines(
         nodes,
         [("bad", "a1", "a1", 0.1)];

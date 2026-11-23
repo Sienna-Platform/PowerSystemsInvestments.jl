@@ -273,7 +273,7 @@ _terms_by_name(expression) =
 end
 
 # Four nodes A (reference) to D; lines are (name, from, to, formulation, keywords)
-function _ptdf_network_data(lines; tol=0.0, kwargs...)
+function _ptdf_network_data(lines; kwargs...)
     portfolio, op_days = test_2_zone_portfolio()
     sys = build_system(PSITestSystems, "c_sys5_re")
     set_units_base_system!(sys, "NATURAL_UNITS")
@@ -325,7 +325,7 @@ function _ptdf_network_data(lines; tol=0.0, kwargs...)
             BasicDispatchFeasibility,
         )
     end
-    return PSIN.PTDFNetworkData(portfolio, template; tol=tol, kwargs...), portfolio
+    return PSIN.PTDFNetworkData(portfolio, template; kwargs...), portfolio
 end
 
 @testset "PTDF network branches" begin
@@ -384,6 +384,48 @@ end
         ("ab_existing", "A", "B", ContinuousInvestment, (;)),
         ("ab_new", "A", "B", ContinuousInvestment, (reactance=0.2,)),
     ])
+    # Susceptance per MW of rating: the existing capacity, or the maximum capacity of a line
+    # without one, whatever the unit size
+    sys = build_system(PSITestSystems, "c_sys5_re")
+    set_units_base_system!(sys, "NATURAL_UNITS")
+    rating = PSY.get_rating(PSY.get_component(PSY.Line, sys, "1"))
+    @test_logs (:warn, r"susceptance per MW") match_mode = :any _ptdf_network_data([
+        ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+        ("ab_new", "A", "B", ContinuousInvestment, (max_capacity=2 * rating,)),
+    ])
+    logs, _ = Test.collect_test_logs() do
+        _ptdf_network_data([
+            ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+            (
+                "ab_new",
+                "A",
+                "B",
+                ContinuousInvestment,
+                (reactance=0.2, max_capacity=rating / 2, unit_size=10.0),
+            ),
+        ])
+    end
+    @test !any(occursin("susceptance per MW", string(l.message)) for l in logs)
+
+    # Only HVDC and zonal links model losses
+    @test_throws ArgumentError TechnologyModel(
+        PTDF_LINE_TYPE,
+        ContinuousInvestment,
+        BasicDispatchWithLosses,
+        BasicDispatchFeasibility,
+    )
+    @test TechnologyModel(
+        HVDC_TYPE,
+        ContinuousInvestment,
+        BasicDispatchWithLosses,
+        BasicDispatchFeasibility,
+    ) isa TechnologyModel
+    @test_throws ArgumentError TechnologyModel(
+        HVDC_TYPE,
+        ContinuousInvestment,
+        BasicDispatchWithBudget,
+        BasicDispatchFeasibility,
+    )
 end
 
 # Corridors A-B, B-C, C-D and A-C, a unit line D-A and a new corridor B-D
@@ -930,34 +972,6 @@ end
     )
 end
 
-@testset "PTDF cutoff" begin
-    tol = 0.4
-    m = _triangle_model(NodalPTDFModel; attributes=Dict{String, Any}("tol" => tol))
-    container = PSIN.get_optimization_container(m)
-    network = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m)))
-    ptdf = network.ptdf
-    @test any(0.0 < abs(x) <= tol for x in ptdf.data)
-    flow = PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio)
-    dispatch = PSIN.get_variable(
-        container,
-        PSIN.ActivePowerVariable(),
-        PSIP.SupplyTechnology{PSY.ThermalStandard},
-        "BasicDispatch",
-    )
-    for branch in ptdf.axes[2],
-        (generator, node) in (("cheap_thermal", "n1"), ("expensive_thermal", "n2"))
-
-        factor = ptdf[branch, node]
-        expected = abs(factor) > tol ? factor : 0.0
-        @test JuMP.coefficient(flow[branch, 1], dispatch[generator, 1]) ≈ expected
-    end
-    _solved_objective(m)
-    # Reported flows use the whole PTDF
-    model_flow = JuMP.value.(flow)
-    reported = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
-    @test maximum(abs.(model_flow.data .- reported[axes(model_flow, 1), :].data)) > 1.0
-end
-
 @testset "Iterative monitoring" begin
     full = _triangle_model(NodalPTDFModel)
     full_objective = _solved_objective(full)
@@ -1049,6 +1063,54 @@ end
     )
     @test isapprox(_solved_objective(m), full_objective; rtol=1e-5)
     @test size(get_monitoring_log(m), 1) >= 2
+end
+
+@testset "Iterative monitoring of a direct model" begin
+    full_objective = _solved_objective(_triangle_model(NodalPTDFModel))
+    base = _triangle_model(NodalPTDFModel; algorithm=IterativeMonitoring)
+    m = InvestmentModel(
+        PSIN.get_template(base),
+        IterativeMonitoring,
+        PSIN.get_portfolio(base),
+        JuMP.direct_model(HiGHS.Optimizer());
+        portfolio_to_file=false,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    # Exporting the problem needs an optimizer in the settings
+    @test solve!(m; export_optimization_problem=false) ==
+          PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test isapprox(JuMP.objective_value(PSIN.get_jump_model(m)), full_objective; rtol=1e-6)
+    @test size(get_monitoring_log(m), 1) >= 2
+end
+
+@testset "Adding monitored corridors" begin
+    m = _triangle_model(NodalPTDFModel; algorithm=IterativeMonitoring)
+    container = PSIN.get_optimization_container(m)
+    transport_model = PSIN.get_transport_model(PSIN.get_template(m))
+    portfolio = PSIN.get_portfolio(m)
+    PSIN.add_monitored_corridors!(container, transport_model, portfolio, ["n1_n2", "l12"])
+    PSIN.add_monitored_corridors!(container, transport_model, portfolio, ["n1_n2", "n2_n3"])
+    @test PSIN.get_monitored_corridors(m) == ["n1_n2", "n2_n3"]
+    flow = PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio)
+    @test axes(flow, 1) == ["n1_n2", "n2_n3"]
+    @test all(isassigned(flow.data, i) for i in eachindex(flow.data))
+end
+
+@testset "Failed iterative solve restores the screening changes" begin
+    lines = [RING_LINES; RING_CANDIDATES]
+    m = _ring_model(
+        lines;
+        candidate_cost=1.0,
+        attributes=Dict{String, Any}("screening_mip_gap" => 0.05),
+        algorithm=IterativeMonitoring,
+    )
+    jump_model = PSIN.get_jump_model(m)
+    gap = JuMP.get_attribute(jump_model, MOI.RelativeGapTolerance())
+    JuMP.set_time_limit_sec(jump_model, 0.0)
+    @test solve!(m; console_level=Logging.AboveMaxLevel) == PSIN.RunStatus.FAILED
+    @test PSIN.is_milp(PSIN.get_optimization_container(m))
+    @test JuMP.get_attribute(jump_model, MOI.RelativeGapTolerance()) == gap
 end
 
 @testset "Iterative monitoring of a MIP" begin

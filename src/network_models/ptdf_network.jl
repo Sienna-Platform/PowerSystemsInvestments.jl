@@ -31,13 +31,11 @@ struct UnitLine
     line::LineKey
 end
 
-# The PTDF is kept whole; `tol` only drops injection terms from the flows
 struct PTDFNetworkData <: AbstractNetworkData
     merged_corridors::Vector{MergedCorridor}
     new_corridors::Vector{NewCorridor}
     unit_lines::Vector{UnitLine}
     ptdf::PTDF
-    tol::Float64
     monitored::Set{String}
     limited::Set{String}
     transport_lines::Set{String}
@@ -115,8 +113,9 @@ function _limit_units(
     return count
 end
 
-function _check_susceptance_per_mw(corridor_name, technologies)
-    per_mw = [_susceptance(t) / PSIP.get_unit_size(t) for t in technologies]
+# Per MW of each line's rating: its existing capacity, or its maximum capacity when it has none
+function _check_susceptance_per_mw(corridor_name, technologies, ratings)
+    per_mw = _susceptance.(technologies) ./ ratings
     if length(per_mw) > 1 &&
        maximum(per_mw) > (1 + SUSCEPTANCE_PER_MW_TOLERANCE) * minimum(per_mw)
         @warn "Lines on corridor $corridor_name have different susceptance per MW; the corridor limit overstates what they can carry together" lines =
@@ -129,7 +128,6 @@ end
 function PTDFNetworkData(
     portfolio::PSIP.Portfolio,
     template::InvestmentModelTemplate;
-    tol::Float64=0.0,
     monitored::Union{Nothing, Vector{String}}=nothing,
     min_voltage::Float64=0.0,
     monitor_iteratively::Bool=false,
@@ -164,15 +162,11 @@ function PTDFNetworkData(
             corridor_name = join(corridor, "_")
             existing_technologies =
                 [t for (t, mw) in zip(technologies, existing) if mw > 0.0]
-            _check_susceptance_per_mw(
-                corridor_name,
-                unique(
-                    [
-                        existing_technologies
-                        [t for (t, c) in zip(technologies, continuous) if c]
-                    ],
-                ),
-            )
+            checked = [
+                (t, mw > 0.0 ? mw : PSIP.get_capacity_limits(t).max) for
+                (t, mw, c) in zip(technologies, existing, continuous) if mw > 0.0 || c
+            ]
+            _check_susceptance_per_mw(corridor_name, first.(checked), last.(checked))
             fixed_lines = [
                 (line, mw) for
                 (line, mw, e) in zip(lines, existing, expandable) if !e && mw > 0.0
@@ -244,13 +238,13 @@ function PTDFNetworkData(
         Tuple{String, String}[b.arc for b in branches],
         Float64[b.susceptance for b in branches];
         reference_nodes=_reference_nodes(nodes),
+        candidate_branches=Set{String}(b.name for b in [new_corridors; unit_lines]),
     )
     return PTDFNetworkData(
         merged_corridors,
         new_corridors,
         unit_lines,
         ptdf,
-        tol,
         monitored_corridors,
         monitor_iteratively ? all_corridors : copy(monitored_corridors),
         transport_lines,
@@ -269,7 +263,6 @@ function initialize_network!(
     transport_model.network_data = PTDFNetworkData(
         portfolio,
         template;
-        tol=get(transport_model.attributes, "tol", 0.0),
         monitored=get(transport_model.attributes, "monitored", nothing),
         min_voltage=Float64(get(transport_model.attributes, "min_voltage", 0.0)),
         monitor_iteratively=monitor_iteratively,

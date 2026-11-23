@@ -53,83 +53,78 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         max_loading=Float64[],
         overloaded=Int[],
     )
-    loading = Dict{String, Tuple{Float64, Float64}}()
-    rounds = 0
-    capped = false
-    for iteration in Iterators.countfrom(0)
-        stage =
-            !isnothing(undo_relax) ? "relaxed" :
-            !isnothing(target_gap) ? "screening gap" : "final"
-        status = solve_model!(container, portfolio)
-        set_run_status!(model, status)
-        status == RunStatus.SUCCESSFULLY_FINALIZED || _solve_failed(model)
-        calculate_network_values!(container, transport_model, portfolio)
-        loading = _corridor_loading(container, network)
-        overloaded = [name for (name, (ratio, _)) in loading if ratio > 1 + tolerance]
-        new_overloads = setdiff(overloaded, network.monitored)
-        added =
-            isempty(new_overloads) || capped ? String[] :
-            sort!(
-                union(
-                    new_overloads,
-                    [
-                        name for (name, (ratio, _)) in loading if
-                        ratio > threshold && !(name in network.monitored)
-                    ],
+    # A failed solve leaves the screening changes in place unless they are undone here
+    try
+        rounds = 0
+        capped = false
+        for iteration in Iterators.countfrom(0)
+            stage =
+                !isnothing(undo_relax) ? "relaxed" :
+                !isnothing(target_gap) ? "screening gap" : "final"
+            status = solve_model!(container, portfolio)
+            set_run_status!(model, status)
+            status == RunStatus.SUCCESSFULLY_FINALIZED || _solve_failed(model)
+            calculate_network_values!(container, transport_model, portfolio)
+            loading = _corridor_loading(container, network)
+            overloaded = [name for (name, (ratio, _)) in loading if ratio > 1 + tolerance]
+            new_overloads = setdiff(overloaded, network.monitored)
+            added =
+                isempty(new_overloads) || capped ? String[] :
+                sort!(
+                    union(
+                        new_overloads,
+                        [
+                            name for (name, (ratio, _)) in loading if
+                            ratio > threshold && !(name in network.monitored)
+                        ],
+                    ),
+                )
+            push!(
+                log,
+                (
+                    stage,
+                    iteration,
+                    length(network.monitored),
+                    length(added),
+                    JuMP.objective_value(jump_model),
+                    get_optimizer_stats(container).timed_solve_time,
+                    maximum(first, values(loading); init=0.0),
+                    length(overloaded),
                 ),
             )
-        push!(
-            log,
-            (
-                stage,
-                iteration,
-                length(network.monitored),
-                length(added),
-                JuMP.objective_value(jump_model),
-                get_optimizer_stats(container).timed_solve_time,
-                maximum(first, values(loading); init=0.0),
-                length(overloaded),
-            ),
-        )
-        @info "Monitoring iteration $iteration" last(log)
-        if capped
-            isempty(new_overloads) ||
+            @info "Monitoring iteration $iteration" last(log)
+            if capped
+                isempty(new_overloads) ||
+                    @warn "Stopped after $max_iterations rounds with corridors overloaded" corridors =
+                        sort!(new_overloads)
+                break
+            end
+            if isempty(added)
+                next_stage!() || break
+                continue
+            end
+            if rounds == max_iterations
+                # The last solve is always a final one
+                capped = true
+                while next_stage!()
+                end
+                stage == "final" || continue
                 @warn "Stopped after $max_iterations rounds with corridors overloaded" corridors =
                     sort!(new_overloads)
-            break
-        end
-        if isempty(added)
-            next_stage!() || break
-            continue
-        end
-        if rounds == max_iterations
-            # The last solve is always a final one
-            capped = true
-            while next_stage!()
+                break
             end
-            stage == "final" || continue
-            @warn "Stopped after $max_iterations rounds with corridors overloaded" corridors =
-                sort!(new_overloads)
-            break
+            _add_corridors!(container, transport_model, portfolio, added)
+            rounds += 1
         end
-        _add_corridors!(container, transport_model, portfolio, added)
-        rounds += 1
-    end
-    residual = [
-        name for (name, (ratio, _)) in loading if
-        ratio > 1 + tolerance && name in network.monitored
-    ]
-    if !isempty(residual)
-        max_excess_mw = maximum(last(loading[name]) for name in residual)
-        @warn "Monitored corridors above their limits (PTDF cutoff)" max_excess_mw corridors =
-            sort!(residual)
+    finally
+        isnothing(undo_relax) || undo_relax()
+        isnothing(target_gap) ||
+            JuMP.set_attribute(jump_model, MOI.RelativeGapTolerance(), target_gap)
     end
     model.ext["monitoring_log"] = log
     return
 end
 
-# Adding rows to a model loaded in the solver is slow, so the solver is detached while they
-# are added; for an LP the previous basis is then restored
 function _add_corridors!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel,
@@ -137,7 +132,7 @@ function _add_corridors!(
     names::Vector{String},
 )
     jump_model = get_jump_model(container)
-    if get_direct_mode_optimizer(get_settings(container))
+    if JuMP.mode(jump_model) == JuMP.DIRECT
         add_monitored_corridors!(container, transport_model, portfolio, names)
         return
     end
@@ -192,24 +187,32 @@ function _restore_basis!(jump_model::JuMP.Model, basis)
     backend = JuMP.backend(jump_model)
     MOI.Utilities.attach_optimizer(backend)
     index_map = backend.model_to_optimizer_map
-    for v in JuMP.all_variables(jump_model)
-        MOI.set(
-            backend.optimizer,
-            MOI.VariableBasisStatus(),
-            index_map[JuMP.index(v)],
-            get(variable_status, v, MOI.BASIC),
-        )
-    end
-    for c in _constraint_refs(jump_model)
-        status = get(constraint_status, c) do
-            _new_row_status(JuMP.constraint_object(c).set)
+    try
+        for v in JuMP.all_variables(jump_model)
+            MOI.set(
+                backend.optimizer,
+                MOI.VariableBasisStatus(),
+                index_map[JuMP.index(v)],
+                get(variable_status, v, MOI.BASIC),
+            )
         end
-        MOI.set(
-            backend.optimizer,
-            MOI.ConstraintBasisStatus(),
-            index_map[JuMP.index(c)],
-            status,
-        )
+        for c in _constraint_refs(jump_model)
+            status = get(constraint_status, c) do
+                _new_row_status(JuMP.constraint_object(c).set)
+            end
+            MOI.set(
+                backend.optimizer,
+                MOI.ConstraintBasisStatus(),
+                index_map[JuMP.index(c)],
+                status,
+            )
+        end
+    catch err
+        err isa Union{MOI.UnsupportedAttribute, MOI.SetAttributeNotAllowed} || rethrow()
+        @info "The solver cannot set a basis, so the next solves are not warm-started" maxlog =
+            1
+        # Drops any statuses already set
+        MOI.Utilities.reset_optimizer(jump_model)
     end
     return
 end

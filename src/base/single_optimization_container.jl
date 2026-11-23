@@ -178,9 +178,6 @@ function get_time_step_weight(container::SingleOptimizationContainer, op_ix::Int
            get_time_step_length(get_time_mapping(container), op_ix)
 end
 
-# Weights are per year: the period length is applied when costs are discounted, so weights
-# that include it would count operation costs more than once.
-# The objective is discounted with the discount rate and base year of the portfolio
 function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Portfolio)
     discount_rate = PSIP.get_discount_rate(portfolio)
     base_year = PSIP.get_base_year(portfolio)

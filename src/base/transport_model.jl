@@ -18,7 +18,6 @@ that only carries flow once built.
 
 Attributes of the `TransportModel`:
 
-  - `"tol"`: PTDF entries at or below this magnitude are left out of the flows (default 0).
   - `"monitored"`: corridors whose flow is limited, by corridor name (its node names joined
     by `_`) or by the name of one of its lines. All are monitored by default.
   - `"flow_variables"`: limit a flow variable set equal to the PTDF flow instead of the PTDF

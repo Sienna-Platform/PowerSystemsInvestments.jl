@@ -4,6 +4,8 @@ const ControllableTransportTechnology =
 
 #! format: off
 _supported_investment_formulations(::Type{<:PSIP.TransmissionTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment)
+_supported_operation_formulations(::Type{<:PSIP.TransmissionTechnology}) = (BasicDispatch,)
+_supported_operation_formulations(::Type{<:ControllableTransportTechnology}) = (BasicDispatch, BasicDispatchWithLosses)
 
 # New capacity is limited by the maximum cumulative capacity constraint, which accounts for
 # the existing capacity
