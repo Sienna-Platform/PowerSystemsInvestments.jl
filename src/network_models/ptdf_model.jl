@@ -327,7 +327,6 @@ function add_monitored_corridors!(
     ]
     isempty(corridors) && return
     names = [c.name for c in corridors]
-    union!(network.monitored, names)
     U = PSIP.Portfolio
     flow = _add_rows!(container.expressions, ExpressionKey(PTDFBranchFlow, U), names)
 
@@ -363,6 +362,7 @@ function add_monitored_corridors!(
     for corridor in corridors
         _add_corridor_limit!(con_range, con_lb, con_ub, flow, container, corridor)
     end
+    union!(network.monitored, names)
     return
 end
 
@@ -649,12 +649,16 @@ function calculate_network_values!(
     injection = jump_value.(get_expression(container, EnergyBalance(), U))
     transactions = jump_value.(get_variable(container, VirtualTransactionVariable(), U))
     flow = get_aux_variables(container)[AuxVarKey(BranchFlow, U)]
-    flow.data .= transpose(ptdf.data) * injection[nodes, :].data
-
+    # Each transaction moves power from one end of its branch to the other, and removes the
+    # branch's own flow
+    injected = copy(injection[nodes, :].data)
     for (name, arc, _) in _virtual_branches(network)
-        transfer = ptdf.data[node_lookup[arc[1]], :] .- ptdf.data[node_lookup[arc[2]], :]
-        transfer[ptdf.lookup[2][name]] -= 1.0
-        flow.data .+= transfer * transpose(transactions[name, :].data)
+        injected[node_lookup[arc[1]], :] .+= transactions[name, :].data
+        injected[node_lookup[arc[2]], :] .-= transactions[name, :].data
+    end
+    flow.data .= transpose(ptdf.data) * injected
+    for (name, _, _) in _virtual_branches(network)
+        flow.data[ptdf.lookup[2][name], :] .-= transactions[name, :].data
     end
 
     line_flow = get_aux_variables(container)[AuxVarKey(LineFlow, U)]

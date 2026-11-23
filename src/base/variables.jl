@@ -110,13 +110,17 @@ struct StartUpCapacityVariable <: OperationsVariableType end
 
 """
 Unserved-energy slack on a system power-balance constraint (deficit: injection < 0).
-Only created when the TransportModel is built with `use_slacks = true`.
+Only created when the TransportModel is built with `use_slacks = true`. Under the nodal
+transport models it is added to the node's `EnergyBalance`, which then does not show the
+deficit.
 """
 struct BalanceSlackUp <: OperationsVariableType end
 
 """
 Over-supply slack on a system power-balance constraint (surplus: injection > 0).
-Only created when the TransportModel is built with `use_slacks = true`.
+Only created when the TransportModel is built with `use_slacks = true`. Under the nodal
+transport models it is added to the node's `EnergyBalance`, which then does not show the
+surplus.
 """
 struct BalanceSlackDown <: OperationsVariableType end
 

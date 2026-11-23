@@ -438,6 +438,8 @@ function solve!(
                 TimerOutputs.@timeit RUN_OPERATION_MODEL_TIMER "Solve" begin
                     @warn "todo: add pre-solve model check back in"
                     #_pre_solve_model_checks(model, optimizer)
+                    # Results of an earlier solve are dropped, so a failed solve leaves none
+                    empty!(get_store(model))
                     solve_impl!(model)
                     # After solve_impl!, which can add to the model
                     initialize_storage!(

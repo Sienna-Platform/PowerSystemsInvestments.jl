@@ -2,20 +2,11 @@ struct PTDF
     data::Matrix{Float64}
     axes::Tuple{Vector{String}, Vector{String}}
     lookup::Tuple{Dict{String, Int}, Dict{String, Int}}
-    arcs::Vector{Tuple{String, String}}
     subnetworks::Dict{String, Vector{String}}
-end
-
-struct LODF
-    data::Matrix{Float64}
-    axes::Tuple{Vector{String}, Vector{String}}
-    lookup::Tuple{Dict{String, Int}, Dict{String, Int}}
 end
 
 Base.getindex(ptdf::PTDF, branch::AbstractString, node::AbstractString) =
     ptdf.data[ptdf.lookup[1][node], ptdf.lookup[2][branch]]
-Base.getindex(lodf::LODF, monitored::AbstractString, outaged::AbstractString) =
-    lodf.data[lodf.lookup[1][outaged], lodf.lookup[2][monitored]]
 
 function _make_lookup(names::Vector{String})
     lookup = Dict{String, Int}()
@@ -100,13 +91,7 @@ function PTDF(
         ABA = (BA * A)[valid_ix, valid_ix]
         data[valid_ix, :] = LinearAlgebra.lu(ABA) \ Matrix(BA[valid_ix, :])
     end
-    return PTDF(
-        data,
-        (nodes, branches),
-        (node_lookup, _make_lookup(branches)),
-        arcs,
-        subnetworks,
-    )
+    return PTDF(data, (nodes, branches), (node_lookup, _make_lookup(branches)), subnetworks)
 end
 
 # Per unit on a 1 MVA base, from ohms and kV
@@ -116,17 +101,4 @@ function _susceptance(line::PSIP.NodalACTransportTechnology)
     (iszero(x) || iszero(voltage)) &&
         error("Line $(PSIP.get_name(line)) has zero reactance or voltage")
     return voltage^2 / x
-end
-
-function LODF(ptdf::PTDF)
-    branches = ptdf.axes[2]
-    data = _incidence_matrix(ptdf.arcs, ptdf.lookup[1]) * ptdf.data
-    for k in eachindex(branches)
-        denominator = 1.0 - data[k, k]
-        if denominator >= LODF_ENTRY_TOLERANCE
-            data[k, :] ./= denominator
-        end
-        data[k, k] = -1.0
-    end
-    return LODF(data, (branches, branches), (ptdf.lookup[2], ptdf.lookup[2]))
 end

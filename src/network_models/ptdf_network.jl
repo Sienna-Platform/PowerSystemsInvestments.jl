@@ -220,6 +220,12 @@ function PTDFNetworkData(
             Set(c.name for c in merged_corridors if any(in(monitored), _names(c)))
     end
     branches = [merged_corridors; new_corridors; unit_lines]
+    names = [b.name for b in branches]
+    allunique(names) || error(
+        "PTDF branch names $(unique(filter(n -> count(==(n), names) > 1, names))) are " *
+        "repeated. Merged corridors are named by their node names joined by `_`, so node " *
+        "names that contain `_` can collide.",
+    )
     nodes = sort!(collect(PSIP.get_regions(PSIP.Node, portfolio)); by=PSIP.get_name)
     ptdf = PTDF(
         PSIP.get_name.(nodes),

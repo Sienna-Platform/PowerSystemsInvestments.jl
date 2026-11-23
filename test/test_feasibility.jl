@@ -33,7 +33,14 @@ function _feasibility_portfolio()
     return p, op_days
 end
 
-function _feasibility_model(p, op_days, transport_model, demand_names, branches)
+function _feasibility_model(
+    p,
+    op_days,
+    transport_model,
+    demand_names,
+    branches;
+    storage=false,
+)
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -68,6 +75,16 @@ function _feasibility_model(p, op_days, transport_model, demand_names, branches)
         BasicDispatch,
         BasicDispatchFeasibility,
     )
+    if storage
+        set_technology_model!(
+            template,
+            ["test_storage"],
+            PSIP.StorageTechnology{PSY.EnergyReservoirStorage},
+            ContinuousInvestment,
+            CyclicalStorageDispatch,
+            BasicDispatchFeasibility,
+        )
+    end
     for (names, branch_type) in branches
         set_technology_model!(
             template,
@@ -201,6 +218,8 @@ function _test_nodal_feasibility(transport)
     for (technology_type, name) in supply
         PSIP.set_region!(PSIP.get_technology(technology_type, p, name), [nodes[1]])
     end
+    storage_type = PSIP.StorageTechnology{PSY.EnergyReservoirStorage}
+    PSIP.set_region!(PSIP.get_technology(storage_type, p, "test_storage"), [nodes[2]])
     for (name, node) in zip(["demand1", "demand2"], nodes)
         demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, name)
         PSIP.set_region!(demand, [node])
@@ -234,7 +253,8 @@ function _test_nodal_feasibility(transport)
         op_days,
         TransportModel(transport, use_slacks=false),
         ["demand1", "demand2"],
-        [(["line"], branch_type)],
+        [(["line"], branch_type)];
+        storage=true,
     )
     container = PSIN.get_optimization_container(m)
     t = _first_feasibility_step(container)
@@ -253,6 +273,17 @@ function _test_nodal_feasibility(transport)
         PSIP.Portfolio,
     )
     @test JuMP.normalized_coefficient(feasibility["Node_2", t], line_build) == 1.0
+    # Storage counts at its installed discharge capacity
+    storage_build = PSIN.get_variable(
+        container,
+        PSIN.BuildPowerCapacity(),
+        storage_type,
+        "ContinuousInvestment",
+    )[
+        "test_storage",
+        1,
+    ]
+    @test JuMP.normalized_coefficient(feasibility["Node_2", t], storage_build) == 1.0
     @test JuMP.normalized_rhs(feasibility["Node_2", t]) == FEASIBILITY_DEMAND
     if transport == NodalBalanceModel
         flow_limit = PSIN.get_constraint(
