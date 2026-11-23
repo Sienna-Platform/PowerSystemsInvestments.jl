@@ -330,11 +330,11 @@ function add_monitored_corridors!(
     union!(network.monitored, names)
     U = PSIP.Portfolio
     flow = _add_rows!(container.expressions, ExpressionKey(PTDFBranchFlow, U), names)
-    
+
     for name in names
         _add_branch_flow!(flow, container, network, name)
     end
-    
+
     if get(transport_model.attributes, "flow_variables", false)
         variable =
             _add_rows!(container.variables, VariableKey(FlowActivePowerVariable, U), names)
@@ -385,7 +385,7 @@ function add_constraints!(
         time_steps[2:end],
         meta="order",
     )
-    
+
     jump_model = get_jump_model(container)
     for corridor in network.new_corridors
         name = corridor.name
@@ -430,7 +430,7 @@ function add_constraints!(
         time_steps,
         meta="order",
     )
-    
+
     jump_model = get_jump_model(container)
     for line in lines
         units = [u for u in network.unit_lines if u.line.name == line.name]
@@ -453,18 +453,42 @@ function add_constraints!(
     return
 end
 
+# Dijkstra from `source`: the distance to each node and the node before it on the path
+function _shortest_paths(neighbors::Vector{Vector{Tuple{Int, Float64}}}, source::Int)
+    distance = fill(Inf, length(neighbors))
+    previous = zeros(Int, length(neighbors))
+    distance[source] = 0.0
+    heap = DataStructures.BinaryMinHeap([(0.0, source)])
+    while !isempty(heap)
+        current_distance, current = pop!(heap)
+        current_distance > distance[current] && continue
+        for (next, weight) in neighbors[current]
+            next_distance = current_distance + weight
+            if next_distance < distance[next]
+                distance[next] = next_distance
+                previous[next] = current
+                push!(heap, (next_distance, next))
+            end
+        end
+    end
+    return distance, previous
+end
+
 # Big-M of each virtual transaction: its branch's susceptance times a bound on the angle
-# difference across it, the shortest path of Fmax / b over limited merged corridors (or the
-# sum over all limited branches when none join its ends)
+# difference across it, the shortest path of Fmax / b over limited merged corridors. When only
+# other branches that may not be built join its ends, the sum over all limited branches is used;
+# when unlimited corridors join them, no bound holds.
 function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.Portfolio)
     nodes = network.ptdf.axes[1]
     node_lookup = network.ptdf.lookup[1]
     neighbors = [Tuple{Int, Float64}[] for _ in nodes]
-    
+    all_neighbors = [Tuple{Int, Float64}[] for _ in nodes]
     for corridor in network.merged_corridors
-        corridor.name in network.limited || continue
         weight = _max_flow(corridor, portfolio) / corridor.susceptance
         from, to = (node_lookup[n] for n in corridor.arc)
+        push!(all_neighbors[from], (to, weight))
+        push!(all_neighbors[to], (from, weight))
+        corridor.name in network.limited || continue
         push!(neighbors[from], (to, weight))
         push!(neighbors[to], (from, weight))
     end
@@ -475,27 +499,25 @@ function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.P
             init=0.0,
         )
     bounds = Dict{String, Float64}()
-    
-    # Dijkstra, once per source node
     distances = Dict{Int, Vector{Float64}}()
     for (name, arc, susceptance) in _virtual_branches(network)
         from, to = (node_lookup[n] for n in arc)
-        distance = get!(distances, from) do
-            distance = fill(Inf, length(nodes))
-            distance[from] = 0.0
-            heap = DataStructures.BinaryMinHeap([(0.0, from)])
-            while !isempty(heap)
-                current_distance, current = pop!(heap)
-                current_distance > distance[current] && continue
-                for (next, weight) in neighbors[current]
-                    next_distance = current_distance + weight
-                    if next_distance < distance[next]
-                        distance[next] = next_distance
-                        push!(heap, (next_distance, next))
-                    end
+        distance = get!(() -> first(_shortest_paths(neighbors, from)), distances, from)
+        if isinf(distance[to])
+            all_distance, previous = _shortest_paths(all_neighbors, from)
+            if !isinf(all_distance[to])
+                path = String[]
+                node = to
+                while node != from
+                    push!(path, join(minmax(nodes[previous[node]], nodes[node]), "_"))
+                    node = previous[node]
                 end
+                error(
+                    "The ends of $name are only joined by corridors without flow limits, so " *
+                    "its virtual transaction has no valid bound. Monitor the corridors " *
+                    "$(reverse!(path)) or solve with IterativeMonitoring.",
+                )
             end
-            distance
         end
         bounds[name] = susceptance * (isinf(distance[to]) ? longest_path : distance[to])
     end
@@ -519,7 +541,7 @@ function add_constraints!(
     con_ub = add_constraints_container!(container, T(), U, names, time_steps, meta="ub")
     jump_model = get_jump_model(container)
     bounds = _virtual_transaction_bounds(network, portfolio)
-    
+
     for name in names, op_ix in get_operational_indexes(time_mapping)
         period = inverse_invest_mapping[op_ix]
         limit = bounds[name] * (1 - built[name, period])
@@ -564,7 +586,7 @@ calculate_aux_variable_value!(
 
 function _capacity_values(container::SingleOptimizationContainer, network::PTDFNetworkData)
     values = Dict{Tuple{DataType, DataType}, DenseAxisArray{Float64}}()
-    
+
     for corridor in network.merged_corridors, line in corridor.expandable_lines
         get!(values, (line.type, line.formulation)) do
             jump_value.(_capacity_expression(container, line))
@@ -584,7 +606,7 @@ function _corridor_loading(container::SingleOptimizationContainer, network::PTDF
     flow = get_aux_variables(container)[AuxVarKey(BranchFlow, PSIP.Portfolio)]
     capacities = _capacity_values(container, network)
     loading = Dict{String, Tuple{Float64, Float64}}()
-    
+
     for corridor in network.merged_corridors
         ratio, excess = 0.0, -Inf
         for op_ix in get_operational_indexes(time_mapping)
@@ -634,7 +656,7 @@ function calculate_network_values!(
         transfer[ptdf.lookup[2][name]] -= 1.0
         flow.data .+= transfer * transpose(transactions[name, :].data)
     end
-    
+
     line_flow = get_aux_variables(container)[AuxVarKey(LineFlow, U)]
     fill!(line_flow, 0.0)
     capacities = _capacity_values(container, network)
@@ -660,7 +682,7 @@ function calculate_network_values!(
             end
         end
     end
-    
+
     branches = [
         [(c.line.name, c.name) for c in network.new_corridors]
         [(l.line.name, l.name) for l in network.unit_lines]
@@ -668,6 +690,6 @@ function calculate_network_values!(
     for (line, branch) in branches, t in get_time_steps(time_mapping)
         line_flow[line, t] += flow[branch, t]
     end
-    
+
     return
 end

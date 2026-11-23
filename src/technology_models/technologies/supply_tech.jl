@@ -423,7 +423,7 @@ function add_to_expression!(
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Vector{D},
-    V <: Union{MultiRegionBalanceModel, NodalBalanceModel},
+    V <: Union{MultiRegionBalanceModel, AbstractNodalTransportAggregation},
     X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0

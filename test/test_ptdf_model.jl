@@ -461,18 +461,31 @@ end
     @test isempty(iterative.monitored)
     @test PSIN._virtual_transaction_bounds(iterative, portfolio) == bounds
 
-    # Only the monitored A-B corridor is limited, so no limited path joins B and D
+    # Only the A-B corridor is monitored, so unlimited corridors join the ends of the
+    # candidates and no bound holds
     partial, _ = _ptdf_network_data(lines; monitored=["A_B"])
     @test partial.limited == Set(["A_B"])
-    corridor = only(c for c in partial.merged_corridors if c.name == "A_B")
+    @test_throws r"bd_new .* Monitor the corridors \[\"B_C\", \"C_D\"\]" PSIN._virtual_transaction_bounds(
+        partial,
+        portfolio,
+    )
+
+    # C and D are only joined by candidates, so the sum over all limited branches is used
+    candidates = [
+        ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+        ("cd_new", "C", "D", ContinuousInvestment, (;)),
+        ("cd_units", "C", "D", IntegerInvestment, (unit_size=100.0, max_capacity=100.0)),
+    ]
+    separate, portfolio = _ptdf_network_data(candidates)
+    corridor = only(separate.merged_corridors)
     longest_path =
         PSIN._max_flow(corridor, portfolio) / corridor.susceptance + sum(
             PSIN._max_flow(b, portfolio) / b.susceptance for
-            b in [partial.new_corridors; partial.unit_lines]
+            b in [separate.new_corridors; separate.unit_lines]
         )
-    partial_bounds = PSIN._virtual_transaction_bounds(partial, portfolio)
-    for (name, _, susceptance) in PSIN._virtual_branches(partial)
-        @test partial_bounds[name] ≈ susceptance * longest_path
+    separate_bounds = PSIN._virtual_transaction_bounds(separate, portfolio)
+    for (name, _, susceptance) in PSIN._virtual_branches(separate)
+        @test separate_bounds[name] ≈ susceptance * longest_path
     end
 end
 
