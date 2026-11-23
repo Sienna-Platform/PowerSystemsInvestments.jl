@@ -40,8 +40,12 @@ function _transmission_template(transport)
 end
 
 # Zonal line between the two zones of the test portfolio
-function _aggregate_line_model(formulation; operation=BasicDispatch)
-    template, p_5bus = _transmission_template(MultiRegionBalanceModel)
+function _aggregate_line_model(
+    formulation;
+    operation=BasicDispatch,
+    transport=MultiRegionBalanceModel,
+)
+    template, p_5bus = _transmission_template(transport)
     line_type = PSIP.AggregateTransportTechnology{PSY.ACBranch}
     line = PSIP.get_technology(line_type, p_5bus, "test_branch")
     PSIP.set_unit_size!(line, TRANSMISSION_UNIT_SIZE)
@@ -237,4 +241,34 @@ end
         JuMP.objective_value(PSIN.get_jump_model(container))
     end
     @test objectives[2] > objectives[1]
+
+    # Links inside a single region carry no losses
+    template, p_5bus, line_type, name = _aggregate_line_model(
+        ContinuousInvestment;
+        operation=BasicDispatchWithLosses,
+        transport=SingleRegionBalanceModel,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+    )
+    @test build!(
+        m;
+        output_dir=mktempdir(; cleanup=true),
+        console_level=Logging.AboveMaxLevel,
+    ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+    @test_throws r"has no effect under SingleRegionBalanceModel" PSIN.construct_technologies!(
+        PSIN.get_optimization_container(m),
+        p_5bus,
+        [name],
+        IS.Optimization.ArgumentConstructStage(),
+        PSIN.get_operation_model(template),
+        line_type,
+        BasicDispatchWithLosses,
+        PSIN.get_transport_model(template),
+        PSIN.TechnologyModel[],
+    )
 end

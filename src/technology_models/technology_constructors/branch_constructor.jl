@@ -89,6 +89,27 @@ function construct_technologies!(
 end
 
 function construct_technologies!(
+    ::SingleOptimizationContainer,
+    ::PSIP.Portfolio,
+    names::Vector{String},
+    ::ArgumentConstructStage,
+    ::OperationCostModel,
+    ::Type{T},
+    ::Type{C},
+    ::TransportModel{SingleRegionBalanceModel},
+    ::Vector{X},
+) where {
+    T <: ControllableTransportTechnology,
+    C <: BasicDispatchWithLosses,
+    X <: TechnologyModel,
+}
+    error(
+        "BasicDispatchWithLosses has no effect under SingleRegionBalanceModel; use " *
+        "BasicDispatch for links $names",
+    )
+end
+
+function construct_technologies!(
     container::SingleOptimizationContainer,
     p::PSIP.Portfolio,
     names::Vector{String},
