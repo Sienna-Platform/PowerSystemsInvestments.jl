@@ -166,7 +166,11 @@ function _add_branch_flow!(
     transactions = get_variable(container, VirtualTransactionVariable(), PSIP.Portfolio)
     ix = ptdf.lookup[2][branch]
     factors = [(nodes[n], ptdf.data[n, ix]) for n in eachindex(nodes)]
-    filter!(((_, factor),) -> !iszero(factor), factors)
+    # Virtual branches keep every entry, so an unbuilt branch carries no flow
+    virtual = any(name == branch for (name, _, _) in _virtual_branches(network))
+    relative_tol = virtual ? 0.0 : network.relative_tol
+    cutoff = max(PTDF_ZERO_TOL, relative_tol * maximum(abs(f) for (_, f) in factors))
+    filter!(((_, factor),) -> abs(factor) > cutoff, factors)
     # The branch's own transaction also removes its flow
     transfers = [
         (

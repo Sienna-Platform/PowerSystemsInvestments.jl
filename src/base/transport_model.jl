@@ -26,6 +26,10 @@ Attributes of the `TransportModel`:
     dispatched like `BasicDispatch` lines under `NodalBalanceModel`: their flow is only
     limited by their capacity, and ignores their impedance (default 0, all lines in the
     PTDF).
+  - `"relative_tol"`: leave out of each branch's flow the PTDF entries below this share of
+    the branch's largest entry, to make the flows sparser and better conditioned, at the
+    cost of flow errors (default 0; 1e-6 is a safe value). Reported flows always use the
+    whole PTDF.
 """
 struct NodalPTDFModel <: AbstractNodalTransportAggregation end
 

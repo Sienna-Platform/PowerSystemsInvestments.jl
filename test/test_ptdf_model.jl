@@ -972,6 +972,60 @@ end
     )
 end
 
+function _dispatch_coefficients(m, branch)
+    container = PSIN.get_optimization_container(m)
+    flow = PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio)
+    dispatch = PSIN.get_variable(
+        container,
+        PSIN.ActivePowerVariable(),
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        "BasicDispatch",
+    )
+    return Dict(
+        node => JuMP.coefficient(flow[branch, 1], dispatch[generator, 1]) for
+        (generator, node) in (("cheap_thermal", "n1"), ("expensive_thermal", "n2"))
+    )
+end
+
+@testset "PTDF relative tolerance" begin
+    relative_tol = 0.7
+    m = _triangle_model(
+        NodalPTDFModel;
+        attributes=Dict{String, Any}("relative_tol" => relative_tol),
+    )
+    container = PSIN.get_optimization_container(m)
+    ptdf = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m))).ptdf
+    dropped = 0
+    for branch in ptdf.axes[2]
+        cutoff = relative_tol * maximum(abs, ptdf.data[:, ptdf.lookup[2][branch]])
+        for (node, coefficient) in _dispatch_coefficients(m, branch)
+            factor = ptdf[branch, node]
+            expected = abs(factor) > cutoff ? factor : 0.0
+            dropped += expected != factor
+            @test coefficient ≈ expected
+        end
+    end
+    @test dropped > 0
+    _solved_objective(m)
+    # Reported flows use the whole PTDF
+    flow = PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio)
+    model_flow = JuMP.value.(flow)
+    reported = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
+    @test maximum(abs.(model_flow.data .- reported[axes(model_flow, 1), :].data)) > 1.0
+
+    # Virtual branches keep every entry
+    ring = _ring_model(
+        [RING_LINES; RING_CANDIDATES];
+        attributes=Dict{String, Any}("relative_tol" => 0.99),
+    )
+    ptdf = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(ring))).ptdf
+    for branch in ("d13", "d24", "r45"),
+        (node, coefficient) in _dispatch_coefficients(ring, branch)
+
+        @test coefficient ≈ ptdf[branch, node]
+    end
+end
+
 @testset "Iterative monitoring" begin
     full = _triangle_model(NodalPTDFModel)
     full_objective = _solved_objective(full)

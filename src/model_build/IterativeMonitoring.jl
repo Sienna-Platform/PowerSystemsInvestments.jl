@@ -17,7 +17,6 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
     attributes = transport_model.attributes
     max_iterations = get(attributes, "max_iterations", 20)
     tolerance = get(attributes, "overload_tolerance", 1e-4)
-    threshold = get(attributes, "add_threshold", 1.0)
     jump_model = get_jump_model(container)
     milp = is_milp(container)
     # A MIP is first screened with integrality relaxed, and then with a looser gap
@@ -55,6 +54,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
     )
     # A failed solve leaves the screening changes in place unless they are undone here
     try
+        loading = Dict{String, Tuple{Float64, Float64}}()
         rounds = 0
         capped = false
         for iteration in Iterators.countfrom(0)
@@ -68,17 +68,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
             loading = _corridor_loading(container, network)
             overloaded = [name for (name, (ratio, _)) in loading if ratio > 1 + tolerance]
             new_overloads = setdiff(overloaded, network.monitored)
-            added =
-                isempty(new_overloads) || capped ? String[] :
-                sort!(
-                    union(
-                        new_overloads,
-                        [
-                            name for (name, (ratio, _)) in loading if
-                            ratio > threshold && !(name in network.monitored)
-                        ],
-                    ),
-                )
+            added = capped ? String[] : sort!(new_overloads)
             push!(
                 log,
                 (
@@ -115,6 +105,16 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
             end
             _add_corridors!(container, transport_model, portfolio, added)
             rounds += 1
+        end
+        # Only possible with a relative PTDF tolerance
+        residual = [
+            name for (name, (ratio, _)) in loading if
+            ratio > 1 + tolerance && name in network.monitored
+        ]
+        if !isempty(residual)
+            max_excess_mw = maximum(last(loading[name]) for name in residual)
+            @warn "Monitored corridors above their limits (PTDF relative tolerance)" max_excess_mw corridors =
+                sort!(residual)
         end
     finally
         isnothing(undo_relax) || undo_relax()

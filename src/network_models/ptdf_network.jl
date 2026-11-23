@@ -36,6 +36,7 @@ struct PTDFNetworkData <: AbstractNetworkData
     new_corridors::Vector{NewCorridor}
     unit_lines::Vector{UnitLine}
     ptdf::PTDF
+    relative_tol::Float64
     monitored::Set{String}
     limited::Set{String}
     transport_lines::Set{String}
@@ -128,6 +129,7 @@ end
 function PTDFNetworkData(
     portfolio::PSIP.Portfolio,
     template::InvestmentModelTemplate;
+    relative_tol::Float64=0.0,
     monitored::Union{Nothing, Vector{String}}=nothing,
     min_voltage::Float64=0.0,
     monitor_iteratively::Bool=false,
@@ -245,6 +247,7 @@ function PTDFNetworkData(
         new_corridors,
         unit_lines,
         ptdf,
+        relative_tol,
         monitored_corridors,
         monitor_iteratively ? all_corridors : copy(monitored_corridors),
         transport_lines,
@@ -264,6 +267,7 @@ function initialize_network!(
         portfolio,
         template;
         monitored=get(transport_model.attributes, "monitored", nothing),
+        relative_tol=Float64(get(transport_model.attributes, "relative_tol", 0.0)),
         min_voltage=Float64(get(transport_model.attributes, "min_voltage", 0.0)),
         monitor_iteratively=monitor_iteratively,
     )
