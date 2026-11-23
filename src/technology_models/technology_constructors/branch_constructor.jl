@@ -15,10 +15,8 @@ function construct_technologies!(
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    # BuildCapacity variable
     add_variable!(container, BuildCapacity(), devices, B())
 
-    # CumulativeCapacity
     add_expression!(container, p, CumulativeCapacity(), devices, B())
 
     add_expression!(container, CapitalCostExpression(), devices, B())
@@ -134,10 +132,8 @@ function construct_technologies!(
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    # Capital Component of objective function
     objective_function!(container, devices, B())
 
-    # Capacity constraint
     add_constraints!(
         container,
         MaximumCumulativeCapacity(),
@@ -169,7 +165,6 @@ function construct_technologies!(
 ) where {T <: PSIP.TransmissionTechnology, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    # Dispatch constraint
     add_constraints!(
         container,
         ActivePowerLimitsConstraint(),

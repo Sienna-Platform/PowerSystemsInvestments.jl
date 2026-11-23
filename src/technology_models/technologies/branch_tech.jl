@@ -21,7 +21,7 @@ get_variable_upper_bound(::FlowActivePowerVariable, d::ControllableTransportTech
 get_variable_lower_bound(::Union{FlowActivePowerFromToVariable, FlowActivePowerToFromVariable}, d::ControllableTransportTechnology, ::BasicDispatchWithLosses) = 0.0
 get_variable_upper_bound(::Union{FlowActivePowerFromToVariable, FlowActivePowerToFromVariable}, d::ControllableTransportTechnology, ::BasicDispatchWithLosses) = nothing
 
-# Operations variable bounds: bidirectional flow with magnitude <= capacity
+# |flow| <= maximum capacity
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = -PSIP.get_capacity_limits(d).max
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = PSIP.get_capacity_limits(d).max
 
@@ -406,7 +406,7 @@ end
 
 ########################### Nodal AC Transport Technology Methods #################################
 
-# Constraints: |flow| <= cumulative capacity (two inequality constraints per line)
+# |flow| <= cumulative capacity
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -435,7 +435,6 @@ function add_constraints!(
         meta=tech_model,
     )
 
-    # Create second constraint container for upper bounds using different constraint type
     con_ub_upper = add_constraints_container!(
         container,
         FlowActivePowerUpperBoundConstraint(),
@@ -459,12 +458,10 @@ function add_constraints!(
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
-                # Lower bound: flow >= -capacity
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     variable[name, t] >= -installed_cap_inv[name, time_step_inv]
                 )
-                # Upper bound: flow <= capacity
                 con_ub_upper[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     variable[name, t] <= installed_cap_inv[name, time_step_inv]

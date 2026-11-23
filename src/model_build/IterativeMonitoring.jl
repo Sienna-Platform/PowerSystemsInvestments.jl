@@ -52,7 +52,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         max_loading=Float64[],
         overloaded=Int[],
     )
-    # A failed solve leaves the screening changes in place unless they are undone here
+    # Undoes the screening changes if a solve fails
     try
         loading = Dict{String, Tuple{Float64, Float64}}()
         rounds = 0
@@ -136,70 +136,59 @@ function _add_corridors!(
         add_monitored_corridors!(container, transport_model, portfolio, names)
         return
     end
+    variables = JuMP.all_variables(jump_model)
+    constraints =
+        JuMP.all_constraints(jump_model; include_variable_in_set_constraints=false)
+    basis = nothing
     if is_milp(container)
-        # The current solution is the start of the next MIP solve
-        variables = JuMP.all_variables(jump_model)
-        # Values are read before any is set, since setting one discards the solution
+        # Values are read before any start is set, since setting one discards the solution
         values = JuMP.value.(variables)
         JuMP.set_start_value.(variables, values)
-        basis = nothing
     else
-        basis = _get_basis(jump_model)
+        try
+            basis = (
+                Dict(
+                    zip(
+                        variables,
+                        MOI.get.(jump_model, MOI.VariableBasisStatus(), variables),
+                    ),
+                ),
+                Dict(
+                    zip(
+                        constraints,
+                        MOI.get.(jump_model, MOI.ConstraintBasisStatus(), constraints),
+                    ),
+                ),
+            )
+        catch err
+            err isa Union{MOI.GetAttributeNotAllowed, MOI.UnsupportedAttribute} || rethrow()
+            @info "The solver has no basis, so the next solves are not warm-started" maxlog =
+                1
+        end
     end
     MOI.Utilities.reset_optimizer(jump_model)
     add_monitored_corridors!(container, transport_model, portfolio, names)
-    isnothing(basis) || _restore_basis!(jump_model, basis)
-    return
-end
-
-_constraint_refs(jump_model::JuMP.Model) =
-    JuMP.all_constraints(jump_model; include_variable_in_set_constraints=false)
-
-# `nothing` when the solver has no basis, such as an interior point solve without crossover
-function _get_basis(jump_model::JuMP.Model)
-    variables = JuMP.all_variables(jump_model)
-    constraints = _constraint_refs(jump_model)
-    try
-        return (
-            Dict(
-                zip(variables, MOI.get.(jump_model, MOI.VariableBasisStatus(), variables)),
-            ),
-            Dict(
-                zip(
-                    constraints,
-                    MOI.get.(jump_model, MOI.ConstraintBasisStatus(), constraints),
-                ),
-            ),
-        )
-    catch err
-        err isa Union{MOI.GetAttributeNotAllowed, MOI.UnsupportedAttribute} || rethrow()
-        @info "The solver has no basis, so the next solves are not warm-started" maxlog = 1
-        return nothing
-    end
-end
-
-# New flow variables are basic, so the equalities that set them are nonbasic
-_new_row_status(::MOI.EqualTo) = MOI.NONBASIC
-_new_row_status(::MOI.AbstractScalarSet) = MOI.BASIC
-
-function _restore_basis!(jump_model::JuMP.Model, basis)
+    isnothing(basis) && return
     variable_status, constraint_status = basis
     backend = JuMP.backend(jump_model)
     MOI.Utilities.attach_optimizer(backend)
     index_map = backend.model_to_optimizer_map
     try
         for v in JuMP.all_variables(jump_model)
+            status = get(variable_status, v, MOI.BASIC)
             MOI.set(
                 backend.optimizer,
                 MOI.VariableBasisStatus(),
                 index_map[JuMP.index(v)],
-                get(variable_status, v, MOI.BASIC),
+                status,
             )
         end
-        for c in _constraint_refs(jump_model)
-            status = get(constraint_status, c) do
-                _new_row_status(JuMP.constraint_object(c).set)
-            end
+        for c in JuMP.all_constraints(jump_model; include_variable_in_set_constraints=false)
+            status = get(
+                () -> _new_row_status(JuMP.constraint_object(c).set),
+                constraint_status,
+                c,
+            )
             MOI.set(
                 backend.optimizer,
                 MOI.ConstraintBasisStatus(),
@@ -216,6 +205,10 @@ function _restore_basis!(jump_model::JuMP.Model, basis)
     end
     return
 end
+
+# New flow variables are basic, so the equalities that set them are nonbasic
+_new_row_status(::MOI.EqualTo) = MOI.NONBASIC
+_new_row_status(::MOI.AbstractScalarSet) = MOI.BASIC
 
 """
 Log of each solve of a model solved with [`IterativeMonitoring`](@ref).

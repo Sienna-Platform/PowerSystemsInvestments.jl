@@ -138,21 +138,13 @@ end
     )
 end
 
-@testset "PTDF of the AC lines in a portfolio" begin
-    portfolio, _ = test_2_zone_portfolio()
-    first_id = next_region_id(portfolio)
-    nodes = [
-        PSIP.Node(; name="n1", id=first_id, bus_type=PSY.ACBusTypes.REF),
-        PSIP.Node(; name="n2", id=first_id + 1),
-        PSIP.Node(; name="n3", id=first_id + 2),
-    ]
-    for node in nodes
-        PSIP.add_region!(portfolio, node)
-    end
+@testset "PTDF of AC lines with reactance in ohms" begin
+    nodes = [PSIP.Node(; name="n$i", id=i) for i in 1:3]
     # The same per-unit reactance at two voltages: 0.1 * 230^2 ohms and 0.1 * 115^2 ohms
-    for (id, (from, to, x, kv)) in
-        enumerate(((1, 2, 5290.0, 230.0), (2, 3, 5290.0, 230.0), (3, 1, 1322.5, 115.0)))
-        line = PSIP.NodalACTransportTechnology{PSY.ACBranch}(;
+    lines = map(
+        enumerate(((1, 2, 5290.0, 230.0), (2, 3, 5290.0, 230.0), (3, 1, 1322.5, 115.0))),
+    ) do (id, (from, to, x, kv))
+        PSIP.NodalACTransportTechnology{PSY.ACBranch}(;
             name="line_$(from)$(to)",
             start_node=nodes[from],
             end_node=nodes[to],
@@ -171,9 +163,14 @@ end
                 tax_rate=0.21,
             ),
         )
-        PSIP.add_technology!(portfolio, line)
     end
-    ptdf = PSIN.PTDF(portfolio)
+    ptdf = PSIN.PTDF(
+        ["n1", "n2", "n3"],
+        PSIP.get_name.(lines),
+        [PSIN._arc(l) for l in lines],
+        PSIN._susceptance.(lines);
+        reference_nodes=Set(["n1"]),
+    )
     @test ptdf.axes == (["n1", "n2", "n3"], ["line_12", "line_23", "line_31"])
     @test collect(keys(ptdf.subnetworks)) == ["n1"]
     @test ptdf["line_12", "n2"] ≈ -2 / 3

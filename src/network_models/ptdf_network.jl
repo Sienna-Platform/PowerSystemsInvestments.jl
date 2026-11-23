@@ -85,17 +85,6 @@ _collect_corridor_lines!(
     ::Float64,
 ) = nothing
 
-function _unit_count(
-    technology::PSIP.NodalACTransportTechnology,
-    existing::Float64,
-    ::Type{F},
-) where {F}
-    unit_size = get_unit_size(BuildCapacity(), technology, F())
-    count =
-        floor(Int, (PSIP.get_capacity_limits(technology).max - existing) / unit_size + 1e-9)
-    return _limit_units(technology, max(count, 0), F)
-end
-
 _limit_units(::PSIP.NodalACTransportTechnology, count::Int, ::Type{BinaryInvestment}) =
     min(count, 1)
 
@@ -112,17 +101,6 @@ function _limit_units(
         )
     end
     return count
-end
-
-# Per MW of each line's rating: its existing capacity, or its maximum capacity when it has none
-function _check_susceptance_per_mw(corridor_name, technologies, ratings)
-    per_mw = _susceptance.(technologies) ./ ratings
-    if length(per_mw) > 1 &&
-       maximum(per_mw) > (1 + SUSCEPTANCE_PER_MW_TOLERANCE) * minimum(per_mw)
-        @warn "Lines on corridor $corridor_name have different susceptance per MW; the corridor limit overstates what they can carry together" lines =
-            PSIP.get_name.(technologies)
-    end
-    return
 end
 
 # New corridors and unit lines are always limited, since their limits decide what is built
@@ -164,11 +142,17 @@ function PTDFNetworkData(
             corridor_name = join(corridor, "_")
             existing_technologies =
                 [t for (t, mw) in zip(technologies, existing) if mw > 0.0]
+            # Per MW of rating: existing capacity, or maximum capacity for a new line
             checked = [
                 (t, mw > 0.0 ? mw : PSIP.get_capacity_limits(t).max) for
                 (t, mw, c) in zip(technologies, existing, continuous) if mw > 0.0 || c
             ]
-            _check_susceptance_per_mw(corridor_name, first.(checked), last.(checked))
+            per_mw = [_susceptance(t) / rating for (t, rating) in checked]
+            if length(per_mw) > 1 &&
+               maximum(per_mw) > (1 + SUSCEPTANCE_PER_MW_TOLERANCE) * minimum(per_mw)
+                @warn "Lines on corridor $corridor_name have different susceptance per MW; the corridor limit overstates what they can carry together" lines =
+                    PSIP.get_name.(first.(checked))
+            end
             fixed_lines = [
                 (line, mw) for
                 (line, mw, e) in zip(lines, existing, expandable) if !e && mw > 0.0
@@ -200,14 +184,21 @@ function PTDFNetworkData(
         end
         for (technology, line, mw, c) in zip(technologies, lines, existing, continuous)
             c && continue
-            for unit in 1:_unit_count(technology, mw, line.formulation)
+            unit_size = get_unit_size(BuildCapacity(), technology, line.formulation())
+            max_units = (PSIP.get_capacity_limits(technology).max - mw) / unit_size
+            count = _limit_units(
+                technology,
+                max(floor(Int, max_units + 1e-9), 0),
+                line.formulation,
+            )
+            for unit in 1:count
                 push!(
                     unit_lines,
                     UnitLine(
                         "$(line.name)_unit_$(unit)",
                         _arc(technology),
                         _susceptance(technology),
-                        PSIP.get_unit_size(technology),
+                        unit_size,
                         unit,
                         line,
                     ),
@@ -239,7 +230,9 @@ function PTDFNetworkData(
         String[b.name for b in branches],
         Tuple{String, String}[b.arc for b in branches],
         Float64[b.susceptance for b in branches];
-        reference_nodes=_reference_nodes(nodes),
+        reference_nodes=Set(
+            PSIP.get_name(n) for n in nodes if PSIP.get_bus_type(n) == PSY.ACBusTypes.REF
+        ),
         candidate_branches=Set{String}(b.name for b in [new_corridors; unit_lines]),
     )
     return PTDFNetworkData(

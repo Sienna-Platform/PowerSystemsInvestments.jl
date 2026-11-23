@@ -217,96 +217,88 @@ end
 _capacity_expression(container::SingleOptimizationContainer, line::LineKey) =
     get_expression(container, CumulativeCapacity(), line.type, string(line.formulation))
 
+# |flow| <= limit(investment period)
+function _add_flow_limits!(
+    con_lb,
+    con_ub,
+    flow,
+    container::SingleOptimizationContainer,
+    name,
+    limit,
+)
+    time_mapping = get_time_mapping(container)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    jump_model = get_jump_model(container)
+    for op_ix in get_operational_indexes(time_mapping)
+        period_limit = limit(inverse_invest_mapping[op_ix])
+        for t in consecutive_slices[op_ix]
+            con_ub[name, t] = JuMP.@constraint(jump_model, flow[name, t] <= period_limit)
+            con_lb[name, t] = JuMP.@constraint(jump_model, flow[name, t] >= -period_limit)
+        end
+    end
+    return
+end
+
+function _capacity_limit(container::SingleOptimizationContainer, fixed_capacity, lines)
+    capacities = [_capacity_expression(container, line) for line in lines]
+    return period ->
+        fixed_capacity + sum(c[l.name, period] for (l, c) in zip(lines, capacities))
+end
+
 # A corridor with nothing to expand has a constant limit, set by one ranged constraint
+function _add_corridor_limit!(
+    con_range,
+    con_lb,
+    con_ub,
+    flow,
+    container::SingleOptimizationContainer,
+    corridor::MergedCorridor,
+)
+    if isempty(corridor.expandable_lines)
+        limit = corridor.fixed_capacity
+        jump_model = get_jump_model(container)
+        for t in get_time_steps(get_time_mapping(container))
+            con_range[corridor.name, t] =
+                JuMP.@constraint(jump_model, -limit <= flow[corridor.name, t] <= limit)
+        end
+    else
+        limit =
+            _capacity_limit(container, corridor.fixed_capacity, corridor.expandable_lines)
+        _add_flow_limits!(con_lb, con_ub, flow, container, corridor.name, limit)
+    end
+    return
+end
+
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::Type{T},
     ::U,
     network::PTDFNetworkData,
 ) where {T <: FlowRateConstraint, U <: PSIP.Portfolio}
-    time_mapping = get_time_mapping(container)
-    time_steps = get_time_steps(time_mapping)
-    consecutive_slices = get_consecutive_slices(time_mapping)
-    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    time_steps = get_time_steps(get_time_mapping(container))
     flow = get_expression(container, PTDFBranchFlow(), U)
     monitored = _monitored_corridors(network)
-    constant = [c for c in monitored if isempty(c.expandable_lines)]
-    limits = [
-        [
-            (c.name, c.fixed_capacity, c.expandable_lines) for
-            c in monitored if !isempty(c.expandable_lines)
-        ]
-        [(c.name, 0.0, [c.line]) for c in network.new_corridors]
+    constant = [c.name for c in monitored if isempty(c.expandable_lines)]
+    varying = [
+        [c.name for c in monitored if !isempty(c.expandable_lines)]
+        first.(_virtual_branches(network))
     ]
-    names = [first.(limits); [line.name for line in network.unit_lines]]
-    con_lb = add_constraints_container!(container, T(), U, names, time_steps, meta="lb")
-    con_ub = add_constraints_container!(container, T(), U, names, time_steps, meta="ub")
-    con_range = add_constraints_container!(
-        container,
-        T(),
-        U,
-        [c.name for c in constant],
-        time_steps,
-        meta="range",
-    )
-    jump_model = get_jump_model(container)
-    for corridor in constant
-        _add_constant_limit!(con_range, flow, container, corridor)
+    con_range =
+        add_constraints_container!(container, T(), U, constant, time_steps, meta="range")
+    con_lb = add_constraints_container!(container, T(), U, varying, time_steps, meta="lb")
+    con_ub = add_constraints_container!(container, T(), U, varying, time_steps, meta="ub")
+    for corridor in monitored
+        _add_corridor_limit!(con_range, con_lb, con_ub, flow, container, corridor)
+    end
+    for c in network.new_corridors
+        limit = _capacity_limit(container, 0.0, [c.line])
+        _add_flow_limits!(con_lb, con_ub, flow, container, c.name, limit)
     end
     built = get_variable(container, BranchBuiltVariable(), U)
-    for unit_line in network.unit_lines, op_ix in get_operational_indexes(time_mapping)
-        name = unit_line.name
-        limit = unit_line.unit_size * built[name, inverse_invest_mapping[op_ix]]
-        for t in consecutive_slices[op_ix]
-            con_ub[name, t] = JuMP.@constraint(jump_model, flow[name, t] <= limit)
-            con_lb[name, t] = JuMP.@constraint(jump_model, flow[name, t] >= -limit)
-        end
-    end
-    for (name, fixed_capacity, lines) in limits
-        _add_capacity_limit!(con_lb, con_ub, flow, container, name, fixed_capacity, lines)
-    end
-    return
-end
-
-function _add_constant_limit!(
-    con_range,
-    flow,
-    container::SingleOptimizationContainer,
-    corridor::MergedCorridor,
-)
-    jump_model = get_jump_model(container)
-    limit = corridor.fixed_capacity
-    for t in get_time_steps(get_time_mapping(container))
-        con_range[corridor.name, t] =
-            JuMP.@constraint(jump_model, -limit <= flow[corridor.name, t] <= limit)
-    end
-    return
-end
-
-function _add_capacity_limit!(
-    con_lb,
-    con_ub,
-    flow,
-    container::SingleOptimizationContainer,
-    name,
-    fixed_capacity,
-    lines,
-)
-    time_mapping = get_time_mapping(container)
-    consecutive_slices = get_consecutive_slices(time_mapping)
-    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    jump_model = get_jump_model(container)
-    capacities = [_capacity_expression(container, line) for line in lines]
-    for op_ix in get_operational_indexes(time_mapping)
-        period = inverse_invest_mapping[op_ix]
-        limit = JuMP.AffExpr(fixed_capacity)
-        for (line, capacity) in zip(lines, capacities)
-            JuMP.add_to_expression!(limit, capacity[line.name, period])
-        end
-        for t in consecutive_slices[op_ix]
-            con_ub[name, t] = JuMP.@constraint(jump_model, flow[name, t] <= limit)
-            con_lb[name, t] = JuMP.@constraint(jump_model, flow[name, t] >= -limit)
-        end
+    for u in network.unit_lines
+        limit = period -> u.unit_size * built[u.name, period]
+        _add_flow_limits!(con_lb, con_ub, flow, container, u.name, limit)
     end
     return
 end
@@ -320,7 +312,8 @@ function _add_rows!(containers::Dict, key, names::Vector{String})
     return new
 end
 
-# Adds the flows and limits of merged corridors to a built model
+# Adds the flows and limits of merged corridors to a built model, skipping names that are not
+# merged corridors or are already monitored
 function add_monitored_corridors!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel{NodalPTDFModel},
@@ -358,37 +351,15 @@ function add_monitored_corridors!(
             _add_network_flow!(constraint, flow, variable, container, corridor.name)
         end
     end
-    constant = [c for c in corridors if isempty(c.expandable_lines)]
-    expandable = [c for c in corridors if !isempty(c.expandable_lines)]
-    con_range = _add_rows!(
-        container.constraints,
-        ConstraintKey(FlowRateConstraint, U, "range"),
-        [c.name for c in constant],
-    )
-    for corridor in constant
-        _add_constant_limit!(con_range, flow, container, corridor)
-    end
-    expandable_names = [c.name for c in expandable]
-    con_lb = _add_rows!(
-        container.constraints,
-        ConstraintKey(FlowRateConstraint, U, "lb"),
-        expandable_names,
-    )
-    con_ub = _add_rows!(
-        container.constraints,
-        ConstraintKey(FlowRateConstraint, U, "ub"),
-        expandable_names,
-    )
-    for corridor in expandable
-        _add_capacity_limit!(
-            con_lb,
-            con_ub,
-            flow,
-            container,
-            corridor.name,
-            corridor.fixed_capacity,
-            corridor.expandable_lines,
-        )
+    constraints = container.constraints
+    constant = [c.name for c in corridors if isempty(c.expandable_lines)]
+    expandable = setdiff(names, constant)
+    con_range =
+        _add_rows!(constraints, ConstraintKey(FlowRateConstraint, U, "range"), constant)
+    con_lb = _add_rows!(constraints, ConstraintKey(FlowRateConstraint, U, "lb"), expandable)
+    con_ub = _add_rows!(constraints, ConstraintKey(FlowRateConstraint, U, "ub"), expandable)
+    for corridor in corridors
+        _add_corridor_limit!(con_range, con_lb, con_ub, flow, container, corridor)
     end
     return
 end
@@ -499,32 +470,30 @@ function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.P
             init=0.0,
         )
     bounds = Dict{String, Float64}()
+    # Dijkstra, once per source node
     distances = Dict{Int, Vector{Float64}}()
     for (name, arc, susceptance) in _virtual_branches(network)
         from, to = (node_lookup[n] for n in arc)
-        distance = get!(() -> _shortest_distances(neighbors, from), distances, from)
+        distance = get!(distances, from) do
+            distance = fill(Inf, length(nodes))
+            distance[from] = 0.0
+            heap = DataStructures.BinaryMinHeap([(0.0, from)])
+            while !isempty(heap)
+                current_distance, current = pop!(heap)
+                current_distance > distance[current] && continue
+                for (next, weight) in neighbors[current]
+                    next_distance = current_distance + weight
+                    if next_distance < distance[next]
+                        distance[next] = next_distance
+                        push!(heap, (next_distance, next))
+                    end
+                end
+            end
+            distance
+        end
         bounds[name] = susceptance * (isinf(distance[to]) ? longest_path : distance[to])
     end
     return bounds
-end
-
-# Dijkstra from `source`
-function _shortest_distances(neighbors::Vector{Vector{Tuple{Int, Float64}}}, source::Int)
-    distance = fill(Inf, length(neighbors))
-    distance[source] = 0.0
-    heap = DataStructures.BinaryMinHeap([(0.0, source)])
-    while !isempty(heap)
-        current_distance, current = pop!(heap)
-        current_distance > distance[current] && continue
-        for (next, weight) in neighbors[current]
-            next_distance = current_distance + weight
-            if next_distance < distance[next]
-                distance[next] = next_distance
-                push!(heap, (next_distance, next))
-            end
-        end
-    end
-    return distance
 end
 
 function add_constraints!(
@@ -555,17 +524,6 @@ function add_constraints!(
     return
 end
 
-function _line_names(network::PTDFNetworkData)
-    names = String[]
-    for corridor in network.merged_corridors
-        append!(names, [l.name for l in corridor.expandable_lines])
-        append!(names, [l.name for (l, _) in corridor.fixed_lines])
-    end
-    append!(names, [c.line.name for c in network.new_corridors])
-    append!(names, [l.line.name for l in network.unit_lines])
-    return sort!(unique(names))
-end
-
 function add_aux_variable!(
     container::SingleOptimizationContainer,
     ::T,
@@ -579,7 +537,15 @@ function add_aux_variable!(
     return
 end
 
-_flow_names(::LineFlow, network::PTDFNetworkData) = _line_names(network)
+_flow_names(::LineFlow, network::PTDFNetworkData) = sort!(
+    unique(
+        [
+            [n for c in network.merged_corridors for n in _names(c)[2:end]]
+            [c.line.name for c in network.new_corridors]
+            [u.line.name for u in network.unit_lines]
+        ],
+    ),
+)
 _flow_names(::BranchFlow, network::PTDFNetworkData) = network.ptdf.axes[2]
 
 # Computed by calculate_network_values!
@@ -647,7 +613,7 @@ function calculate_network_values!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     ptdf = network.ptdf
-    nodes, branches = ptdf.axes
+    nodes = ptdf.axes[1]
     node_lookup = ptdf.lookup[1]
     injection = jump_value.(get_expression(container, EnergyBalance(), U))
     transactions = jump_value.(get_variable(container, VirtualTransactionVariable(), U))

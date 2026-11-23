@@ -60,15 +60,25 @@ function _island_roots(arcs, node_lookup::Dict{String, Int})
     return [find_root(ix) for ix in eachindex(root)]
 end
 
-function _find_subnetworks(
+function PTDF(
     nodes::Vector{String},
+    branches::Vector{String},
     arcs::Vector{Tuple{String, String}},
-    node_lookup::Dict{String, Int},
-    reference_nodes::AbstractSet{String},
-    candidate::AbstractVector{Bool}=falses(length(arcs)),
+    susceptances::Vector{Float64};
+    reference_nodes::AbstractSet{String}=Set{String}(),
+    candidate_branches::AbstractSet{String}=Set{String}(),
 )
+    IS.@assert_op length(arcs) == length(branches)
+    IS.@assert_op length(susceptances) == length(branches)
+    node_lookup = _make_lookup(nodes)
+    A = _incidence_matrix(arcs, node_lookup)
+    BA = SparseArrays.sparse(transpose(A)) * LinearAlgebra.Diagonal(susceptances)
+    # Islands include candidate branches, which may join islands that each have a reference
     roots = _island_roots(arcs, node_lookup)
-    fixed_roots = _island_roots(arcs[.!candidate], node_lookup)
+    fixed_roots = _island_roots(
+        [arc for (arc, b) in zip(arcs, branches) if !(b in candidate_branches)],
+        node_lookup,
+    )
     islands = Dict{Int, Vector{String}}()
     for (ix, node) in enumerate(nodes)
         push!(get!(islands, roots[ix], String[]), node)
@@ -86,29 +96,6 @@ function _find_subnetworks(
             subnetworks[first(references)] = island
         end
     end
-    return subnetworks
-end
-
-function PTDF(
-    nodes::Vector{String},
-    branches::Vector{String},
-    arcs::Vector{Tuple{String, String}},
-    susceptances::Vector{Float64};
-    reference_nodes::AbstractSet{String}=Set{String}(),
-    candidate_branches::AbstractSet{String}=Set{String}(),
-)
-    IS.@assert_op length(arcs) == length(branches)
-    IS.@assert_op length(susceptances) == length(branches)
-    node_lookup = _make_lookup(nodes)
-    A = _incidence_matrix(arcs, node_lookup)
-    BA = SparseArrays.sparse(transpose(A)) * LinearAlgebra.Diagonal(susceptances)
-    subnetworks = _find_subnetworks(
-        nodes,
-        arcs,
-        node_lookup,
-        reference_nodes,
-        [b in candidate_branches for b in branches],
-    )
     valid_ix = setdiff(eachindex(nodes), [node_lookup[r] for r in keys(subnetworks)])
     data = zeros(length(nodes), length(branches))
     if !isempty(valid_ix)
@@ -131,34 +118,6 @@ function _susceptance(line::PSIP.NodalACTransportTechnology)
     (iszero(x) || iszero(voltage)) &&
         error("Line $(PSIP.get_name(line)) has zero reactance or voltage")
     return voltage^2 / x
-end
-
-_reference_nodes(nodes) =
-    Set(PSIP.get_name(n) for n in nodes if PSIP.get_bus_type(n) == PSY.ACBusTypes.REF)
-
-function PTDF(portfolio::PSIP.Portfolio)
-    nodes = sort!(collect(PSIP.get_regions(PSIP.Node, portfolio)); by=PSIP.get_name)
-    lines = sort!(
-        collect(
-            PSIP.get_technologies(
-                PSIP.get_available,
-                PSIP.NodalACTransportTechnology,
-                portfolio,
-            ),
-        );
-        by=PSIP.get_name,
-    )
-    arcs = [
-        (PSIP.get_name(PSIP.get_start_node(l)), PSIP.get_name(PSIP.get_end_node(l))) for
-        l in lines
-    ]
-    return PTDF(
-        PSIP.get_name.(nodes),
-        PSIP.get_name.(lines),
-        arcs,
-        _susceptance.(lines);
-        reference_nodes=_reference_nodes(nodes),
-    )
 end
 
 # A branch whose outage splits its island keeps an unscaled row, as in PowerNetworkMatrices

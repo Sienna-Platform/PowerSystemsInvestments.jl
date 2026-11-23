@@ -233,14 +233,29 @@ function _add_linearcurve_cost!(
         )
     time_mapping = get_time_mapping(container)
     inv_tuples = get_investment_time_stamps(time_mapping)
-    capex_multipliers = get_capex_multipliers(technology, T(), inv_tuples)
+    # Capital cost multiplier at the first year of each investment period, 1.0 without the
+    # capex time series
+    capex_name = get_capex_time_series_name(T(), technology)
+    capex = Dict{Int, Float64}()
+    if IS.has_time_series(technology, IS.SingleTimeSeries, capex_name)
+        data = IS.get_time_series(IS.SingleTimeSeries, technology, capex_name).data
+        capex = Dict(zip(Dates.year.(TimeSeries.timestamp(data)), TimeSeries.values(data)))
+    end
 
     for t in get_investment_time_steps(time_mapping)
         inv_date = inv_tuples[t]
         year = Dates.value.(Dates.Year.(inv_date[1]))
         future_to_present_value = discount_factor^(year - base_year)
+        multiplier =
+            isempty(capex) ? 1.0 :
+            get(capex, year) do
+                error(
+                    "Time series $capex_name of technology $(PSIP.get_name(technology)) has " *
+                    "no value for the investment period starting in $year.",
+                )
+            end
         npv_proportional_term =
-            amortized_proportional_term * capex_multipliers[t] * future_to_present_value
+            amortized_proportional_term * multiplier * future_to_present_value
         _add_linearcurve_variable_term_to_model!(
             container,
             T(),

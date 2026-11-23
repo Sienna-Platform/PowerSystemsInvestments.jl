@@ -36,30 +36,6 @@ end
 
 get_capex_time_series_name(::InvestmentVariableType, ::PSIP.Technology) = "inv_capex"
 
-# Capital cost multiplier of each investment period, read from the capex time series at the
-# first year of the period; 1.0 when the technology has no such time series
-function get_capex_multipliers(
-    technology::PSIP.Technology,
-    variable_type::InvestmentVariableType,
-    inv_tuples,
-)
-    name = get_capex_time_series_name(variable_type, technology)
-    if !IS.has_time_series(technology, IS.SingleTimeSeries, name)
-        return ones(length(inv_tuples))
-    end
-    data = IS.get_time_series(IS.SingleTimeSeries, technology, name).data
-    values = Dict(zip(Dates.year.(TimeSeries.timestamp(data)), TimeSeries.values(data)))
-    return map(inv_tuples) do inv_tuple
-        year = Dates.year(first(inv_tuple))
-        get(values, year) do
-            error(
-                "Time series $name of technology $(PSIP.get_name(technology)) has no " *
-                "value for the investment period starting in $year.",
-            )
-        end
-    end
-end
-
 # Present value in the base year of one unit paid at the start of each year of an investment
 # period. The payments are valued at the start of the period and discounted from its first
 # year, whatever the dates of the representative periods that stand for it.

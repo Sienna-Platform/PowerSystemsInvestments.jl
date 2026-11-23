@@ -51,7 +51,6 @@ function _add_balance_slacks!(
     return
 end
 
-# Nodal power balance model: energy balance constraint at each bus (node).
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::Type{T},
