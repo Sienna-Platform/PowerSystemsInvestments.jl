@@ -20,6 +20,75 @@
     @test PSIN.get_objective_expression(test_obj) == 10.0 * x^2 + 5.0 * x + 60.0
 end
 
+@testset "Investment Formulation Validation" begin
+    @test_throws ArgumentError PSIN.TechnologyModel(
+        PSIP.StorageTechnology{PSY.EnergyReservoirStorage},
+        PSIN.BinaryInvestment,
+        PSIN.CyclicalStorageDispatch,
+        PSIN.BasicDispatchFeasibility,
+    )
+end
+
+@testset "Operational weights check" begin
+    _, op_days = test_2_zone_portfolio()
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    time_mapping = PSIN.TimeMapping(periods, op_days, Vector{Vector{DateTime}}())
+
+    @test_logs min_level = Logging.Warn PSIN.check_operational_weights(
+        time_mapping,
+        [365.0, 365.0],
+    )
+    # Weights that include the length of the period are flagged, one warning per period.
+    @test_logs(
+        (:warn, r"represent 5.0 years"),
+        (:warn, r"represent 5.0 years"),
+        min_level = Logging.Warn,
+        PSIN.check_operational_weights(time_mapping, [365.0 * 5, 365.0 * 5]),
+    )
+    @test_logs(
+        (:warn, r"represent 0.5 years"),
+        min_level = Logging.Warn,
+        PSIN.check_operational_weights(time_mapping, [365.0, 182.5]),
+    )
+end
+
+@testset "Time series checks" begin
+    # Every operational time series, including the hydro budget, must have one value per time
+    # step of its representative period, starting at its first time stamp.
+    p, op_days = test_hydro_portfolio()
+    hydro = PSIP.get_technology(PSIP.SupplyTechnology{PSY.HydroDispatch}, p, "hydro")
+    demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, "demand")
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    no_feasibility = Vector{Vector{DateTime}}()
+    time_mapping = PSIN.TimeMapping(periods, op_days, no_feasibility)
+    budget = PSIN.retrieve_ops_time_series(hydro, 1, time_mapping, "ops_hydro_budget")
+    @test length(budget.data) == length(op_days[1])
+    @test length(PSIN.retrieve_ops_time_series(demand, 2, time_mapping).data) ==
+          length(op_days[2])
+
+    later_day =
+        PSIN.TimeMapping(periods, [op_days[1] .+ Hour(1), op_days[2]], no_feasibility)
+    @test_throws "starts at" PSIN.retrieve_ops_time_series(
+        hydro,
+        1,
+        later_day,
+        "ops_hydro_budget",
+    )
+    shorter_day = PSIN.TimeMapping(periods, [op_days[1][1:12], op_days[2]], no_feasibility)
+    @test_throws "has 24 values but representative period 1 has 12 time steps" PSIN.retrieve_ops_time_series(
+        hydro,
+        1,
+        shorter_day,
+        "ops_hydro_budget",
+    )
+end
+
 @testset "Constructor" begin
     p_5bus, op_days = test_2_zone_portfolio()
 
@@ -32,7 +101,7 @@ end
         ], # Vector of Period Duration
     )
 
-    weights = [365 * 5, 365 * 5] # Each day is weighted for a year and then 5 year period length
+    weights = [365, 365] # Per-year weights: each period is represented by one day
     operations = PSIN.OperationalRepresentativeDays(op_days, weights)
     feasibility = RepresentativePeriods(Vector{Vector{Dates}}()) # Empty Feasibility
 
@@ -71,6 +140,15 @@ end
         PSIN.BasicDispatch,
         PSIN.BasicDispatchFeasibility,
     )
+    storage_type = PSIP.StorageTechnology{PSY.EnergyReservoirStorage}
+    storage_model = PSIN.TechnologyModel(
+        storage_type,
+        PSIN.ContinuousInvestment,
+        PSIN.CyclicalStorageDispatch,
+        PSIN.BasicDispatchFeasibility,
+    )
+    storage = PSIP.get_technology(storage_type, p_5bus, "test_storage")
+    PSIP.set_duration_limits!(storage, (min=2.0, max=4.0))
 
     # Argument Stage
 
@@ -98,7 +176,9 @@ end
         [demand_model],
     )
 
-    @test length(container.expressions) == 2
+    # System expressions: EnergyBalance, FeasibilitySurplus, WeightedEnergyDemand.
+    # The demand argument stage only populates these existing containers.
+    @test length(container.expressions) == 3
     @test length(container.variables) == 0
 
     #SupplyTechnology{RenewableDispatch}
@@ -125,7 +205,8 @@ end
         [vre_model],
     )
 
-    @test length(container.expressions) == 3
+    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for wind.
+    @test length(container.expressions) == 6
     @test length(container.variables) == 2
 
     v = PSIN.get_variable(
@@ -177,7 +258,8 @@ end
         [thermal_model, thermal_model],
     )
 
-    @test length(container.expressions) == 4
+    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for thermal.
+    @test length(container.expressions) == 9
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(
@@ -209,6 +291,19 @@ end
           length(PSIN.get_investment_time_steps(container.time_mapping))
     @test length(e["cheap_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
+
+    # StorageTechnology{EnergyReservoirStorage}
+    PSIN.construct_technologies!(
+        container,
+        p_5bus,
+        ["test_storage"],
+        PSIN.ArgumentConstructStage(),
+        capital,
+        storage_type,
+        PSIN.ContinuousInvestment,
+        transport_model,
+        [storage_model],
+    )
 
     # Model Stage
 
@@ -316,4 +411,72 @@ end
           length(PSIN.get_investment_time_steps(container.time_mapping))
     @test length(c["cheap_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
+
+    # StorageTechnology{EnergyReservoirStorage}
+    PSIN.construct_technologies!(
+        container,
+        p_5bus,
+        ["test_storage"],
+        PSIN.ModelConstructStage(),
+        capital,
+        storage_type,
+        PSIN.ContinuousInvestment,
+        transport_model,
+        [storage_model],
+    )
+
+    lower_duration = PSIN.get_constraint(
+        container,
+        PSIN.StorageDurationLowerBoundConstraint(),
+        storage_type,
+        "ContinuousInvestment",
+    )
+    upper_duration = PSIN.get_constraint(
+        container,
+        PSIN.StorageDurationUpperBoundConstraint(),
+        storage_type,
+        "ContinuousInvestment",
+    )
+    build_power = PSIN.get_variable(
+        container,
+        PSIN.BuildPowerCapacity(),
+        storage_type,
+        "ContinuousInvestment",
+    )
+    build_energy = PSIN.get_variable(
+        container,
+        PSIN.BuildEnergyCapacity(),
+        storage_type,
+        "ContinuousInvestment",
+    )
+    investment_time_steps = PSIN.get_investment_time_steps(container.time_mapping)
+
+    @test length(lower_duration["test_storage", :]) == length(investment_time_steps)
+    @test length(upper_duration["test_storage", :]) == length(investment_time_steps)
+
+    final_time_step = last(investment_time_steps)
+    lower_constraint = lower_duration["test_storage", final_time_step]
+    upper_constraint = upper_duration["test_storage", final_time_step]
+    @test JuMP.constraint_object(lower_constraint).set isa
+          MathOptInterface.GreaterThan{Float64}
+    @test JuMP.constraint_object(upper_constraint).set isa
+          MathOptInterface.LessThan{Float64}
+    for t in investment_time_steps
+        @test JuMP.normalized_coefficient(
+            lower_constraint,
+            build_energy["test_storage", t],
+        ) == 1.0
+        @test JuMP.normalized_coefficient(
+            lower_constraint,
+            build_power["test_storage", t],
+        ) == -2.0
+        @test JuMP.normalized_coefficient(
+            upper_constraint,
+            build_energy["test_storage", t],
+        ) == 1.0
+        @test JuMP.normalized_coefficient(
+            upper_constraint,
+            build_power["test_storage", t],
+        ) == -4.0
+    end
 end

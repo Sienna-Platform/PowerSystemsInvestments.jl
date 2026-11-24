@@ -50,9 +50,11 @@ function serialize_problem(model::InvestmentModel; optimizer=nothing)
     end
     container = get_optimization_container(model)
 
-    if optimizer === nothing
+    if isnothing(optimizer)
         optimizer = get_optimizer(get_settings(model))
-        @assert optimizer !== nothing "optimizer must be passed if it wasn't saved in Settings"
+        if isnothing(optimizer)
+            error("optimizer must be passed if it wasn't saved in Settings")
+        end
     end
 
     obj = ProblemSerializationWrapper(
