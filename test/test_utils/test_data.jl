@@ -8,6 +8,11 @@ using Dates
 const PSIP = PowerSystemsInvestmentsPortfolios
 const IS = InfrastructureSystems
 
+function next_region_id(portfolio::PSIP.Portfolio)
+    regions = PSIP.get_regions(PSIP.RegionTopology, portfolio)
+    return maximum(PSIP.get_id(r) for r in regions; init=0) + 1
+end
+
 function test_2_zone_portfolio()
     ########################
     #### Financial Data ####
@@ -241,7 +246,7 @@ function test_2_zone_portfolio()
         power_systems_type="EnergyReservoirStorage",
         prime_mover_type=PrimeMovers.BA,
         available=true,
-        capital_costs_storage=PSIP.StorageCapitalCost(
+        capital_costs=PSIP.StorageCapitalCost(
             charge_capital_cost=LinearCurve(0.0),
             discharge_capital_cost=LinearCurve(stor_kw_capex * 1000),
             energy_capital_cost=LinearCurve(stor_kwh_capex * 1000),
