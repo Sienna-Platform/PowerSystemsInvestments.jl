@@ -7,7 +7,6 @@ _is_line(::PSIP.TransmissionTechnology) = true
 _is_end_use(::PSIP.Technology) = false
 _is_end_use(::PSIP.DemandSideTechnology) = true
 
-# Available technologies attached to a requirement, of the kind selected by `is_kind`
 _contributing(p::PSIP.Portfolio, requirement::PSIP.Requirement, is_kind) = [
     t for t in PSIP.get_contributing_technologies(p, requirement) if
     is_kind(t) && PSIP.get_available(t)
@@ -25,20 +24,21 @@ _contributing_end_uses(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
 # resources (their capacity)
 function _check_contributors(
     p::PSIP.Portfolio,
-    requirement::PSIP.Requirement;
+    requirement::PSIP.Requirement,
+    names_to_model_map::Dict{String, TechnologyModel};
     demands::Bool,
     end_use_demand::Bool=false,
     end_use_capacity::Bool=false,
 )
-    has_end_uses = !isempty(_contributing_end_uses(p, requirement))
+    resources = _contributing_resources(p, requirement)
+    end_uses = _contributing_end_uses(p, requirement)
     missing_kinds = String[]
-    if isempty(_contributing_resources(p, requirement)) &&
-       !(end_use_capacity && has_end_uses)
+    if isempty(resources) && !(end_use_capacity && !isempty(end_uses))
         push!(missing_kinds, "resources")
     end
     if demands &&
        isempty(_contributing_demands(p, requirement)) &&
-       !(end_use_demand && has_end_uses)
+       !(end_use_demand && !isempty(end_uses))
         push!(missing_kinds, "demand technologies")
     end
     if !isempty(missing_kinds)
@@ -47,14 +47,13 @@ function _check_contributors(
             "$(join(missing_kinds, " or ")).",
         )
     end
+    # Demands without a technology model have a fixed demand
+    used_end_uses = end_use_demand || end_use_capacity ? end_uses : PSIP.Technology[]
+    for technology in [resources; used_end_uses]
+        _contributor_model(names_to_model_map, PSIP.get_name(requirement), technology)
+    end
     return
 end
-
-# Regions (zonal) or nodes (nodal) of the contributing demand technologies of a requirement
-_requirement_area(p::PSIP.Portfolio, requirement::PSIP.Requirement) = Set(
-    PSIP.get_name(region) for d in _contributing_demands(p, requirement) for
-    region in PSIP.get_region(d)
-)
 
 function _target_investment_period(time_mapping::TimeMapping, requirement::PSIP.Requirement)
     target_year = PSIP.get_target_year(requirement)
@@ -63,9 +62,11 @@ function _target_investment_period(time_mapping::TimeMapping, requirement::PSIP.
         get_investment_time_stamps(time_mapping),
     )
     if isnothing(period)
-        error(
-            "Requirement $(PSIP.get_name(requirement)) has target year $target_year, which " *
-            "is not within any investment period of the capital model.",
+        throw(
+            IS.ConflictingInputsError(
+                "Requirement $(PSIP.get_name(requirement)) has target year $target_year, " *
+                "which is not within any investment period of the capital model",
+            ),
         )
     end
     return period
@@ -79,15 +80,6 @@ function _period_cost_factor(container::SingleOptimizationContainer, period::Int
            (1.0 + discount_rate)^(get_base_year(container) - Dates.year(first(inv_tuple)))
 end
 
-_target_period_cost_factor(
-    container::SingleOptimizationContainer,
-    requirement::PSIP.Requirement,
-) = _period_cost_factor(
-    container,
-    _target_investment_period(get_time_mapping(container), requirement),
-)
-
-# Warns that attached technologies of a kind do not contribute to a requirement
 function _warn_ignored_contributors(
     technologies::Vector,
     requirement::PSIP.Requirement,
@@ -98,69 +90,78 @@ function _warn_ignored_contributors(
     return
 end
 
-# Shortfall variables of the requirements whose model uses slacks. A unit of shortfall in a
-# target period costs the "slack_penalty" in every year of that period.
-function _add_requirement_slacks!(
+# Slack container of the requirements whose model uses slacks; nothing when none does
+function _add_slack_container!(
     container::SingleOptimizationContainer,
     requirements::Vector{T},
-    requirement_model_vector::Vector{<:RequirementModel};
+    requirement_model_vector::Vector{<:RequirementModel},
+    axs...;
     meta::String=IS.Optimization.CONTAINER_KEY_EMPTY_META,
 ) where {T <: PSIP.Requirement}
-    with_slacks = [
-        (req, model) for (req, model) in zip(requirements, requirement_model_vector) if
-        get_use_slacks(model)
+    names = [
+        PSIP.get_name(req) for
+        (req, model) in zip(requirements, requirement_model_vector) if get_use_slacks(model)
     ]
-    isempty(with_slacks) && return
-    jump_model = get_jump_model(container)
-    store_names = get_store_variable_names(get_settings(container))
-    slacks = add_variable_container!(
+    isempty(names) && return nothing
+    return add_variable_container!(
         container,
         RequirementSlackVariable(),
         T,
-        [PSIP.get_name(req) for (req, _) in with_slacks];
+        names,
+        axs...;
         meta=meta,
     )
-    for (req, model) in with_slacks
-        name = PSIP.get_name(req)
-        slacks[name] = JuMP.@variable(
-            jump_model,
-            lower_bound = 0.0,
-            base_name = store_names ? "RequirementSlackVariable_{$(name)}" : "",
-        )
-        cost =
-            get_attributes(model)["slack_penalty"] *
-            _target_period_cost_factor(container, req)
-        add_to_objective_operations_expression!(container, cost * slacks[name])
-    end
+end
+
+function _add_requirement_slack!(
+    expression::JuMP.AffExpr,
+    container::SingleOptimizationContainer,
+    slacks,
+    cost::Float64,
+    index...,
+)
+    store_names = get_store_variable_names(get_settings(container))
+    slack = JuMP.@variable(
+        get_jump_model(container),
+        lower_bound = 0.0,
+        base_name =
+            store_names ? "RequirementSlackVariable_{$(join(index, ", "))}" : "",
+    )
+    slacks[index...] = slack
+    JuMP.add_to_expression!(expression, slack)
+    add_to_objective_operations_expression!(container, cost * slack)
     return
 end
 
-# Stores the duals of the constraints listed by the requirement models. The constraints of a
-# requirement type have the formulation as meta when the type has several formulations.
+# Constraints have the formulation as meta when their requirement type has several
 function _add_requirement_duals!(
     container::SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{B},
-    requirement_model_vector::Vector{<:RequirementModel},
-) where {T <: PSIP.Requirement, B <: RequirementFormulation}
+    requirement_map::Dict{Tuple{Type, Type}, Vector{String}},
+    requirement_names_to_model_map::Dict{String, RequirementModel},
+)
     constraints = get_constraints(container)
-    for model in requirement_model_vector, constraint_type in get_duals(model)
-        found = filter(
-            k -> haskey(constraints, k),
-            [
-                ConstraintKey(constraint_type, T),
-                ConstraintKey(constraint_type, T, string(B)),
-            ],
-        )
-        if isempty(found)
-            error("$(nameof(T)) has no $(nameof(constraint_type)) to take the duals of.")
+    for ((T, B), names) in requirement_map, name in names
+        for constraint_type in get_duals(requirement_names_to_model_map[name])
+            found = filter(
+                k -> haskey(constraints, k),
+                [
+                    ConstraintKey(constraint_type, T),
+                    ConstraintKey(constraint_type, T, string(B)),
+                ],
+            )
+            if isempty(found)
+                throw(
+                    ArgumentError(
+                        "$(nameof(T)) has no $(nameof(constraint_type)) to take the duals of",
+                    ),
+                )
+            end
+            container.duals[only(found)] = constraints[only(found)]
         end
-        container.duals[only(found)] = constraints[only(found)]
     end
     return
 end
 
-# Technology model of a contributing technology
 function _contributor_model(
     names_to_model_map::Dict{String, TechnologyModel},
     req_name::String,
@@ -168,9 +169,11 @@ function _contributor_model(
 )
     name = PSIP.get_name(technology)
     if !haskey(names_to_model_map, name)
-        error(
-            "Requirement '$(req_name)' lists contributing technology '$(name)' " *
-            "which has no technology model in the template.",
+        throw(
+            IS.ConflictingInputsError(
+                "Requirement '$(req_name)' lists contributing technology '$(name)' " *
+                "which has no technology model in the template",
+            ),
         )
     end
     return names_to_model_map[name]
@@ -189,31 +192,27 @@ function _demand_formulation(
     return BasicDispatch()
 end
 
-# Weighted energy of a variable over the time steps of a representative period
 function _weighted_energy(
     container::SingleOptimizationContainer,
-    variable::T,
-    ::Type{D},
-    meta::String,
+    variable::VariableType,
+    tech_model::TechnologyModel{D},
     name::String,
     op_ix::Int,
-) where {T <: VariableType, D <: PSIP.Technology}
+) where {D <: PSIP.Technology}
+    meta = string(get_operations_formulation(tech_model))
     values = get_variable(container, variable, D, meta)
     slices = get_consecutive_slices(get_time_mapping(container))[op_ix]
     return get_time_step_weight(container, op_ix) * sum(values[name, t] for t in slices)
 end
 
-# Eligible generation of a contributing resource: the output of supply technologies and the
-# wind and solar output that co-located technologies deliver through their inverter. Storage
-# only shifts energy.
 function _add_eligible_generation!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.SupplyTechnology,
-    meta::String,
+    tech_model::TechnologyModel{D},
     op_ix::Int,
 ) where {D <: PSIP.SupplyTechnology}
+    meta = string(get_operations_formulation(tech_model))
     generation = get_expression(container, WeightedEnergyGeneration(), D, meta)
     for name in get_variable_names(technology)
         JuMP.add_to_expression!(expression, generation[name, op_ix])
@@ -224,18 +223,17 @@ end
 function _add_eligible_generation!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.ColocatedSupplyStorageTechnology,
-    meta::String,
+    tech_model::TechnologyModel,
     op_ix::Int,
-) where {D <: PSIP.ColocatedSupplyStorageTechnology}
+)
     name = PSIP.get_name(technology)
     efficiency = get_inverter_efficiency(technology)
     for variable in (ActivePowerWindVariable(), ActivePowerSolarVariable())
         JuMP.add_to_expression!(
             expression,
             efficiency,
-            _weighted_energy(container, variable, D, meta, name, op_ix),
+            _weighted_energy(container, variable, tech_model, name, op_ix),
         )
     end
     return
@@ -244,9 +242,8 @@ end
 _add_eligible_generation!(
     ::JuMP.AffExpr,
     ::SingleOptimizationContainer,
-    ::Type{<:PSIP.StorageTechnology},
     ::PSIP.StorageTechnology,
-    ::String,
+    ::TechnologyModel,
     ::Int,
 ) = nothing
 
@@ -254,9 +251,8 @@ _add_eligible_generation!(
 _add_storage_losses!(
     ::JuMP.AffExpr,
     ::SingleOptimizationContainer,
-    ::Type{<:PSIP.SupplyTechnology},
     ::PSIP.SupplyTechnology,
-    ::String,
+    ::TechnologyModel,
     ::Int,
 ) = nothing
 
@@ -264,18 +260,17 @@ _add_storage_losses!(
 function _add_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.StorageTechnology,
-    meta::String,
+    tech_model::TechnologyModel,
     op_ix::Int,
-) where {D <: PSIP.StorageTechnology}
+)
     name = PSIP.get_name(technology)
     for (variable, sign) in
         ((ActiveInPowerVariable(), 1.0), (ActiveOutPowerVariable(), -1.0))
         JuMP.add_to_expression!(
             expression,
             sign,
-            _weighted_energy(container, variable, D, meta, name, op_ix),
+            _weighted_energy(container, variable, tech_model, name, op_ix),
         )
     end
     return
@@ -285,11 +280,10 @@ end
 function _add_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.ColocatedSupplyStorageTechnology,
-    meta::String,
+    tech_model::TechnologyModel,
     op_ix::Int,
-) where {D <: PSIP.ColocatedSupplyStorageTechnology}
+)
     name = PSIP.get_name(technology)
     efficiency = get_inverter_efficiency(technology)
     for (variable, coefficient) in (
@@ -299,13 +293,27 @@ function _add_storage_losses!(
         JuMP.add_to_expression!(
             expression,
             coefficient,
-            _weighted_energy(container, variable, D, meta, name, op_ix),
+            _weighted_energy(container, variable, tech_model, name, op_ix),
         )
     end
     return
 end
 
-# Eligible generation of every contributing resource of a requirement
+function _add_net_injection!(
+    expression::JuMP.AffExpr,
+    container::SingleOptimizationContainer,
+    tech_model::TechnologyModel{D},
+    name::String,
+    t::Int,
+) where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
+    meta = string(get_operations_formulation(tech_model))
+    injection = get_variable(container, ActiveOutPowerVariable(), D, meta)
+    withdrawal = get_variable(container, ActiveInPowerVariable(), D, meta)
+    JuMP.add_to_expression!(expression, injection[name, t])
+    JuMP.add_to_expression!(expression, -1.0, withdrawal[name, t])
+    return
+end
+
 function _add_eligible_generation!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -317,22 +325,13 @@ function _add_eligible_generation!(
     req_name = PSIP.get_name(requirement)
     for resource in _contributing_resources(p, requirement)
         tech_model = _contributor_model(names_to_model_map, req_name, resource)
-        _add_eligible_generation!(
-            expression,
-            container,
-            get_technology_type(tech_model),
-            resource,
-            string(get_operations_formulation(tech_model)),
-            op_ix,
-        )
+        _add_eligible_generation!(expression, container, resource, tech_model, op_ix)
     end
     return
 end
 
-# Weighted demand of the contributing demand technologies of a requirement, plus the
-# consumption of its end-use technologies and the losses of its contributing storage. The
-# demand is gross, or with `served` net of unserved demand; demand shifted in time is counted
-# where it is served, so shifting losses count.
+# Weighted demand of a requirement (gross, or net of unserved demand with `served`), plus the
+# consumption of its end-use technologies and the losses of its storage
 function _add_demand_and_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -376,14 +375,7 @@ function _add_demand_and_storage_losses!(
     end
     for resource in _contributing_resources(p, requirement)
         tech_model = _contributor_model(names_to_model_map, req_name, resource)
-        _add_storage_losses!(
-            expression,
-            container,
-            get_technology_type(tech_model),
-            resource,
-            string(get_operations_formulation(tech_model)),
-            op_ix,
-        )
+        _add_storage_losses!(expression, container, resource, tech_model, op_ix)
     end
     return
 end

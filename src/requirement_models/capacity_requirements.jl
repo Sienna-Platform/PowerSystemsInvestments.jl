@@ -11,15 +11,14 @@ get_default_attributes(
     ::Type{<:Union{RequirementMinimumCapacity, RequirementMaximumCapacity}},
 ) = Dict{String, Any}("slack_penalty" => CAPACITY_REQUIREMENT_SLACK_PENALTY)
 
-# Capacity a resource counts towards a capacity requirement in an investment period
 function _add_requirement_capacity!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.SupplyTechnology,
-    investment_meta::String,
+    tech_model::TechnologyModel{D},
     period::Int,
 ) where {D <: PSIP.SupplyTechnology}
+    investment_meta = string(get_investment_formulation(tech_model))
     capacity = get_expression(container, CumulativeCapacity(), D, investment_meta)
     for name in get_variable_names(technology)
         JuMP.add_to_expression!(expression, capacity[name, period])
@@ -30,25 +29,24 @@ end
 function _add_requirement_capacity!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.StorageTechnology,
-    investment_meta::String,
+    tech_model::TechnologyModel{D},
     period::Int,
 ) where {D <: PSIP.StorageTechnology}
+    investment_meta = string(get_investment_formulation(tech_model))
     capacity = get_expression(container, CumulativePowerCapacity(), D, investment_meta)
     JuMP.add_to_expression!(expression, capacity[PSIP.get_name(technology), period])
     return
 end
 
-# Co-located technologies count their wind and solar capacity
 function _add_requirement_capacity!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.ColocatedSupplyStorageTechnology,
-    investment_meta::String,
+    tech_model::TechnologyModel{D},
     period::Int,
 ) where {D <: PSIP.ColocatedSupplyStorageTechnology}
+    investment_meta = string(get_investment_formulation(tech_model))
     for expression_type in (CumulativeWindCapacity(), CumulativeSolarCapacity())
         capacity = get_expression(container, expression_type, D, investment_meta)
         JuMP.add_to_expression!(expression, capacity[PSIP.get_name(technology), period])
@@ -59,36 +57,28 @@ end
 function _add_requirement_capacity!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.DemandSideTechnology,
-    investment_meta::String,
+    tech_model::TechnologyModel{D},
     period::Int,
 ) where {D <: PSIP.DemandSideTechnology}
+    investment_meta = string(get_investment_formulation(tech_model))
     capacity = get_expression(container, CumulativeCapacity(), D, investment_meta)
     JuMP.add_to_expression!(expression, capacity[PSIP.get_name(technology), period])
     return
 end
 
-_capacity_limit(requirement::PSIP.MinimumCapacityRequirements) =
-    PSIP.get_min_capacity_mw(requirement)
-_capacity_limit(requirement::PSIP.MaximumCapacityRequirements) =
-    PSIP.get_max_capacity_mw(requirement)
-
 _capacity_constraint(
     jump_model::JuMP.Model,
+    requirement::PSIP.MinimumCapacityRequirements,
     capacity::JuMP.AffExpr,
-    ::RequirementMinimumCapacity,
-    limit::Float64,
-) = JuMP.@constraint(jump_model, capacity >= limit)
+    slack::JuMP.AffExpr,
+) = JuMP.@constraint(jump_model, capacity + slack >= PSIP.get_min_capacity_mw(requirement))
 _capacity_constraint(
     jump_model::JuMP.Model,
+    requirement::PSIP.MaximumCapacityRequirements,
     capacity::JuMP.AffExpr,
-    ::RequirementMaximumCapacity,
-    limit::Float64,
-) = JuMP.@constraint(jump_model, capacity <= limit)
-
-_slack_sign(::RequirementMinimumCapacity) = 1.0
-_slack_sign(::RequirementMaximumCapacity) = -1.0
+    slack::JuMP.AffExpr,
+) = JuMP.@constraint(jump_model, capacity - slack <= PSIP.get_max_capacity_mw(requirement))
 
 function construct_requirement!(
     ::SingleOptimizationContainer,
@@ -98,7 +88,7 @@ function construct_requirement!(
     ::Type{T},
     ::Type{B},
     ::TransportModel{<:AbstractTransportAggregation},
-    ::Dict{String, TechnologyModel},
+    names_to_model_map::Dict{String, TechnologyModel},
     ::Vector{X},
 ) where {
     T <: CapacityRequirements,
@@ -107,7 +97,13 @@ function construct_requirement!(
 }
     for name in names
         req = PSIP.get_requirement(T, p, name)
-        _check_contributors(p, req; demands=false, end_use_capacity=true)
+        _check_contributors(
+            p,
+            req,
+            names_to_model_map;
+            demands=false,
+            end_use_capacity=true,
+        )
         _warn_ignored_contributors(_contributing_lines(p, req), req, "Lines")
         _warn_ignored_contributors(
             _contributing_demands(p, req),
@@ -146,14 +142,13 @@ function construct_requirement!(
     return
 end
 
-# Capacity of the resources in the target period >= min_capacity_mw (with the slack added) or
-# <= max_capacity_mw (with the slack subtracted)
+# Target period capacity + slack >= min_capacity_mw, or capacity - slack <= max_capacity_mw
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::CapacityRequirementConstraint,
     p::PSIP.Portfolio,
     requirements::Vector{T},
-    formulation::B,
+    ::B,
     names_to_model_map::Dict{String, TechnologyModel},
     requirement_model_vector::Vector{X},
 ) where {
@@ -163,38 +158,29 @@ function add_constraints!(
 }
     time_mapping = get_time_mapping(container)
     jump_model = get_jump_model(container)
-    _add_requirement_slacks!(container, requirements, requirement_model_vector)
-    slacks = if has_container_key(container, RequirementSlackVariable, T)
-        get_variable(container, RequirementSlackVariable(), T)
-    else
-        nothing
-    end
+    slacks = _add_slack_container!(container, requirements, requirement_model_vector)
     con = add_constraints_container!(
         container,
         CapacityRequirementConstraint(),
         T,
         PSIP.get_name.(requirements),
     )
-    for req in requirements
+    for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
         period = _target_investment_period(time_mapping, req)
         capacity = JuMP.AffExpr(0.0)
         for resource in [_contributing_resources(p, req); _contributing_end_uses(p, req)]
             tech_model = _contributor_model(names_to_model_map, req_name, resource)
-            _add_requirement_capacity!(
-                capacity,
-                container,
-                get_technology_type(tech_model),
-                resource,
-                string(get_investment_formulation(tech_model)),
-                period,
-            )
+            _add_requirement_capacity!(capacity, container, resource, tech_model, period)
         end
-        if !isnothing(slacks) && req_name in axes(slacks, 1)
-            JuMP.add_to_expression!(capacity, _slack_sign(formulation), slacks[req_name])
+        slack = JuMP.AffExpr(0.0)
+        if get_use_slacks(model)
+            cost =
+                get_attributes(model)["slack_penalty"] *
+                _period_cost_factor(container, period)
+            _add_requirement_slack!(slack, container, slacks, cost, req_name)
         end
-        con[req_name] =
-            _capacity_constraint(jump_model, capacity, formulation, _capacity_limit(req))
+        con[req_name] = _capacity_constraint(jump_model, req, capacity, slack)
     end
     return
 end

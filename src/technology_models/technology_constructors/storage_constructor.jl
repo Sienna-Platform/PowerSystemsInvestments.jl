@@ -19,9 +19,15 @@ function construct_technologies!(
     add_variable!(container, BuildEnergyCapacity(), devices, B())
     add_variable!(container, BuildPowerCapacity(), devices, B())
 
+    add_expression!(container, PowerCapacityAdditions(), devices, B())
+    add_expression!(container, EnergyCapacityAdditions(), devices, B())
+
     # CumulativeCapacity expressions
     add_expression!(container, p, CumulativePowerCapacity(), devices, B())
     add_expression!(container, p, CumulativeEnergyCapacity(), devices, B())
+
+    add_expression!(container, CapitalCostExpression(), devices, B())
+    add_expression!(container, FixedOperationModelCost(), devices, B())
     return
 end
 
@@ -70,6 +76,7 @@ function construct_technologies!(
     # WeightedEnergyGeneration
     add_expression!(container, WeightedEnergyGeneration(), devices, C())
 
+    add_expression!(container, VariableOMCost(), devices, C())
     return
 end
 
@@ -89,25 +96,13 @@ function construct_technologies!(
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
-
-    # TODO: Decide if we want different variables or not for feasibility
-
-    # EnergyBalance
     add_to_expression!(
         container,
         FeasibilitySurplus(),
-        ActiveInPowerVariable(),
         devices,
         D(),
         transport_model,
-    )
-    add_to_expression!(
-        container,
-        FeasibilitySurplus(),
-        ActiveOutPowerVariable(),
-        devices,
-        D(),
-        transport_model,
+        tech_model_vector,
     )
     return
 end

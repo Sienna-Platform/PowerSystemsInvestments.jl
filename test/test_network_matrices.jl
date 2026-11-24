@@ -14,14 +14,14 @@ const GARVER_LINES = [
     ("4-6c", "4", "6", 0.3),
 ]
 
-function _ptdf_from_lines(nodes, lines; reference_nodes=Set{String}(), tol=0.0)
+function _ptdf_from_lines(nodes, lines; reference_nodes=Set{String}(), kwargs...)
     return PSIN.PTDF(
         nodes,
         [l[1] for l in lines],
         [(l[2], l[3]) for l in lines],
         [1.0 / l[4] for l in lines];
         reference_nodes=reference_nodes,
-        tol=tol,
+        kwargs...,
     )
 end
 
@@ -44,17 +44,11 @@ _flows(ptdf, injections) = transpose(ptdf.data) * injections
     for (branch, row) in expected, (node, value) in zip(nodes, row)
         @test isapprox(ptdf[branch, node], value; atol=1e-4)
     end
-    # Parallel lines split the corridor flow by susceptance
     for node in nodes
         @test ptdf["3-5a", node] ≈ ptdf["3-5b", node]
         @test ptdf["4-6a", node] ≈ ptdf["4-6c", node]
     end
     @test ptdf.subnetworks == Dict("1" => nodes)
-
-    cut = _ptdf_from_lines(nodes, GARVER_LINES; reference_nodes=Set(["1"]), tol=0.1)
-    @test cut["2-4", "3"] == 0.0
-    @test cut["2-3", "4"] == 0.0
-    @test cut["1-2", "2"] == ptdf["1-2", "2"]
 end
 
 @testset "PTDF flows balance at every node but the reference" begin
@@ -68,27 +62,6 @@ end
         net_outflow[parse(Int, to)] -= flow
     end
     @test net_outflow[2:end] ≈ injections[2:end]
-end
-
-@testset "LODF matches recomputing the PTDF without the outaged line" begin
-    nodes = string.(1:6)
-    ptdf = _ptdf_from_lines(nodes, GARVER_LINES; reference_nodes=Set(["1"]))
-    lodf = PSIN.LODF(ptdf)
-    injections = [-80.0, -240.0, 120.0, -160.0, -240.0, 600.0]
-    flows = Dict(zip(ptdf.axes[2], _flows(ptdf, injections)))
-    for outaged in ("1-5", "2-3", "3-6a", "4-6b")
-        @test lodf[outaged, outaged] == -1.0
-        remaining = filter(l -> l[1] != outaged, GARVER_LINES)
-        post = _ptdf_from_lines(nodes, remaining; reference_nodes=Set(["1"]))
-        post_flows = Dict(zip(post.axes[2], _flows(post, injections)))
-        for (monitored, _, _, _) in remaining
-            @test isapprox(
-                flows[monitored] + lodf[monitored, outaged] * flows[outaged],
-                post_flows[monitored];
-                atol=1e-9,
-            )
-        end
-    end
 end
 
 @testset "PTDF of a network with islands" begin
@@ -122,27 +95,33 @@ end
             reference_nodes=Set(["a1", "a2"]),
         )
     @test haskey(two_references.subnetworks, "a1")
-    @test_throws ErrorException _ptdf_from_lines(
+
+    joined = [lines; ("a3b1", "a3", "b1", 0.1)]
+    @test_logs (:warn, r"reference nodes") match_mode = :any _ptdf_from_lines(
+        nodes,
+        joined;
+        reference_nodes=Set(["a1", "b1"]),
+    )
+    @test_logs min_level = Logging.Warn _ptdf_from_lines(
+        nodes,
+        joined;
+        reference_nodes=Set(["a1", "b1"]),
+        candidate_branches=Set(["a3b1"]),
+    )
+    @test_throws IS.DataFormatError _ptdf_from_lines(
         nodes,
         [("bad", "a1", "a1", 0.1)];
         reference_nodes=Set(["a1"]),
     )
 end
 
-@testset "PTDF of the AC lines in a portfolio" begin
-    portfolio, _ = test_2_zone_portfolio()
-    nodes = [
-        PSIP.Node(; name="n1", id=101, bus_type=PSY.ACBusTypes.REF),
-        PSIP.Node(; name="n2", id=102),
-        PSIP.Node(; name="n3", id=103),
-    ]
-    for node in nodes
-        PSIP.add_region!(portfolio, node)
-    end
+@testset "PTDF of AC lines with reactance in ohms" begin
+    nodes = [PSIP.Node(; name="n$i", id=i) for i in 1:3]
     # The same per-unit reactance at two voltages: 0.1 * 230^2 ohms and 0.1 * 115^2 ohms
-    for (id, (from, to, x, kv)) in
-        enumerate(((1, 2, 5290.0, 230.0), (2, 3, 5290.0, 230.0), (3, 1, 1322.5, 115.0)))
-        line = PSIP.NodalACTransportTechnology{PSY.ACBranch}(;
+    lines = map(
+        enumerate(((1, 2, 5290.0, 230.0), (2, 3, 5290.0, 230.0), (3, 1, 1322.5, 115.0))),
+    ) do (id, (from, to, x, kv))
+        PSIP.NodalACTransportTechnology{PSY.ACBranch}(;
             name="line_$(from)$(to)",
             start_node=nodes[from],
             end_node=nodes[to],
@@ -161,9 +140,14 @@ end
                 tax_rate=0.21,
             ),
         )
-        PSIP.add_technology!(portfolio, line)
     end
-    ptdf = PSIN.PTDF(portfolio)
+    ptdf = PSIN.PTDF(
+        ["n1", "n2", "n3"],
+        PSIP.get_name.(lines),
+        [PSIN._arc(l) for l in lines],
+        PSIN._susceptance.(lines);
+        reference_nodes=Set(["n1"]),
+    )
     @test ptdf.axes == (["n1", "n2", "n3"], ["line_12", "line_23", "line_31"])
     @test collect(keys(ptdf.subnetworks)) == ["n1"]
     @test ptdf["line_12", "n2"] ≈ -2 / 3

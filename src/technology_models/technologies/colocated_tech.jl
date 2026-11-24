@@ -43,9 +43,11 @@ get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerS
 function get_inverter_efficiency(d::PSIP.ColocatedSupplyStorageTechnology)
     efficiency = PSIP.get_inverter_efficiency(d)
     if !(0.0 < efficiency <= 1.0)
-        error(
-            "Technology $(PSIP.get_name(d)) has inverter efficiency $efficiency, which must " *
-            "be in (0, 1].",
+        throw(
+            IS.InvalidValue(
+                "Technology $(PSIP.get_name(d)) has inverter efficiency $efficiency, which " *
+                "must be in (0, 1]",
+            ),
         )
     end
     return efficiency
@@ -263,7 +265,6 @@ function add_constraints!(
     operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
-    time_stamps = get_time_stamps(time_mapping)
 
     for (ix, d) in enumerate(devices)
         name = PSIP.get_name(d)
@@ -275,7 +276,6 @@ function add_constraints!(
             ts_name = get_default_time_series_names(D, V())
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping, ts_name)
             ts_data = TimeSeries.values(time_series.data)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             time_step_inv = inverse_invest_mapping[op_ix]
             for (ix, t) in enumerate(time_slices)
                 con_ub[name, t] = JuMP.@constraint(
@@ -471,7 +471,6 @@ function add_constraints!(
             time_slices = consecutive_slices[op_ix]
             time_step_length = get_time_step_length(time_mapping, op_ix)
             for t in time_slices
-                # The state of charge of the first time step follows the last one
                 previous_t = get_previous_time_step(time_mapping, op_ix, t)
                 con_soc[name, t] = JuMP.@constraint(
                     get_jump_model(container),

@@ -17,32 +17,7 @@ _has_fuel_consumption(d::PSIP.SupplyTechnology) = has_fuel_curve(d)
 _emitters(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
     filter(_has_fuel_consumption, _contributing_resources(p, requirement))
 
-# Carbon intensity (tCO2/MMBtu) of the fuel of a technology
-function _carbon_intensity(technology::PSIP.SupplyTechnology)
-    co2 = PSIP.get_co2(technology)
-    isempty(co2) && return 0.0
-    fuels = PSIP.get_fuel(technology)
-    if length(fuels) != 1
-        error(
-            "Technology $(PSIP.get_name(technology)) has carbon intensities and " *
-            "$(length(fuels)) fuels; emissions are computed for a single fuel.",
-        )
-    end
-    return get(co2, only(fuels), 0.0)
-end
-
-function _check_emitters(p::PSIP.Portfolio, requirement::PSIP.Requirement)
-    if isempty(_emitters(p, requirement))
-        error(
-            "Requirement '$(PSIP.get_name(requirement))' has no available contributing " *
-            "technology with a fuel curve, so it has no emissions.",
-        )
-    end
-    return
-end
-
-# The demand rate cap is set by the policy's demand
-_uses_demands(::Type{<:RequirementFormulation}) = false
+_uses_demands(::Type{<:CarbonCapFormulation}) = false
 _uses_demands(::Type{RequirementCarbonCapDemandRate}) = true
 
 function construct_requirement!(
@@ -54,16 +29,43 @@ function construct_requirement!(
     ::Type{B},
     ::TransportModel{<:AbstractTransportAggregation},
     names_to_model_map::Dict{String, TechnologyModel},
-    requirement_model_vector::Vector{X},
-) where {
-    T <: Union{PSIP.CarbonCaps, PSIP.CarbonTax},
-    B <: Union{CarbonCapFormulation, RequirementCarbonTax},
-    X <: RequirementModel,
-}
+    ::Vector{X},
+) where {T <: PSIP.CarbonCaps, B <: CarbonCapFormulation, X <: RequirementModel}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
     for req in requirements
-        _check_emitters(p, req)
-        _check_contributors(p, req; demands=_uses_demands(B), end_use_demand=true)
+        _check_contributors(
+            p,
+            req,
+            names_to_model_map;
+            demands=_uses_demands(B),
+            end_use_demand=true,
+        )
+    end
+    add_expression!(
+        container,
+        WeightedCarbonEmissions(),
+        p,
+        requirements,
+        B(),
+        names_to_model_map,
+    )
+    return
+end
+
+function construct_requirement!(
+    container::SingleOptimizationContainer,
+    p::PSIP.Portfolio,
+    names::Vector{String},
+    ::ArgumentConstructStage,
+    ::Type{T},
+    ::Type{B},
+    ::TransportModel{<:AbstractTransportAggregation},
+    names_to_model_map::Dict{String, TechnologyModel},
+    ::Vector{X},
+) where {T <: PSIP.CarbonTax, B <: RequirementCarbonTax, X <: RequirementModel}
+    requirements = [PSIP.get_requirement(T, p, n) for n in names]
+    for req in requirements
+        _check_contributors(p, req, names_to_model_map; demands=false)
     end
     add_expression!(
         container,
@@ -116,9 +118,9 @@ function construct_requirement!(
     emissions = get_expression(container, WeightedCarbonEmissions(), T, string(B))
     for name in names
         req = PSIP.get_requirement(T, p, name)
-        op_indexes = map_to_op[_target_investment_period(time_mapping, req)]
-        cost =
-            PSIP.get_tax_dollars_per_ton(req) * _target_period_cost_factor(container, req)
+        period = _target_investment_period(time_mapping, req)
+        op_indexes = map_to_op[period]
+        cost = PSIP.get_tax_dollars_per_ton(req) * _period_cost_factor(container, period)
         add_to_objective_operations_expression!(
             container,
             cost * sum(emissions[name, op_ix] for op_ix in op_indexes),
@@ -127,8 +129,7 @@ function construct_requirement!(
     return
 end
 
-# Yearly emissions of each policy in each representative period: carbon intensity times
-# fuel consumption of its technologies with fuel curves
+# Yearly emissions of each policy per representative period: intensity times fuel use
 function add_expression!(
     container::SingleOptimizationContainer,
     ::WeightedCarbonEmissions,
@@ -136,7 +137,18 @@ function add_expression!(
     requirements::Vector{T},
     ::B,
     names_to_model_map::Dict{String, TechnologyModel},
-) where {T <: PSIP.Requirement, B <: RequirementFormulation}
+) where {
+    T <: Union{PSIP.CarbonCaps, PSIP.CarbonTax},
+    B <: Union{CarbonCapFormulation, RequirementCarbonTax},
+}
+    for req in requirements
+        if isempty(_emitters(p, req))
+            error(
+                "Requirement '$(PSIP.get_name(req))' has no available contributing " *
+                "technology with a fuel curve, so it has no emissions.",
+            )
+        end
+    end
     time_mapping = get_time_mapping(container)
     operational_indexes = get_operational_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
@@ -155,7 +167,17 @@ function add_expression!(
             expression[req_name, op_ix] = JuMP.AffExpr(0.0)
         end
         for d in _emitters(p, req)
-            intensity = _carbon_intensity(d)
+            co2 = PSIP.get_co2(d)
+            isempty(co2) && continue
+            fuels = PSIP.get_fuel(d)
+            if length(fuels) != 1
+                error(
+                    "Technology $(PSIP.get_name(d)) has carbon intensities and " *
+                    "$(length(fuels)) fuels; emissions are computed for a single fuel.",
+                )
+            end
+            # tCO2/MMBtu
+            intensity = get(co2, only(fuels), 0.0)
             iszero(intensity) && continue
             tech_model = _contributor_model(names_to_model_map, req_name, d)
             fuel = get_expression(
@@ -178,7 +200,6 @@ function add_expression!(
     return
 end
 
-# Yearly emission limit of a carbon cap in the operational indexes of its target period
 function _add_carbon_limit!(
     limit::JuMP.AffExpr,
     ::SingleOptimizationContainer,
@@ -256,12 +277,8 @@ function add_constraints!(
     map_to_op = get_investment_map_to_operational_slices(time_mapping)
     meta = string(B)
     emissions = get_expression(container, WeightedCarbonEmissions(), T, meta)
-    _add_requirement_slacks!(container, requirements, requirement_model_vector; meta=meta)
-    slacks = if has_container_key(container, RequirementSlackVariable, T, meta)
-        get_variable(container, RequirementSlackVariable(), T, meta)
-    else
-        nothing
-    end
+    slacks =
+        _add_slack_container!(container, requirements, requirement_model_vector; meta=meta)
     con = add_constraints_container!(
         container,
         CarbonCapConstraint(),
@@ -269,9 +286,10 @@ function add_constraints!(
         PSIP.get_name.(requirements);
         meta=meta,
     )
-    for req in requirements
+    for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
-        op_indexes = map_to_op[_target_investment_period(time_mapping, req)]
+        period = _target_investment_period(time_mapping, req)
+        op_indexes = map_to_op[period]
         limit = JuMP.AffExpr(0.0)
         _add_carbon_limit!(
             limit,
@@ -282,8 +300,11 @@ function add_constraints!(
             names_to_model_map,
             op_indexes,
         )
-        if !isnothing(slacks) && req_name in axes(slacks, 1)
-            JuMP.add_to_expression!(limit, slacks[req_name])
+        if get_use_slacks(model)
+            cost =
+                get_attributes(model)["slack_penalty"] *
+                _period_cost_factor(container, period)
+            _add_requirement_slack!(limit, container, slacks, cost, req_name)
         end
         con[req_name] = JuMP.@constraint(
             jump_model,

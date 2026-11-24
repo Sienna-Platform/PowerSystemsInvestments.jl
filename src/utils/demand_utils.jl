@@ -61,7 +61,6 @@ function initialize_demands!(container::SingleOptimizationContainer, p::PSIP.Por
         for (op_ix, year) in years
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-            check_initial_timestamp(time_series, d, time_stamps[first(time_slices)], op_ix)
             shape = TimeSeries.values(time_series.data)
             exceeds_peak |= maximum(shape) > 1.0
             year < reference_year && PSIP.is_new(d) && continue

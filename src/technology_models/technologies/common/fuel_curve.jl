@@ -1,6 +1,6 @@
 function throw_unsupported_curve(curve::PSY.ProductionVariableCostCurve)
     error(
-        "Variable cost curves of type $(typeof(curve)) are not currently supported. Use a " *
+        "Variable cost curves of type $(typeof(curve)) are not supported; use a " *
         "CostCurve{LinearCurve} or a FuelCurve{LinearCurve}.",
     )
 end
@@ -22,9 +22,7 @@ get_fuel_price(fuel_curve::PSY.FuelCurve) = _get_fuel_price(PSY.get_fuel_cost(fu
 _get_fuel_price(fuel_price::Float64) = fuel_price
 
 function _get_fuel_price(::IS.TimeSeriesKey)
-    error(
-        "Time-varying fuel prices are not currently supported. Use a constant fuel price.",
-    )
+    error("Time-varying fuel prices are not supported; use a constant fuel price.")
 end
 
 # Fuel per MW started (start-up fuel offtake) and per MW committed per hour (no-load term)

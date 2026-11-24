@@ -1,4 +1,3 @@
-# Names that index the variables and expressions of a technology
 get_variable_names(d::PSIP.Technology) = [PSIP.get_name(d)]
 
 function get_variable_names(devices::Vector{<:PSIP.Technology})

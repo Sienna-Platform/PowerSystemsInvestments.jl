@@ -104,7 +104,7 @@ function write_result!(
     end
     container = getfield(store, get_store_container_type(key))
     container[key][index] =
-        DenseAxisArray(reshape(array.data, 1, length(columns)), ["1"], columns)
+        DenseAxisArray(reshape(array.data, length(columns), 1), columns, 1:1)
     return
 end
 

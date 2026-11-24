@@ -19,7 +19,7 @@ function InvestmentModel(
 
     model = InvestmentModel{M}(
         :CEM,
-        template,
+        copy_for_model(template),
         portfolio,
         internal,
         SimulationInfo(),
@@ -438,6 +438,8 @@ function solve!(
                 TimerOutputs.@timeit RUN_OPERATION_MODEL_TIMER "Solve" begin
                     @warn "todo: add pre-solve model check back in"
                     #_pre_solve_model_checks(model, optimizer)
+                    # Results of an earlier solve are dropped, so a failed solve leaves none
+                    empty!(get_store(model))
                     solve_impl!(model)
                     # After solve_impl!, which can add to the model
                     initialize_storage!(
@@ -464,7 +466,7 @@ function solve!(
                     end
                 end
                 TimerOutputs.@timeit RUN_OPERATION_MODEL_TIMER "Results processing" begin
-                    results = OptimizationProblemResults(model)
+                    results = InvestmentProblemResults(model)
                     serialize_results(results, get_output_dir(model))
                     export_problem_results && export_results(results)
                 end
@@ -553,15 +555,12 @@ function _read_results(model::InvestmentModel, key::OptimizationContainerKey)
     for (_, arr) in store_data
         col_names = string.(_read_col_name(axes(arr)))
         n_times = size(arr.data, 2)
-        df_wide = DataFrames.DataFrame(permutedims(arr.data), col_names)
-        df_wide.time_index = (t_offset + 1):(t_offset + n_times)
         push!(
             frames,
-            DataFrames.stack(
-                df_wide,
-                DataFrames.Not(:time_index);
-                variable_name=:name,
-                value_name=:value,
+            DataFrames.DataFrame(;
+                time_index=repeat((t_offset + 1):(t_offset + n_times), length(col_names)),
+                name=repeat(col_names; inner=n_times),
+                value=vec(permutedims(arr.data)),
             ),
         )
         t_offset += n_times

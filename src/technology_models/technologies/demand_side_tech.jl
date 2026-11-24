@@ -82,14 +82,14 @@ function add_expression!(
     return
 end
 
-# Containers of the variable cost and the product revenue of each technology, for results
+# Container of the product revenue of each technology, for results
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::V,
 ) where {
-    T <: Union{VariableOMCost, ProductRevenue},
+    T <: ProductRevenue,
     U <: Vector{D},
     V <: EndUseDispatch,
 } where {D <: PSIP.DemandSideTechnology}
