@@ -109,18 +109,13 @@ function add_constraints!(
     for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
         resources = _contributing_resources(p, req)
-        demands = _contributing_demands(p, req)
         resource_models = [
             _contributor_model(names_to_model_map, req_name, resource) for
             resource in resources
         ]
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
-            demand = zeros(length(time_slices))
-            for d in demands
-                time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-                demand .+= TimeSeries.values(time_series.data)
-            end
+            demand = _requirement_demand(p, req, time_mapping, op_ix)
             slack_cost =
                 get_attributes(model)["slack_penalty"] *
                 get_time_step_weight(container, op_ix) *

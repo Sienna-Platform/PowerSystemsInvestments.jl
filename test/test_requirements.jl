@@ -849,12 +849,19 @@ _constraint_surplus(constraint) =
     )
         PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [requirement])
     end
+    area = PSIN._reserve_area(p_5bus, requirement, TransportModel(MultiRegionBalanceModel))
     @test_logs (:warn, r"test_branch is fully inside the area") PSIN._boundary_lines(
         p_5bus,
-        requirement;
+        requirement,
+        area;
         warn=true,
     )
-    @test isempty(PSIN._boundary_lines(p_5bus, requirement))
+    @test isempty(PSIN._boundary_lines(p_5bus, requirement, area))
+    # Lines have no effect in a single region model
+    @test_logs (
+        :warn,
+        r"Lines test_branch attached to requirement 'reserve_margin' do not contribute",
+    ) PSIN._boundary_lines(p_5bus, requirement, nothing; warn=true)
 end
 
 _capacity_requirement(type, limit) = type(;

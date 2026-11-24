@@ -6,9 +6,12 @@ get_default_attributes(
     ::Type{RequirementCapacityReserveMargin},
 ) = Dict{String, Any}("slack_penalty" => REQUIREMENT_SLACK_PENALTY)
 
-# Area of a capacity reserve margin: everything is in the area of a single region model
-_reserve_area(p::PSIP.Portfolio, requirement::PSIP.Requirement, ::TransportModel) =
-    _requirement_area(p, requirement)
+# Area of a capacity reserve margin: the regions (or nodes) of its demand technologies, or
+# everything in a single region model
+_reserve_area(p::PSIP.Portfolio, requirement::PSIP.Requirement, ::TransportModel) = Set(
+    PSIP.get_name(region) for d in _contributing_demands(p, requirement) for
+    region in PSIP.get_region(d)
+)
 _reserve_area(
     ::PSIP.Portfolio,
     ::PSIP.Requirement,
@@ -94,8 +97,12 @@ end
 
 # Lines attached to a capacity reserve margin that cross the boundary of its area, and whether
 # each ends inside it. The other lines do not contribute.
-function _boundary_lines(p::PSIP.Portfolio, requirement::PSIP.Requirement; warn=false)
-    area = _requirement_area(p, requirement)
+function _boundary_lines(
+    p::PSIP.Portfolio,
+    requirement::PSIP.Requirement,
+    area::Set{String};
+    warn=false,
+)
     lines = Tuple{PSIP.TransmissionTechnology, Bool}[]
     for line in _contributing_lines(p, requirement)
         from_inside, to_inside = map(in(area), _arc(line))
@@ -107,6 +114,21 @@ function _boundary_lines(p::PSIP.Portfolio, requirement::PSIP.Requirement; warn=
         push!(lines, (line, to_inside))
     end
     return lines
+end
+
+# Lines have no effect in a single region model
+function _boundary_lines(
+    p::PSIP.Portfolio,
+    requirement::PSIP.Requirement,
+    ::Nothing;
+    warn=false,
+)
+    warn && _warn_ignored_contributors(
+        _contributing_lines(p, requirement),
+        requirement,
+        "Lines",
+    )
+    return Tuple{PSIP.TransmissionTechnology, Bool}[]
 end
 
 # PTDF branches that carry the flow of a line
@@ -223,7 +245,7 @@ _add_line_inflows!(
     names_to_model_map::Dict{String, TechnologyModel},
     req_name::String,
     ::TransportModel,
-    ::Set{String},
+    ::Union{Nothing, Set{String}},
     op_ix::Int,
 ) = _add_controlled_line_inflows!(
     reserve,
@@ -289,8 +311,11 @@ function construct_requirement!(
     for name in names
         req = PSIP.get_requirement(T, p, name)
         _check_contributors(p, req, names_to_model_map; demands=true)
-        _monitor_boundary_corridors!(transport_model, _boundary_lines(p, req; warn=true))
         area = _reserve_area(p, req, transport_model)
+        _monitor_boundary_corridors!(
+            transport_model,
+            _boundary_lines(p, req, area; warn=true),
+        )
         outside = [
             name for resource in _contributing_resources(p, req) for name in
             setdiff(get_variable_names(resource), _names_in_area(resource, area))
@@ -365,9 +390,8 @@ function add_constraints!(
             t => JuMP.AffExpr(0.0) for op_ix in op_indexes for
             t in consecutive_slices[op_ix]
         )
-        demand = Dict(t => 0.0 for t in keys(reserve))
-        area = _requirement_area(p, req)
-        lines = _boundary_lines(p, req)
+        area = _reserve_area(p, req, transport_model)
+        lines = _boundary_lines(p, req, area)
         for op_ix in op_indexes
             _add_line_inflows!(
                 reserve,
@@ -380,9 +404,8 @@ function add_constraints!(
                 op_ix,
             )
         end
-        resource_area = _reserve_area(p, req, transport_model)
         for resource in _contributing_resources(p, req)
-            names_in_area = _names_in_area(resource, resource_area)
+            names_in_area = _names_in_area(resource, area)
             isempty(names_in_area) && continue
             tech_model = _contributor_model(names_to_model_map, req_name, resource)
             for op_ix in op_indexes
@@ -399,14 +422,6 @@ function add_constraints!(
                 )
             end
         end
-        for d in _contributing_demands(p, req), op_ix in op_indexes
-            time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-            time_slices = consecutive_slices[op_ix]
-            for (t, value) in zip(time_slices, TimeSeries.values(time_series.data))
-                demand[t] += value
-            end
-        end
-
         if get_use_slacks(model)
             cost_factor =
                 get_attributes(model)["slack_penalty"] *
@@ -423,9 +438,12 @@ function add_constraints!(
         end
 
         margin = 1.0 + PSIP.get_capacity_reserve_fraction(req)
-        for (t, contribution) in reserve
-            con[req_name, t] =
-                JuMP.@constraint(jump_model, contribution >= margin * demand[t])
+        for op_ix in op_indexes
+            demand = _requirement_demand(p, req, time_mapping, op_ix)
+            for (ix, t) in enumerate(consecutive_slices[op_ix])
+                con[req_name, t] =
+                    JuMP.@constraint(jump_model, reserve[t] >= margin * demand[ix])
+            end
         end
     end
     return

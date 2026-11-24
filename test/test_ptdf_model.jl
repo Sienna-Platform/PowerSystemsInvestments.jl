@@ -1418,7 +1418,8 @@ end
     end
     @test_logs (:warn, r"l12 is fully outside the area") PSIN._boundary_lines(
         p,
-        requirement;
+        requirement,
+        Set(["n3"]);
         warn=true,
     )
     # expensive_thermal, at n2, does not contribute

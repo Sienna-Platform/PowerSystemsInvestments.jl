@@ -40,12 +40,6 @@ function _check_contributors(
     return
 end
 
-# Regions (zonal) or nodes (nodal) of the contributing demand technologies of a requirement
-_requirement_area(p::PSIP.Portfolio, requirement::PSIP.Requirement) = Set(
-    PSIP.get_name(region) for d in _contributing_demands(p, requirement) for
-    region in PSIP.get_region(d)
-)
-
 function _target_investment_period(time_mapping::TimeMapping, requirement::PSIP.Requirement)
     target_year = PSIP.get_target_year(requirement)
     period = findfirst(
@@ -313,6 +307,21 @@ function _add_eligible_generation!(
     return
 end
 
+# Demand (MW) of the contributing demand technologies of a requirement in each time step of a
+# representative period
+function _requirement_demand(
+    p::PSIP.Portfolio,
+    requirement::PSIP.Requirement,
+    time_mapping::TimeMapping,
+    op_ix::Int,
+)
+    demand = zeros(length(get_consecutive_slices(time_mapping)[op_ix]))
+    for d in _contributing_demands(p, requirement)
+        demand .+= TimeSeries.values(retrieve_ops_time_series(d, op_ix, time_mapping).data)
+    end
+    return demand
+end
+
 # Weighted demand of the contributing demand technologies of a requirement, read from their
 # "ops_demand" time series, plus the losses of its contributing storage
 function _add_demand_and_storage_losses!(
@@ -323,16 +332,11 @@ function _add_demand_and_storage_losses!(
     names_to_model_map::Dict{String, TechnologyModel},
     op_ix::Int,
 )
-    time_mapping = get_time_mapping(container)
-    weight = get_time_step_weight(container, op_ix)
-    for d in _contributing_demands(p, requirement)
-        time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
-        # Load data is in MW
-        JuMP.add_to_expression!(
-            expression,
-            weight * sum(TimeSeries.values(time_series.data)),
-        )
-    end
+    demand = _requirement_demand(p, requirement, get_time_mapping(container), op_ix)
+    JuMP.add_to_expression!(
+        expression,
+        get_time_step_weight(container, op_ix) * sum(demand),
+    )
     req_name = PSIP.get_name(requirement)
     for resource in _contributing_resources(p, requirement)
         tech_model = _contributor_model(names_to_model_map, req_name, resource)
