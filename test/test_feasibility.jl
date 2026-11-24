@@ -273,7 +273,6 @@ function _test_nodal_feasibility(transport)
         PSIP.Portfolio,
     )
     @test JuMP.normalized_coefficient(feasibility["Node_2", t], line_build) == 1.0
-    # Storage counts at its installed discharge capacity
     storage_build = PSIN.get_variable(
         container,
         PSIN.BuildPowerCapacity(),

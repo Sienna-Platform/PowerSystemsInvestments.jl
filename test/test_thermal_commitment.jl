@@ -100,7 +100,6 @@ _commitment_test_model(operation_cost=nothing; time_limits=(up=3.0, down=2.0), k
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
-    # The solution respects the commitment limits.
     values(variable_type) =
         sort!(
             filter(
@@ -187,15 +186,12 @@ function _ramp_test_solution(ramp_limits, start_up_cost)
 end
 
 @testset "Thermal ramp limits bind" begin
-    # Ramping is free with limits of 1.0, so limits of 0.05 must raise the cost
     for (ramp_limits, loose_limits) in (
         ((up=0.05, down=1.0), (up=1.0, down=1.0)),
         ((up=1.0, down=0.05), (up=1.0, down=1.0)),
     )
         solution = _ramp_test_solution(ramp_limits, 1000.0)
         @test solution.objective > _ramp_test_solution(loose_limits, 1000.0).objective
-        # The ramps of every time step, including from the last time step of each
-        # representative day to its first, are within the limits
         largest_excess = -Inf
         for (op_ix, steps) in ((1, 1:24), (2, 25:48)), t in steps
             previous = PSIN.get_previous_time_step(solution.time_mapping, op_ix, t)
@@ -215,7 +211,6 @@ end
                 largest_excess = max(largest_excess, up_excess, down_excess)
             end
         end
-        # The tight limit binds somewhere and is never exceeded
         @test largest_excess ≈ 0.0 atol = 1e-4
     end
 end

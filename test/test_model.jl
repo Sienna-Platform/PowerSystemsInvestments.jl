@@ -783,8 +783,7 @@ end
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
-        # Hydro is the only supply, so its daily budget of 0.5 × 24 hours of capacity must
-        # cover the daily demand of 2400 MWh (2030) and 2880 MWh (2035)
+        # Hydro's daily budget of 0.5 × 24 h covers 2400 MWh (2030) and 2880 MWh (2035)
         capacity = read_expression(
             model,
             PSIN.ExpressionKey(
@@ -809,7 +808,6 @@ end
 
 @testset "Hydro budget constraint satisfied with 0.05 factor" begin
     p_tight, op_days = test_constrained_hydro_portfolio()
-    # Free hydro is built to its 500 MW limit, so its energy is limited by the budget
     hydro = PSIP.get_technology(PSIP.SupplyTechnology{PSY.HydroDispatch}, p_tight, "hydro")
     PSIP.set_capital_costs!(hydro, PSIP.CapitalCost(LinearCurve(0.0), 0.0))
     weights = [365, 365]
@@ -971,8 +969,7 @@ end
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 
-        # Dispatch is limited to the 0.8 capacity factor times the 0.95 availability (5%
-        # forced outage) of the capacity
+        # 0.8 capacity factor times 0.95 availability
         cap_factor = 0.8 * 0.95
         hydro_df = read_variable(
             model,
@@ -1016,7 +1013,6 @@ end
     wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
     demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand2")
 
-    # Wind would supply about 130% of demand2 without the policies, so these targets bind
     fraction = 1.5
     fraction_2035 = 1.6
     esr = PSIP.EnergyShareRequirements(;
@@ -1182,7 +1178,6 @@ end
 
     @test total_wind_2030 ≈ fraction * total_demand_2030 rtol = 1e-6
 
-    # The 2035 policy applies to the second investment period (time steps 25:48)
     total_wind_2035 = sum(filter(r -> r.time_index in 25:48, wind_rows).value)
     d_2035 = IS.get_time_series(
         IS.SingleTimeSeries,
@@ -1527,7 +1522,7 @@ end
     # Its annual operation costs are valued at the start of 2028 and discounted from there.
     p_5bus, op_days = test_2_zone_portfolio()
     thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
-    # The capex time series have no value for 2028; capital costs are not tested here.
+    # The capex time series have no value for 2028
     for name in ("cheap_thermal", "expensive_thermal")
         technology = PSIP.get_technology(thermal_type, p_5bus, name)
         PSIP.remove_time_series!(p_5bus, IS.SingleTimeSeries, technology, "inv_capex")

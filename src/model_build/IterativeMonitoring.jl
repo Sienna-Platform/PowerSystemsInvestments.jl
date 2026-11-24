@@ -1,6 +1,9 @@
 _check_monitoring_transport(::TransportModel{NodalPTDFModel}) = nothing
-_check_monitoring_transport(::TransportModel{T}) where {T} =
-    error("IterativeMonitoring requires the NodalPTDFModel transport model, not $T")
+_check_monitoring_transport(::TransportModel{T}) where {T} = throw(
+    IS.ConflictingInputsError(
+        "IterativeMonitoring requires the NodalPTDFModel transport model, not $T",
+    ),
+)
 
 function build_impl!(model::InvestmentModel{IterativeMonitoring})
     transport_model = get_transport_model(get_template(model))
@@ -62,8 +65,13 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         rounds = 0
         capped = false
         for iteration in Iterators.countfrom(0)
-            stage =
-                !isnothing(undo_relax) ? "relaxed" : gap_pending ? "screening gap" : "final"
+            stage = if !isnothing(undo_relax)
+                "relaxed"
+            elseif gap_pending
+                "screening gap"
+            else
+                "final"
+            end
             status = solve_model!(container, portfolio)
             set_run_status!(model, status)
             status == RunStatus.SUCCESSFULLY_FINALIZED || _solve_failed(model)

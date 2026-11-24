@@ -246,14 +246,19 @@ function _add_linearcurve_cost!(
         inv_date = inv_tuples[t]
         year = Dates.value.(Dates.Year.(inv_date[1]))
         future_to_present_value = discount_factor^(year - base_year)
-        multiplier =
-            isempty(capex) ? 1.0 :
+        multiplier = if isempty(capex)
+            1.0
+        else
             get(capex, year) do
-                error(
-                    "Time series $capex_name of technology $(PSIP.get_name(technology)) has " *
-                    "no value for the investment period starting in $year.",
+                throw(
+                    IS.DataFormatError(
+                        "Time series $capex_name of technology " *
+                        "$(PSIP.get_name(technology)) has no value for the investment " *
+                        "period starting in $year",
+                    ),
                 )
             end
+        end
         npv_proportional_term =
             amortized_proportional_term * multiplier * future_to_present_value
         _add_linearcurve_variable_term_to_model!(

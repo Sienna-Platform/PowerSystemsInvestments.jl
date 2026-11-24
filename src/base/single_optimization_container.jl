@@ -183,10 +183,12 @@ function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Po
     base_year = PSIP.get_base_year(portfolio)
     if !isapprox(capital_model.discount_rate, discount_rate) ||
        Dates.value(capital_model.base_year) != base_year
-        error(
-            "DiscountedCashFlow has discount rate $(capital_model.discount_rate) and base " *
-            "year $(Dates.value(capital_model.base_year)), but the portfolio has discount " *
-            "rate $discount_rate and base year $base_year.",
+        throw(
+            IS.ConflictingInputsError(
+                "DiscountedCashFlow has discount rate $(capital_model.discount_rate) and " *
+                "base year $(Dates.value(capital_model.base_year)), but the portfolio has " *
+                "discount rate $discount_rate and base year $base_year",
+            ),
         )
     end
     return

@@ -17,22 +17,6 @@ function _make_lookup(names::Vector{String})
     return lookup
 end
 
-function _incidence_matrix(
-    arcs::Vector{Tuple{String, String}},
-    node_lookup::Dict{String, Int},
-)
-    rows = Int[]
-    cols = Int[]
-    vals = Int8[]
-    for (ix, (from, to)) in enumerate(arcs)
-        from == to && error("Branch $ix starts and ends at node $from")
-        append!(rows, (ix, ix))
-        append!(cols, (node_lookup[from], node_lookup[to]))
-        append!(vals, (Int8(1), Int8(-1)))
-    end
-    return SparseArrays.sparse(rows, cols, vals, length(arcs), length(node_lookup))
-end
-
 function _island_roots(arcs, node_lookup::Dict{String, Int})
     root = collect(1:length(node_lookup))
     function find_root(ix)
@@ -59,7 +43,16 @@ function PTDF(
     IS.@assert_op length(arcs) == length(branches)
     IS.@assert_op length(susceptances) == length(branches)
     node_lookup = _make_lookup(nodes)
-    A = _incidence_matrix(arcs, node_lookup)
+    rows = Int[]
+    cols = Int[]
+    vals = Int8[]
+    for (ix, (from, to)) in enumerate(arcs)
+        from == to && throw(IS.DataFormatError("Branch $ix starts and ends at node $from"))
+        append!(rows, (ix, ix))
+        append!(cols, (node_lookup[from], node_lookup[to]))
+        append!(vals, (Int8(1), Int8(-1)))
+    end
+    A = SparseArrays.sparse(rows, cols, vals, length(arcs), length(node_lookup))
     BA = SparseArrays.sparse(transpose(A)) * LinearAlgebra.Diagonal(susceptances)
 
     # Islands include candidate branches, which may join islands that each have a reference
@@ -98,7 +91,8 @@ end
 function _susceptance(line::PSIP.NodalACTransportTechnology)
     x = PSIP.get_reactance(line)
     voltage = PSIP.get_voltage(line)
-    (iszero(x) || iszero(voltage)) &&
-        error("Line $(PSIP.get_name(line)) has zero reactance or voltage")
+    (iszero(x) || iszero(voltage)) && throw(
+        IS.DataFormatError("Line $(PSIP.get_name(line)) has zero reactance or voltage"),
+    )
     return voltage^2 / x
 end

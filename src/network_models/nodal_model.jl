@@ -1,4 +1,3 @@
-# Penalized slacks added to the EnergyBalance of every node
 function _add_balance_slacks!(
     container::SingleOptimizationContainer,
     ::Type{U},
@@ -8,8 +7,7 @@ function _add_balance_slacks!(
     time_steps = get_time_steps(time_mapping)
     expressions = get_expression(container, EnergyBalance(), U)
     jump_model = get_jump_model(container)
-    # The penalty is weighted like a variable cost: by the hours of the year each time step
-    # stands for, over the years of the investment period, discounted to the base year.
+    # Weighted like a variable cost
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     investment_time_stamps = get_investment_time_stamps(time_mapping)

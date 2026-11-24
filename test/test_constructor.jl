@@ -427,7 +427,7 @@ end
     @test length(c["cheap_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
 
-    # Dispatch is limited to the installed capacity that is not on a forced outage (8%)
+    # 8% forced outage
     limit = PSIN.get_constraint(
         container,
         PSIN.ActivePowerLimitsConstraint(),

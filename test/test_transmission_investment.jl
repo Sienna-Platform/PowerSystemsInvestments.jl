@@ -39,7 +39,6 @@ function _transmission_template(transport)
     return template, p_5bus
 end
 
-# Zonal line between the two zones of the test portfolio
 function _aggregate_line_model(
     formulation;
     operation=BasicDispatch,
@@ -60,7 +59,6 @@ function _aggregate_line_model(
     return template, p_5bus, line_type, "test_branch"
 end
 
-# Nodal line between two nodes holding the zones' technologies
 function _nodal_line_model(formulation)
     template, p_5bus = _transmission_template(NodalBalanceModel)
     first_id = next_region_id(p_5bus)
@@ -242,7 +240,6 @@ end
     end
     @test objectives[2] > objectives[1]
 
-    # Links inside a single region carry no losses
     template, p_5bus, line_type, name = _aggregate_line_model(
         ContinuousInvestment;
         operation=BasicDispatchWithLosses,

@@ -44,10 +44,8 @@ function _ptdf_line(
     )
 end
 
-# 2-zone test portfolio on nodes. `lines` are (name, from, to, reactance, existing line of
-# the base system); lines without an existing line are candidates of up to 1000 MW.
-# `discrete_lines` are (name, from, to, reactance, formulation, unit size, capacity limit),
-# and `hvdc_lines` are (name, from, to, operations formulation, line loss).
+# `lines`: (name, from, to, reactance, existing line), `discrete_lines`: (name, from, to,
+# reactance, formulation, unit size, limit), `hvdc_lines`: (name, from, to, formulation, loss)
 function _nodal_test_model(
     transport;
     nodes,
@@ -220,7 +218,6 @@ const TWO_NODE_PLACEMENT = Dict(
     "test_storage" => "Node_2",
 )
 
-# Two nodes joined by an existing line
 function _two_node_model(transport; kwargs...)
     m = _nodal_test_model(
         transport;
@@ -234,7 +231,6 @@ function _two_node_model(transport; kwargs...)
     return m
 end
 
-# Coefficients of an expression by variable name
 _terms_by_name(expression) =
     Dict(JuMP.name(var) => coef for (coef, var) in JuMP.linear_terms(expression))
 
@@ -340,7 +336,6 @@ end
     @test PSIP.get_existing_capacity_mw(portfolio, existing) > 0.0
     b = 230.0^2 / 0.1
 
-    # The merged corridor has the susceptance of the existing line only
     corridor = only(network.merged_corridors)
     @test corridor.name == "A_B"
     @test corridor.arc == ("A", "B")
@@ -352,7 +347,6 @@ end
     @test new_corridor.name == "bc_new"
     @test new_corridor.arc == ("B", "C")
 
-    # The binary line has one unit although its capacity limit allows more
     @test [l.name for l in network.unit_lines] == ["ba_units_unit_1", "ba_units_unit_2", "ba_units_unit_3", "cd_binary_unit_1"]
     @test all(l.arc == ("B", "A") for l in network.unit_lines[1:3])
     @test [l.unit_size for l in network.unit_lines] == [100.0, 100.0, 100.0, 200.0]
@@ -366,7 +360,6 @@ end
         "ba_units_unit_3",
         "cd_binary_unit_1",
     ]
-    # The unit lines run B to A
     for node in ptdf.axes[1], unit in ("ba_units_unit_1", "ba_units_unit_3")
         @test ptdf[unit, node] ≈ -ptdf["A_B", node]
     end
@@ -376,7 +369,6 @@ end
     @test_throws ErrorException _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (max_capacity=1e8,)),
     ])
-    # PSIP rejects a line with a non-positive unit size when it is added to the portfolio
     @test_logs (:error, r"unit size must be finite and positive") match_mode = :any @test_throws IS.InvalidValue _ptdf_network_data([
         ("ab", "A", "B", IntegerInvestment, (unit_size=0.0,)),
     ])
@@ -384,8 +376,6 @@ end
         ("ab_existing", "A", "B", ContinuousInvestment, (;)),
         ("ab_new", "A", "B", ContinuousInvestment, (reactance=0.2,)),
     ])
-    # Susceptance per MW of rating: the existing capacity, or the maximum capacity of a line
-    # without one, whatever the unit size
     sys = build_system(PSITestSystems, "c_sys5_re")
     set_units_base_system!(sys, "NATURAL_UNITS")
     rating = PSY.get_rating(PSY.get_component(PSY.Line, sys, "1"))
@@ -407,7 +397,6 @@ end
     end
     @test !any(occursin("susceptance per MW", string(l.message)) for l in logs)
 
-    # Only HVDC and zonal links model losses
     @test_throws ArgumentError TechnologyModel(
         PTDF_LINE_TYPE,
         ContinuousInvestment,
@@ -430,7 +419,6 @@ end
 
 # Corridors A-B, B-C, C-D and A-C, a unit line D-A and a new corridor B-D
 @testset "Repeated PTDF branch names" begin
-    # The new corridor C-D is named like the merged corridor A-B
     lines = [
         ("ab_existing", "A", "B", ContinuousInvestment, (;)),
         ("A_B", "C", "D", ContinuousInvestment, (;)),
@@ -465,21 +453,17 @@ end
         @test bounds[name] ≈ susceptance * distance[ix[arc[1]], ix[arc[2]]]
     end
 
-    # Iterative monitoring starts with no monitored corridors but limits them all in the end
     iterative, _ = _ptdf_network_data(lines; monitor_iteratively=true)
     @test isempty(iterative.monitored)
     @test PSIN._virtual_transaction_bounds(iterative, portfolio) == bounds
 
-    # Only the A-B corridor is monitored, so unlimited corridors join the ends of the
-    # candidates and no bound holds
     partial, _ = _ptdf_network_data(lines; monitored=["A_B"])
     @test partial.limited == Set(["A_B"])
-    @test_throws r"bd_new .* Monitor the corridors \[\"B_C\", \"C_D\"\]" PSIN._virtual_transaction_bounds(
+    @test_throws r"bd_new .* monitor the corridors .*B_C.*C_D" PSIN._virtual_transaction_bounds(
         partial,
         portfolio,
     )
 
-    # C and D are only joined by candidates, so the sum over all limited branches is used
     candidates = [
         ("ab_existing", "A", "B", ContinuousInvestment, (;)),
         ("cd_new", "C", "D", ContinuousInvestment, (;)),
@@ -569,8 +553,7 @@ end
           objectives[BasicDispatch, NodalBalanceModel]
 end
 
-# A triangle of existing lines with different reactances: the cheap generator at n1, the
-# expensive one at n2, and demand at n2 and n3. The n1-n2 line is limited to 100 MW.
+# Cheap generator at n1, expensive at n2, demand at n2 and n3; n1-n2 is limited to 100 MW
 const TRIANGLE_LINES = [
     ("l12", "n1", "n2", 0.1, "1"),
     ("l23", "n2", "n3", 0.2, "4"),
@@ -655,14 +638,12 @@ end
         )
     end
 
-    # The transport model ignores KVL, so it is cheaper
     nodal_objective = _solved_objective(_triangle_model(NodalBalanceModel))
     @test nodal_objective < ptdf_objective * (1 - 1e-3)
 end
 
-# A ring of existing lines n1-n2-n3-n4 (n1-n2 limited to 100 MW, the others to 2000 MW), two
-# candidate diagonals that interact, and a candidate to n5, which has no other line. The
-# cheap generator is at n1, the expensive one at n2, wind at n5 and demand at n2 and n4.
+# Ring n1-n4 (n1-n2 limited to 100 MW), two interacting candidate diagonals and a candidate
+# to n5; cheap generator at n1, expensive at n2, wind at n5, demand at n2 and n4
 const RING_LINES = [
     ("r12", "n1", "n2", 0.1, "1"),
     ("r23", "n2", "n3", 0.2, "4"),
@@ -708,7 +689,6 @@ function _ring_model(
     return m
 end
 
-# Expected PTDF branches (name, arc, reactance) of the lines
 function _ptdf_branches(lines, discrete_lines=[])
     branches = Tuple{String, Tuple{String, String}, Float64}[]
     for (name, from, to, x, device) in lines
@@ -727,9 +707,6 @@ function _ptdf_branches(lines, discrete_lines=[])
     return branches
 end
 
-# Checks KCL and KVL for the branches in service (all lines at 230 kV), and that the other
-# branches carry no flow. `in_service` are always in service, and `candidates` when their
-# built binary is 1 in the investment period of the time step.
 function _test_dc_power_flow(container, branches, in_service; candidates=String[])
     flow = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
     injection =
@@ -783,7 +760,6 @@ end
     @test isapprox(_solved_objective(with_candidates), ring_objective; rtol=1e-6)
 
     container = PSIN.get_optimization_container(with_candidates)
-    # The built binary of a corridor without capacity may still be 1
     capacity = PSIN.get_expression(
         container,
         PSIN.CumulativeCapacity(),
@@ -823,7 +799,6 @@ end
         JuMP.value.(PSIN.get_variable(container, BranchBuiltVariable(), PSIP.Portfolio),)
     @test built["r45", 1] > 0.5
     @test any(built[c, 1] > 0.5 for c in ("d13", "d24"))
-    # A built binary alone does not mean capacity was built
     capacity =
         JuMP.value.(
             PSIN.get_expression(
@@ -851,9 +826,7 @@ end
     end
 end
 
-# Two nodes joined by an existing 100 MW line of reactance 0.1 and an integer candidate of
-# two 100 MW units of reactance 0.2. The cheap generator is at Node_1 and the expensive one
-# and most of the demand at Node_2, so the corridor is congested.
+# Existing 100 MW line (x = 0.1) and an integer candidate of two 100 MW units (x = 0.2)
 @testset "Unit lines share the corridor flow by susceptance" begin
     discrete_lines = [("units", "Node_1", "Node_2", 0.2, IntegerInvestment, 100.0, 200.0)]
     m = _nodal_test_model(
@@ -894,12 +867,10 @@ end
         candidates=["units_unit_1", "units_unit_2"],
     )
     for t in axes(flow, 2)
-        # Each unit has half the susceptance of the existing line
         for unit in ("units_unit_1", "units_unit_2")
             @test isapprox(flow[unit, t], 0.5 * flow["Node_1_Node_2", t]; atol=1e-6)
         end
     end
-    # The existing line reaches its limit first: at most 200 MW, not 300
     transfer = [
         flow["Node_1_Node_2", t] + flow["units_unit_1", t] + flow["units_unit_2", t] for
         t in axes(flow, 2)
@@ -943,8 +914,7 @@ end
     )
 end
 
-# An existing 800 MW line and an integer candidate of two 1000 MW units with twice its
-# susceptance: one unit is enough for the 2030 transfers and both are needed in 2035
+# Existing 800 MW line and an integer candidate of two 1000 MW units with twice its susceptance
 @testset "Integer units are built in order" begin
     discrete_lines =
         [("units", "Node_1", "Node_2", 0.05, IntegerInvestment, 1000.0, 2000.0)]
@@ -979,8 +949,6 @@ end
     )
 end
 
-# Two candidates to n5, which has no existing line: the unbuilt one must cancel the flow of
-# the built one, so its big-M cannot assume the corridor carries nothing
 @testset "Candidates to a node without existing lines" begin
     r45 = ("r45", "n4", "n5", 0.1, nothing)
     r35 = ("r35", "n3", "n5", 0.2, nothing)
@@ -1041,13 +1009,11 @@ end
     end
     @test dropped > 0
     _solved_objective(m)
-    # Reported flows use the whole PTDF
     flow = PSIN.get_expression(container, PTDFBranchFlow(), PSIP.Portfolio)
     model_flow = JuMP.value.(flow)
     reported = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
     @test maximum(abs.(model_flow.data .- reported[axes(model_flow, 1), :].data)) > 1.0
 
-    # Virtual branches keep every entry
     ring = _ring_model(
         [RING_LINES; RING_CANDIDATES];
         attributes=Dict{String, Any}("relative_tol" => 0.99),
@@ -1102,7 +1068,6 @@ end
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     @test size(get_monitoring_log(m), 1) == 1
     @test last(get_monitoring_log(m).overloaded) > 0
-    # The cap stops the corridors from being added
     @test only(get_monitoring_log(m).added) == 0
     @test !get_monitoring_converged(m)
     transport = _nodal_test_model(
@@ -1127,7 +1092,6 @@ end
     template = PSIN.get_template(iterative)
     @test !haskey(PSIN.get_transport_model(template).attributes, "monitored")
 
-    # A model built from the same template monitors every corridor
     m = InvestmentModel(
         template,
         SingleInstanceSolve,
@@ -1169,7 +1133,6 @@ end
     )
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
-    # Exporting the problem needs an optimizer in the settings
     @test solve!(m; export_optimization_problem=false) ==
           PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     @test isapprox(JuMP.objective_value(PSIN.get_jump_model(m)), full_objective; rtol=1e-6)
@@ -1205,7 +1168,6 @@ end
     @test solve!(m; console_level=Logging.AboveMaxLevel) == PSIN.RunStatus.FAILED
     @test PSIN.is_milp(PSIN.get_optimization_container(m))
     @test JuMP.get_attribute(jump_model, MOI.RelativeGapTolerance()) == gap
-    # Neither the results nor the log of the first solve are left
     @test isempty(PSIN.get_store(m))
     @test size(get_monitoring_log(m), 1) == 0
     @test !get_monitoring_converged(m)
@@ -1222,7 +1184,6 @@ end
             Dict{String, Any}("relaxed_screening" => false, "screening_mip_gap" => 0.05),
             "screening gap",
         ),
-        # The last solve is a final one even when the rounds run out while screening
         (Dict{String, Any}("max_iterations" => 0), "relaxed"),
     )
         m = _ring_model(
@@ -1262,7 +1223,6 @@ end
 @testset "Unmonitored corridors" begin
     monitored = _triangle_model(NodalPTDFModel)
     monitored_objective = _solved_objective(monitored)
-    # Leaves out the n1-n2 corridor
     m = _triangle_model(
         NodalPTDFModel;
         attributes=Dict{String, Any}("monitored" => ["l23", "l13"]),
@@ -1297,8 +1257,6 @@ end
     ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
 end
 
-# A congested corridor with an existing line, a continuous candidate running the other way
-# and an integer candidate
 @testset "Line flows in a merged corridor" begin
     lines = [
         ("existing", "Node_1", "Node_2", 0.1, "1"),
@@ -1345,7 +1303,6 @@ end
         t in slices
     )
     for t in axes(flow, 2)
-        # The candidate built the other way has the opposite sign
         @test line_flow["existing", t] - line_flow["expansion", t] ≈
               flow["Node_1_Node_2", t]
         @test line_flow["existing", t] / capacity["existing", period[t]] ≈
@@ -1357,14 +1314,11 @@ end
     @test sort(unique(results.name)) == ["existing", "expansion", "units"]
 end
 
-# Lines below 38 kV are dispatched as transport links outside the PTDF
 @testset "Lines below the minimum voltage" begin
     min_voltage = Dict{String, Any}("min_voltage" => 38.0)
     nodal_objective = _solved_objective(_triangle_model(NodalBalanceModel))
     ptdf_objective = _solved_objective(_triangle_model(NodalPTDFModel))
 
-    # Without l12 the PTDF lines form a tree, so KVL no longer binds; l13 at exactly the
-    # minimum voltage stays in the PTDF
     m = _triangle_model(
         NodalPTDFModel;
         attributes=min_voltage,
@@ -1386,7 +1340,6 @@ end
     @test objective < ptdf_objective * (1 - 1e-3)
     @test maximum(abs.(JuMP.value.(line_flow["l12", :]))) <= 100.0 + 1e-6
 
-    # n1 is only reached by lines below the minimum voltage, so it is its own island
     m = _triangle_model(
         NodalPTDFModel;
         attributes=min_voltage,
@@ -1397,7 +1350,6 @@ end
     @test length(axes(balance, 1)) == 2
     @test isapprox(_solved_objective(m), nodal_objective; rtol=1e-6)
 
-    # A line below the minimum voltage cannot be monitored
     m = _nodal_test_model(
         NodalPTDFModel;
         nodes=["Node_1", "Node_2"],

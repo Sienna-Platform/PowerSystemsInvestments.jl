@@ -1,4 +1,3 @@
-# Transport technologies whose flow is controlled directly
 const ControllableTransportTechnology =
     Union{PSIP.AggregateTransportTechnology, PSIP.NodalHVDCTransportTechnology}
 
@@ -350,7 +349,6 @@ function add_constraints!(
     return
 end
 
-# Maximum cumulative capacity
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
