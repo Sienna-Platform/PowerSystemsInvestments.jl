@@ -13,9 +13,6 @@ function next_region_id(portfolio::PSIP.Portfolio)
     return maximum(PSIP.get_id(r) for r in regions; init=0) + 1
 end
 
-# Single region model of the 2-zone portfolio in which the thermal technologies use the given
-# operation formulation. The keyword arguments that are given replace the data of
-# "expensive_thermal".
 function thermal_test_model(
     operation_formulation;
     operation_cost=nothing,

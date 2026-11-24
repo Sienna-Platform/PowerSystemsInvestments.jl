@@ -1,4 +1,3 @@
-# Containers for the operation costs of a technology, one entry per variable name and time step
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -21,8 +20,6 @@ function add_expression!(
     return
 end
 
-# Containers for the investment costs of a technology, one entry per variable name and
-# investment period
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -45,8 +42,7 @@ function add_expression!(
     return
 end
 
-# Adds the cost of one of the variables of a technology to its cost expression, if the
-# formulation creates that expression
+# Only formulations that create the cost expression report to it
 function add_to_expression!(
     container::SingleOptimizationContainer,
     ::Type{S},
