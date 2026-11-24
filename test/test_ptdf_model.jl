@@ -1357,14 +1357,14 @@ end
     @test sort(unique(results.name)) == ["existing", "expansion", "units"]
 end
 
-# The area of the reserve margin is n3, the node of demand2: l13 and l23 enter it and l12 is
-# fully outside
+# The area of the reserve margin is n3, the node of demand2: l13 and l23 enter it, l12 is
+# fully outside, and expensive_thermal at n2 is outside
 @testset "Capacity reserve margin with PTDF flows" begin
     m = _nodal_test_model(
         NodalPTDFModel;
         nodes=["n1", "n2", "n3"],
         placement=Dict(
-            "cheap_thermal" => "n1",
+            "cheap_thermal" => "n3",
             "expensive_thermal" => "n2",
             "wind" => "n3",
             "demand1" => "n2",
@@ -1389,6 +1389,7 @@ end
     demand_type = PSIP.DemandRequirement{PSY.PowerLoad}
     for (type, name) in (
         (thermal_type, "cheap_thermal"),
+        (thermal_type, "expensive_thermal"),
         (demand_type, "demand2"),
         (PTDF_LINE_TYPE, "l12"),
         (PTDF_LINE_TYPE, "l13"),
@@ -1401,6 +1402,11 @@ end
         requirement;
         warn=true,
     )
+    # expensive_thermal, at n2, does not contribute
+    for (name, contributes) in (("cheap_thermal", true), ("expensive_thermal", false))
+        technology = PSIP.get_technology(thermal_type, p, name)
+        @test !isempty(PSIN._names_in_area(technology, Set(["n3"]))) == contributes
+    end
     set_requirement_model!(
         PSIN.get_template(m),
         ["reserve_margin"],

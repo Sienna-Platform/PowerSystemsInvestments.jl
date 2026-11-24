@@ -813,11 +813,24 @@ _constraint_surplus(constraint) =
             PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, "demand2"),
             "ops_demand",
         )
+        # Only the resources in Zone_2 contribute
+        in_area(type, name) =
+            PSIP.get_name.(PSIP.get_region(PSIP.get_technology(type, p, name))) ==
+            ["Zone_2"]
+        thermal_in_area = sum(
+            thermal[name, 1] for name in ("cheap_thermal", "expensive_thermal") if
+            in_area(CARBON_THERMAL_TYPE, name);
+            init=0.0,
+        )
+        wind_in_area = in_area(wind_type, "wind")
+        @test !all(
+            in_area(CARBON_THERMAL_TYPE, name) for
+            name in ("cheap_thermal", "expensive_thermal")
+        ) || !wind_in_area
         for t in 1:24
             expected =
-                thermal["cheap_thermal", 1] +
-                thermal["expensive_thermal", 1] +
-                capacity_factor[t] * capacity(wind_type)["wind", 1] +
+                thermal_in_area +
+                wind_in_area * capacity_factor[t] * capacity(wind_type)["wind", 1] +
                 inflow[t] - 1.3 * demand[t]
             @test _constraint_surplus(constraints["reserve_margin", t]) ≈ expected atol =
                 1e-4

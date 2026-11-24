@@ -6,13 +6,33 @@ get_default_attributes(
     ::Type{RequirementCapacityReserveMargin},
 ) = Dict{String, Any}("slack_penalty" => REQUIREMENT_SLACK_PENALTY)
 
+# Area of a capacity reserve margin: everything is in the area of a single region model
+_reserve_area(p::PSIP.Portfolio, requirement::PSIP.Requirement, ::TransportModel) =
+    _requirement_area(p, requirement)
+_reserve_area(
+    ::PSIP.Portfolio,
+    ::PSIP.Requirement,
+    ::TransportModel{SingleRegionBalanceModel},
+) = nothing
+
+# Variables of a resource located in the area of a capacity reserve margin (a supply
+# technology in several regions has one per region)
+_names_in_area(technology::PSIP.Technology, ::Nothing) = get_variable_names(technology)
+_names_in_area(technology::PSIP.Technology, area::Set{String}) = [
+    name for (name, region) in
+    zip(get_variable_names(technology), PSIP.get_name.(PSIP.get_region(technology))) if
+    region in area
+]
+
 # Capacity a technology provides to a capacity reserve margin in each time step of a
-# representative period: supply technologies their installed capacity
+# representative period from its variables `names`: supply technologies their installed
+# capacity
 function _add_reserve_contribution!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
     ::Type{D},
-    technology::PSIP.SupplyTechnology,
+    ::PSIP.SupplyTechnology,
+    names::Vector{String},
     ::OperationsTechnologyFormulation,
     investment_meta::String,
     ::String,
@@ -21,9 +41,7 @@ function _add_reserve_contribution!(
     time_mapping = get_time_mapping(container)
     period = get_inverse_invest_mapping(time_mapping)[op_ix]
     capacity = get_expression(container, CumulativeCapacity(), D, investment_meta)
-    for t in get_consecutive_slices(time_mapping)[op_ix],
-        name in get_variable_names(technology)
-
+    for t in get_consecutive_slices(time_mapping)[op_ix], name in names
         JuMP.add_to_expression!(reserve[t], capacity[name, period])
     end
     return
@@ -35,6 +53,7 @@ function _add_reserve_contribution!(
     container::SingleOptimizationContainer,
     ::Type{D},
     technology::PSIP.SupplyTechnology,
+    names::Vector{String},
     ::BasicDispatch,
     investment_meta::String,
     ::String,
@@ -46,7 +65,7 @@ function _add_reserve_contribution!(
     time_slices = get_consecutive_slices(time_mapping)[op_ix]
     time_series = retrieve_ops_time_series(technology, op_ix, time_mapping)
     capacity_factors = TimeSeries.values(time_series.data)
-    for (ix, t) in enumerate(time_slices), name in get_variable_names(technology)
+    for (ix, t) in enumerate(time_slices), name in names
         JuMP.add_to_expression!(reserve[t], capacity_factors[ix], capacity[name, period])
     end
     return
@@ -57,16 +76,16 @@ function _add_reserve_contribution!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
     ::Type{D},
-    technology::Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology},
+    ::Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology},
+    names::Vector{String},
     ::OperationsTechnologyFormulation,
     ::String,
     operations_meta::String,
     op_ix::Int,
 ) where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
-    name = PSIP.get_name(technology)
     injection = get_variable(container, ActiveOutPowerVariable(), D, operations_meta)
     withdrawal = get_variable(container, ActiveInPowerVariable(), D, operations_meta)
-    for t in get_consecutive_slices(get_time_mapping(container))[op_ix]
+    for t in get_consecutive_slices(get_time_mapping(container))[op_ix], name in names
         JuMP.add_to_expression!(reserve[t], injection[name, t])
         JuMP.add_to_expression!(reserve[t], -1.0, withdrawal[name, t])
     end
@@ -271,6 +290,13 @@ function construct_requirement!(
         req = PSIP.get_requirement(T, p, name)
         _check_contributors(p, req, names_to_model_map; demands=true)
         _monitor_boundary_corridors!(transport_model, _boundary_lines(p, req; warn=true))
+        area = _reserve_area(p, req, transport_model)
+        outside = [
+            name for resource in _contributing_resources(p, req) for name in
+            setdiff(get_variable_names(resource), _names_in_area(resource, area))
+        ]
+        isempty(outside) ||
+            @warn "Resources $(join(outside, ", ")) attached to capacity reserve margin '$name' are outside its area (the regions of its demand technologies), so they do not contribute to it."
     end
     return
 end
@@ -369,7 +395,10 @@ function add_constraints!(
                 op_ix,
             )
         end
+        resource_area = _reserve_area(p, req, transport_model)
         for resource in _contributing_resources(p, req)
+            names_in_area = _names_in_area(resource, resource_area)
+            isempty(names_in_area) && continue
             tech_model = _contributor_model(names_to_model_map, req_name, resource)
             for op_ix in op_indexes
                 _add_reserve_contribution!(
@@ -377,6 +406,7 @@ function add_constraints!(
                     container,
                     get_technology_type(tech_model),
                     resource,
+                    names_in_area,
                     get_operations_formulation(tech_model)(),
                     string(get_investment_formulation(tech_model)),
                     string(get_operations_formulation(tech_model)),
