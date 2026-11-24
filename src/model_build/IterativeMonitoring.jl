@@ -112,8 +112,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
             rounds += 1
         end
 
-        # Duals of the last solve only. Those of a MIP re-solve it with its discrete
-        # variables fixed, which can change the network values.
+        # Duals of the last solve; those of a MIP re-solve it, which can change the flows
         if !isempty(get_duals(container))
             status, get_optimizer_stats(container).timed_calculate_dual_variables =
                 @timed calculate_dual_variables!(container, portfolio, milp)

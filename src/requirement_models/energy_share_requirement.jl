@@ -164,12 +164,13 @@ function add_constraints!(
     )
     for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
-        op_indexes = map_to_op[_target_investment_period(time_mapping, req)]
+        period = _target_investment_period(time_mapping, req)
+        op_indexes = map_to_op[period]
         lhs = JuMP.AffExpr(0.0)
         if get_use_slacks(model)
             cost =
                 get_attributes(model)["slack_penalty"] *
-                _target_period_cost_factor(container, req)
+                _period_cost_factor(container, period)
             _add_requirement_slack!(lhs, container, slacks, cost, req_name)
         end
         for op_ix in op_indexes

@@ -6,8 +6,7 @@ get_default_attributes(
     ::Type{RequirementCapacityReserveMargin},
 ) = Dict{String, Any}("slack_penalty" => REQUIREMENT_SLACK_PENALTY)
 
-# Area of a capacity reserve margin: the regions (or nodes) of its demand technologies, or
-# everything in a single region model
+# Regions (or nodes) of a reserve margin's demands; nothing (everything) in a single region
 _reserve_area(p::PSIP.Portfolio, requirement::PSIP.Requirement, ::TransportModel) = Set(
     PSIP.get_name(region) for d in _contributing_demands(p, requirement) for
     region in PSIP.get_region(d)
@@ -18,8 +17,7 @@ _reserve_area(
     ::TransportModel{SingleRegionBalanceModel},
 ) = nothing
 
-# Variables of a resource located in the area of a capacity reserve margin (a supply
-# technology in several regions has one per region)
+# Variables of a resource in the area (one per region for supply in several regions)
 _names_in_area(technology::PSIP.Technology, ::Nothing) = get_variable_names(technology)
 _names_in_area(technology::PSIP.Technology, area::Set{String}) = [
     name for (name, region) in
@@ -27,23 +25,19 @@ _names_in_area(technology::PSIP.Technology, area::Set{String}) = [
     region in area
 ]
 
-# Capacity a technology provides to a capacity reserve margin in each time step of a
-# representative period from its variables `names`: supply technologies their installed
-# capacity
+# Reserve from the variables `names` of a technology: supply its installed capacity
 function _add_reserve_contribution!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
-    ::Type{D},
     ::PSIP.SupplyTechnology,
     names::Vector{String},
-    ::OperationsTechnologyFormulation,
-    investment_meta::String,
-    ::String,
+    tech_model::TechnologyModel{D},
     op_ix::Int,
 ) where {D <: PSIP.SupplyTechnology}
     time_mapping = get_time_mapping(container)
     period = get_inverse_invest_mapping(time_mapping)[op_ix]
-    capacity = get_expression(container, CumulativeCapacity(), D, investment_meta)
+    meta = string(get_investment_formulation(tech_model))
+    capacity = get_expression(container, CumulativeCapacity(), D, meta)
     for t in get_consecutive_slices(time_mapping)[op_ix], name in names
         JuMP.add_to_expression!(reserve[t], capacity[name, period])
     end
@@ -54,21 +48,18 @@ end
 function _add_reserve_contribution!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.SupplyTechnology,
     names::Vector{String},
-    ::BasicDispatch,
-    investment_meta::String,
-    ::String,
+    tech_model::TechnologyModel{D, <:Any, BasicDispatch},
     op_ix::Int,
 ) where {D <: PSIP.SupplyTechnology{<:Union{PSY.RenewableDispatch, PSY.HydroDispatch}}}
     time_mapping = get_time_mapping(container)
     period = get_inverse_invest_mapping(time_mapping)[op_ix]
-    capacity = get_expression(container, CumulativeCapacity(), D, investment_meta)
-    time_slices = get_consecutive_slices(time_mapping)[op_ix]
+    meta = string(get_investment_formulation(tech_model))
+    capacity = get_expression(container, CumulativeCapacity(), D, meta)
     time_series = retrieve_ops_time_series(technology, op_ix, time_mapping)
     capacity_factors = TimeSeries.values(time_series.data)
-    for (ix, t) in enumerate(time_slices), name in names
+    for (ix, t) in enumerate(get_consecutive_slices(time_mapping)[op_ix]), name in names
         JuMP.add_to_expression!(reserve[t], capacity_factors[ix], capacity[name, period])
     end
     return
@@ -78,25 +69,18 @@ end
 function _add_reserve_contribution!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
-    ::Type{D},
     ::Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology},
     names::Vector{String},
-    ::OperationsTechnologyFormulation,
-    ::String,
-    operations_meta::String,
+    tech_model::TechnologyModel,
     op_ix::Int,
-) where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
-    injection = get_variable(container, ActiveOutPowerVariable(), D, operations_meta)
-    withdrawal = get_variable(container, ActiveInPowerVariable(), D, operations_meta)
+)
     for t in get_consecutive_slices(get_time_mapping(container))[op_ix], name in names
-        JuMP.add_to_expression!(reserve[t], injection[name, t])
-        JuMP.add_to_expression!(reserve[t], -1.0, withdrawal[name, t])
+        _add_net_injection!(reserve[t], container, tech_model, name, t)
     end
     return
 end
 
-# Lines attached to a capacity reserve margin that cross the boundary of its area, and whether
-# each ends inside it. The other lines do not contribute.
+# Attached lines crossing the area's boundary, with whether each ends inside it
 function _boundary_lines(
     p::PSIP.Portfolio,
     requirement::PSIP.Requirement,
@@ -142,14 +126,12 @@ function _line_branches(network::PTDFNetworkData, line::PSIP.NodalACTransportTec
     ]
 end
 
-# Lines dispatched as links outside the PTDF. An AC line in the PTDF without branches (no unit
-# can be built) carries no flow.
+# Lines dispatched outside the PTDF (an AC line in it without branches carries no flow)
 _is_link(::PTDFNetworkData, ::PSIP.TransmissionTechnology) = true
 _is_link(network::PTDFNetworkData, line::PSIP.NodalACTransportTechnology) =
     PSIP.get_name(line) in network.transport_lines
 
-# Under the PTDF model, the corridors of the boundary lines are monitored so that their flows
-# are in the model
+# Monitors the corridors of the boundary lines so that their flows are in the model
 _monitor_boundary_corridors!(::TransportModel, ::Vector) = nothing
 function _monitor_boundary_corridors!(
     transport_model::TransportModel{NodalPTDFModel},
@@ -165,18 +147,16 @@ function _monitor_boundary_corridors!(
 end
 
 # Net flow into the area of a controlled line: its flow towards the area
-function _add_line_inflow!(
+function _add_link_inflow!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
-    ::Type{D},
     line::PSIP.TransmissionTechnology,
-    ::BasicDispatch,
     into_area::Bool,
-    ::String,
-    operations_meta::String,
+    tech_model::TechnologyModel{D, <:Any, BasicDispatch},
     op_ix::Int,
 ) where {D <: PSIP.TransmissionTechnology}
-    flow = get_variable(container, FlowActivePowerVariable(), D, operations_meta)
+    meta = string(get_operations_formulation(tech_model))
+    flow = get_variable(container, FlowActivePowerVariable(), D, meta)
     name = PSIP.get_name(line)
     for t in get_consecutive_slices(get_time_mapping(container))[op_ix]
         JuMP.add_to_expression!(reserve[t], into_area ? 1.0 : -1.0, flow[name, t])
@@ -184,24 +164,22 @@ function _add_line_inflow!(
     return
 end
 
-# With losses, the flow towards the area arrives net of its losses, and the terminal inside
-# the area bears half the constant losses
-function _add_line_inflow!(
+# Inflow net of its losses; the terminal in the area bears half the constant losses
+function _add_link_inflow!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
-    ::Type{D},
     line::PSIP.TransmissionTechnology,
-    ::BasicDispatchWithLosses,
     into_area::Bool,
-    investment_meta::String,
-    operations_meta::String,
+    tech_model::TechnologyModel{D, <:Any, BasicDispatchWithLosses},
     op_ix::Int,
 ) where {D <: ControllableTransportTechnology}
     time_mapping = get_time_mapping(container)
     period = get_inverse_invest_mapping(time_mapping)[op_ix]
-    from_to = get_variable(container, FlowActivePowerFromToVariable(), D, operations_meta)
-    to_from = get_variable(container, FlowActivePowerToFromVariable(), D, operations_meta)
+    meta = string(get_operations_formulation(tech_model))
+    from_to = get_variable(container, FlowActivePowerFromToVariable(), D, meta)
+    to_from = get_variable(container, FlowActivePowerToFromVariable(), D, meta)
     toward, away = into_area ? (from_to, to_from) : (to_from, from_to)
+    investment_meta = string(get_investment_formulation(tech_model))
     capacity = get_expression(container, CumulativeCapacity(), D, investment_meta)
     rate, constant = _loss_terms(line)
     name = PSIP.get_name(line)
@@ -213,7 +191,7 @@ function _add_line_inflow!(
     return
 end
 
-function _add_controlled_line_inflows!(
+function _add_link_inflows!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
     lines::Vector,
@@ -223,22 +201,12 @@ function _add_controlled_line_inflows!(
 )
     for (line, into_area) in lines
         tech_model = _contributor_model(names_to_model_map, req_name, line)
-        _add_line_inflow!(
-            reserve,
-            container,
-            get_technology_type(tech_model),
-            line,
-            get_operations_formulation(tech_model)(),
-            into_area,
-            string(get_investment_formulation(tech_model)),
-            string(get_operations_formulation(tech_model)),
-            op_ix,
-        )
+        _add_link_inflow!(reserve, container, line, into_area, tech_model, op_ix)
     end
     return
 end
 
-_add_line_inflows!(
+_add_boundary_inflows!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
     lines::Vector,
@@ -247,18 +215,10 @@ _add_line_inflows!(
     ::TransportModel,
     ::Union{Nothing, Set{String}},
     op_ix::Int,
-) = _add_controlled_line_inflows!(
-    reserve,
-    container,
-    lines,
-    names_to_model_map,
-    req_name,
-    op_ix,
-)
+) = _add_link_inflows!(reserve, container, lines, names_to_model_map, req_name, op_ix)
 
-# Under the PTDF model, AC lines contribute the flows of their branches, each branch once even
-# when several of its lines are attached
-function _add_line_inflows!(
+# AC lines contribute the flows of their PTDF branches, each branch once
+function _add_boundary_inflows!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
     lines::Vector,
@@ -282,14 +242,7 @@ function _add_line_inflows!(
         )
     end
     controlled = [(line, into) for (line, into) in lines if _is_link(network, line)]
-    _add_controlled_line_inflows!(
-        reserve,
-        container,
-        controlled,
-        names_to_model_map,
-        req_name,
-        op_ix,
-    )
+    _add_link_inflows!(reserve, container, controlled, names_to_model_map, req_name, op_ix)
     return
 end
 
@@ -355,9 +308,7 @@ function construct_requirement!(
     return
 end
 
-# In each time step of the target period: contributions + slack >=
-# (1 + capacity_reserve_fraction) * demand. Other time steps have no constraint, and their
-# slacks are fixed at 0.
+# In each step of the target period: contributions + slack >= (1 + fraction) * demand
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::CapacityReserveMarginConstraint,
@@ -385,7 +336,8 @@ function add_constraints!(
 
     for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
-        op_indexes = map_to_op[_target_investment_period(time_mapping, req)]
+        period = _target_investment_period(time_mapping, req)
+        op_indexes = map_to_op[period]
         reserve = Dict(
             t => JuMP.AffExpr(0.0) for op_ix in op_indexes for
             t in consecutive_slices[op_ix]
@@ -393,7 +345,7 @@ function add_constraints!(
         area = _reserve_area(p, req, transport_model)
         lines = _boundary_lines(p, req, area)
         for op_ix in op_indexes
-            _add_line_inflows!(
+            _add_boundary_inflows!(
                 reserve,
                 container,
                 lines,
@@ -412,12 +364,9 @@ function add_constraints!(
                 _add_reserve_contribution!(
                     reserve,
                     container,
-                    get_technology_type(tech_model),
                     resource,
                     names_in_area,
-                    get_operations_formulation(tech_model)(),
-                    string(get_investment_formulation(tech_model)),
-                    string(get_operations_formulation(tech_model)),
+                    tech_model,
                     op_ix,
                 )
             end
@@ -425,7 +374,7 @@ function add_constraints!(
         if get_use_slacks(model)
             cost_factor =
                 get_attributes(model)["slack_penalty"] *
-                _target_period_cost_factor(container, req)
+                _period_cost_factor(container, period)
             for op_ix in op_indexes, t in consecutive_slices[op_ix]
                 cost = cost_factor * get_time_step_weight(container, op_ix)
                 _add_requirement_slack!(reserve[t], container, slacks, cost, req_name, t)

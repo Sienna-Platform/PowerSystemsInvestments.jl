@@ -16,9 +16,6 @@ struct WeightedEnergyGeneration <: OperationsExpressionType end
 struct WeightedEnergyDemand <: OperationsExpressionType end
 struct WeightedEnergyShareGeneration <: OperationsExpressionType end
 struct WeightedEnergyShareDemand <: OperationsExpressionType end
-"""
-Yearly emissions (tCO2) of a carbon requirement's technologies in each representative period
-"""
 struct WeightedCarbonEmissions <: OperationsExpressionType end
 
 struct CapacityAdditions <: InvestmentExpressionType end

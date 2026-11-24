@@ -4,38 +4,29 @@ _supported_requirement_formulations(::Type{<:PSIP.HourlyMatching}) =
 get_default_attributes(::Type{<:PSIP.HourlyMatching}, ::Type{RequirementHourlyMatching}) =
     Dict{String, Any}("slack_penalty" => REQUIREMENT_SLACK_PENALTY)
 
-# Output of a resource matched to the demand at a time step: supply output, and the net
-# injection of storage and co-located technologies (their charging counts against them)
+# Supply output, or the net injection of storage and co-located technologies, at step t
 function _add_matched_output!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.SupplyTechnology,
-    operations_meta::String,
+    tech_model::TechnologyModel{D},
     t::Int,
 ) where {D <: PSIP.SupplyTechnology}
-    output = get_variable(container, ActivePowerVariable(), D, operations_meta)
+    meta = string(get_operations_formulation(tech_model))
+    output = get_variable(container, ActivePowerVariable(), D, meta)
     for name in get_variable_names(technology)
         JuMP.add_to_expression!(expression, output[name, t])
     end
     return
 end
 
-function _add_matched_output!(
+_add_matched_output!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology},
-    operations_meta::String,
+    tech_model::TechnologyModel,
     t::Int,
-) where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
-    name = PSIP.get_name(technology)
-    injection = get_variable(container, ActiveOutPowerVariable(), D, operations_meta)
-    withdrawal = get_variable(container, ActiveInPowerVariable(), D, operations_meta)
-    JuMP.add_to_expression!(expression, injection[name, t])
-    JuMP.add_to_expression!(expression, -1.0, withdrawal[name, t])
-    return
-end
+) = _add_net_injection!(expression, container, tech_model, PSIP.get_name(technology), t)
 
 function construct_requirement!(
     ::SingleOptimizationContainer,
@@ -94,7 +85,7 @@ function add_constraints!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     operational_indexes = get_operational_indexes(time_mapping)
-    time_steps = [t for op_ix in operational_indexes for t in consecutive_slices[op_ix]]
+    time_steps = get_operational_time_steps(time_mapping)
     jump_model = get_jump_model(container)
     con = add_constraints_container!(
         container,
@@ -123,14 +114,7 @@ function add_constraints!(
             for (ix, t) in enumerate(time_slices)
                 output = JuMP.AffExpr(0.0)
                 for (resource, tech_model) in zip(resources, resource_models)
-                    _add_matched_output!(
-                        output,
-                        container,
-                        get_technology_type(tech_model),
-                        resource,
-                        string(get_operations_formulation(tech_model)),
-                        t,
-                    )
+                    _add_matched_output!(output, container, resource, tech_model, t)
                 end
                 if get_use_slacks(model)
                     _add_requirement_slack!(

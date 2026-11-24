@@ -63,14 +63,6 @@ function _period_cost_factor(container::SingleOptimizationContainer, period::Int
            (1.0 + discount_rate)^(get_base_year(container) - Dates.year(first(inv_tuple)))
 end
 
-_target_period_cost_factor(
-    container::SingleOptimizationContainer,
-    requirement::PSIP.Requirement,
-) = _period_cost_factor(
-    container,
-    _target_investment_period(get_time_mapping(container), requirement),
-)
-
 # Warns that attached technologies of a kind do not contribute to a requirement
 function _warn_ignored_contributors(
     technologies::Vector,
@@ -126,8 +118,7 @@ function _add_requirement_slack!(
     return
 end
 
-# Stores the duals of the constraints listed by the requirement models. Constraints have the
-# formulation as meta when their requirement type has several formulations.
+# Constraints have the formulation as meta when their requirement type has several
 function _add_requirement_duals!(
     container::SingleOptimizationContainer,
     requirement_map::Dict{Tuple{Type, Type}, Vector{String}},
@@ -173,12 +164,12 @@ end
 # Weighted energy of a variable over the time steps of a representative period
 function _weighted_energy(
     container::SingleOptimizationContainer,
-    variable::T,
-    ::Type{D},
-    meta::String,
+    variable::VariableType,
+    tech_model::TechnologyModel{D},
     name::String,
     op_ix::Int,
-) where {T <: VariableType, D <: PSIP.Technology}
+) where {D <: PSIP.Technology}
+    meta = string(get_operations_formulation(tech_model))
     values = get_variable(container, variable, D, meta)
     slices = get_consecutive_slices(get_time_mapping(container))[op_ix]
     return get_time_step_weight(container, op_ix) * sum(values[name, t] for t in slices)
@@ -187,11 +178,11 @@ end
 function _add_eligible_generation!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.SupplyTechnology,
-    meta::String,
+    tech_model::TechnologyModel{D},
     op_ix::Int,
 ) where {D <: PSIP.SupplyTechnology}
+    meta = string(get_operations_formulation(tech_model))
     generation = get_expression(container, WeightedEnergyGeneration(), D, meta)
     for name in get_variable_names(technology)
         JuMP.add_to_expression!(expression, generation[name, op_ix])
@@ -202,18 +193,17 @@ end
 function _add_eligible_generation!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.ColocatedSupplyStorageTechnology,
-    meta::String,
+    tech_model::TechnologyModel,
     op_ix::Int,
-) where {D <: PSIP.ColocatedSupplyStorageTechnology}
+)
     name = PSIP.get_name(technology)
     efficiency = get_inverter_efficiency(technology)
     for variable in (ActivePowerWindVariable(), ActivePowerSolarVariable())
         JuMP.add_to_expression!(
             expression,
             efficiency,
-            _weighted_energy(container, variable, D, meta, name, op_ix),
+            _weighted_energy(container, variable, tech_model, name, op_ix),
         )
     end
     return
@@ -222,9 +212,8 @@ end
 _add_eligible_generation!(
     ::JuMP.AffExpr,
     ::SingleOptimizationContainer,
-    ::Type{<:PSIP.StorageTechnology},
     ::PSIP.StorageTechnology,
-    ::String,
+    ::TechnologyModel,
     ::Int,
 ) = nothing
 
@@ -232,9 +221,8 @@ _add_eligible_generation!(
 _add_storage_losses!(
     ::JuMP.AffExpr,
     ::SingleOptimizationContainer,
-    ::Type{<:PSIP.SupplyTechnology},
     ::PSIP.SupplyTechnology,
-    ::String,
+    ::TechnologyModel,
     ::Int,
 ) = nothing
 
@@ -242,18 +230,17 @@ _add_storage_losses!(
 function _add_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.StorageTechnology,
-    meta::String,
+    tech_model::TechnologyModel,
     op_ix::Int,
-) where {D <: PSIP.StorageTechnology}
+)
     name = PSIP.get_name(technology)
     for (variable, sign) in
         ((ActiveInPowerVariable(), 1.0), (ActiveOutPowerVariable(), -1.0))
         JuMP.add_to_expression!(
             expression,
             sign,
-            _weighted_energy(container, variable, D, meta, name, op_ix),
+            _weighted_energy(container, variable, tech_model, name, op_ix),
         )
     end
     return
@@ -263,11 +250,10 @@ end
 function _add_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
-    ::Type{D},
     technology::PSIP.ColocatedSupplyStorageTechnology,
-    meta::String,
+    tech_model::TechnologyModel,
     op_ix::Int,
-) where {D <: PSIP.ColocatedSupplyStorageTechnology}
+)
     name = PSIP.get_name(technology)
     efficiency = get_inverter_efficiency(technology)
     for (variable, coefficient) in (
@@ -277,9 +263,25 @@ function _add_storage_losses!(
         JuMP.add_to_expression!(
             expression,
             coefficient,
-            _weighted_energy(container, variable, D, meta, name, op_ix),
+            _weighted_energy(container, variable, tech_model, name, op_ix),
         )
     end
+    return
+end
+
+# Net injection (out - in) of a storage or co-located technology at time step t
+function _add_net_injection!(
+    expression::JuMP.AffExpr,
+    container::SingleOptimizationContainer,
+    tech_model::TechnologyModel{D},
+    name::String,
+    t::Int,
+) where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
+    meta = string(get_operations_formulation(tech_model))
+    injection = get_variable(container, ActiveOutPowerVariable(), D, meta)
+    withdrawal = get_variable(container, ActiveInPowerVariable(), D, meta)
+    JuMP.add_to_expression!(expression, injection[name, t])
+    JuMP.add_to_expression!(expression, -1.0, withdrawal[name, t])
     return
 end
 
@@ -295,20 +297,12 @@ function _add_eligible_generation!(
     req_name = PSIP.get_name(requirement)
     for resource in _contributing_resources(p, requirement)
         tech_model = _contributor_model(names_to_model_map, req_name, resource)
-        _add_eligible_generation!(
-            expression,
-            container,
-            get_technology_type(tech_model),
-            resource,
-            string(get_operations_formulation(tech_model)),
-            op_ix,
-        )
+        _add_eligible_generation!(expression, container, resource, tech_model, op_ix)
     end
     return
 end
 
-# Demand (MW) of the contributing demand technologies of a requirement in each time step of a
-# representative period
+# Summed demand (MW) of a requirement's demand technologies in a representative period
 function _requirement_demand(
     p::PSIP.Portfolio,
     requirement::PSIP.Requirement,
@@ -322,8 +316,7 @@ function _requirement_demand(
     return demand
 end
 
-# Weighted demand of the contributing demand technologies of a requirement, read from their
-# "ops_demand" time series, plus the losses of its contributing storage
+# Weighted demand of a requirement plus the losses of its contributing storage
 function _add_demand_and_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -340,14 +333,7 @@ function _add_demand_and_storage_losses!(
     req_name = PSIP.get_name(requirement)
     for resource in _contributing_resources(p, requirement)
         tech_model = _contributor_model(names_to_model_map, req_name, resource)
-        _add_storage_losses!(
-            expression,
-            container,
-            get_technology_type(tech_model),
-            resource,
-            string(get_operations_formulation(tech_model)),
-            op_ix,
-        )
+        _add_storage_losses!(expression, container, resource, tech_model, op_ix)
     end
     return
 end

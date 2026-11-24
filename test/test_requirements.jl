@@ -622,16 +622,31 @@ end
 end
 
 @testset "Carbon requirements need technologies with fuel curves" begin
-    p_5bus, _ = test_2_zone_portfolio()
+    m, _ = _energy_share_model(0.1)
+    p = PSIN.get_portfolio(m)
     requirement = _carbon_cap()
-    PSIP.add_requirement!(p_5bus, requirement)
+    PSIP.add_requirement!(p, requirement)
     PSIP.set_requirements!(
-        PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind"),
+        PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p, "wind"),
         [requirement],
     )
-    @test_throws r"has no available contributing technology with a fuel curve" PSIN._check_emitters(
-        p_5bus,
-        requirement,
+    @test_throws r"has no available contributing technology with a fuel curve" PSIN.construct_requirement!(
+        PSIN.get_optimization_container(m),
+        p,
+        ["carbon_cap"],
+        IS.Optimization.ArgumentConstructStage(),
+        PSIP.CarbonCaps,
+        RequirementCarbonCapMass,
+        PSIN.get_transport_model(PSIN.get_template(m)),
+        Dict{String, PSIN.TechnologyModel}(
+            "wind" => TechnologyModel(
+                PSIP.SupplyTechnology{PSY.RenewableDispatch},
+                ContinuousInvestment,
+                BasicDispatch,
+                BasicDispatchFeasibility,
+            ),
+        ),
+        PSIN.RequirementModel[],
     )
 end
 

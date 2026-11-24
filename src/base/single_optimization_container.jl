@@ -195,8 +195,7 @@ function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Po
     return
 end
 
-# Weights are per year: the period length is applied when costs are discounted, so weights
-# that include it would count operation costs more than once.
+# Weights are per year: the period length is applied when costs are discounted
 function check_operational_weights(
     time_mapping::TimeMapping,
     operational_weights::Vector{Float64},
@@ -715,33 +714,26 @@ function calculate_aux_variables!(
     return RunStatus.SUCCESSFULLY_FINALIZED
 end
 
-function _calculate_dual_variables_continous_model!(
+function _calculate_dual_variables_continuous_model!(
     container::SingleOptimizationContainer,
     ::PSIP.Portfolio,
 )
     constraints = get_constraints(container)
     for key in collect(keys(get_duals(container)))
-        container.duals[key] = _dual_values(constraints[key])
+        constraint = constraints[key]
+        # Entries without a constraint (e.g. outside a requirement's target period) stay NaN
+        values = DenseAxisArray(fill(NaN, size(constraint)), axes(constraint)...)
+        for i in eachindex(constraint.data)
+            if isassigned(constraint.data, i)
+                values.data[i] = JuMP.dual(constraint.data[i])
+            end
+        end
+        container.duals[key] = values
     end
     return RunStatus.SUCCESSFULLY_FINALIZED
 end
 
-# Entries of a container without a constraint (e.g. time steps outside a requirement's
-# target period) get NaN
-function _dual_values(constraints::DenseAxisArray; available=true)
-    values = DenseAxisArray(fill(NaN, size(constraints)), axes(constraints)...)
-    available || return values
-    for i in eachindex(constraints.data)
-        if isassigned(constraints.data, i)
-            values.data[i] = JuMP.dual(constraints.data[i])
-        end
-    end
-    return values
-end
-
-# The duals of a MIP are those of the LP with its discrete variables fixed at their solution.
-# The model stays fixed, so the solution can still be read, until the next solve. If that LP
-# fails, the MIP is solved again from its solution and the duals are NaN.
+# Duals of the LP with the discrete variables fixed, which stay fixed until the next solve
 function _calculate_dual_variables_discrete_model!(
     container::SingleOptimizationContainer,
     port::PSIP.Portfolio,
@@ -752,7 +744,7 @@ function _calculate_dual_variables_discrete_model!(
     container.unfix_discrete_variables = JuMP.fix_discrete_variables(jump_model)
     JuMP.optimize!(jump_model)
     if JuMP.dual_status(jump_model) == MOI.FEASIBLE_POINT
-        return _calculate_dual_variables_continous_model!(container, port)
+        return _calculate_dual_variables_continuous_model!(container, port)
     end
     @warn "Duals not computed: the LP with fixed discrete variables returned $(JuMP.termination_status(jump_model))"
     unfix_discrete_variables!(container)
@@ -764,7 +756,9 @@ function _calculate_dual_variables_discrete_model!(
     JuMP.optimize!(jump_model)
     constraints = get_constraints(container)
     for key in collect(keys(get_duals(container)))
-        container.duals[key] = _dual_values(constraints[key]; available=false)
+        constraint = constraints[key]
+        container.duals[key] =
+            DenseAxisArray(fill(NaN, size(constraint)), axes(constraint)...)
     end
     if JuMP.primal_status(jump_model) != MOI.FEASIBLE_POINT
         return RunStatus.FAILED
@@ -788,7 +782,7 @@ function calculate_dual_variables!(
     if is_milp
         return _calculate_dual_variables_discrete_model!(container, port)
     end
-    return _calculate_dual_variables_continous_model!(container, port)
+    return _calculate_dual_variables_continuous_model!(container, port)
 end
 
 ##### Build Models #######
