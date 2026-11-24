@@ -101,3 +101,10 @@ function check_flow_variable_values(
     end
     return true
 end
+
+function build_expecting_failure(model::InvestmentModel)
+    output_dir = mktempdir(; cleanup=true)
+    @test build!(model; output_dir=output_dir, console_level=Logging.AboveMaxLevel) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+    return read(joinpath(output_dir, PSIN.PROBLEM_LOG_FILENAME), String)
+end

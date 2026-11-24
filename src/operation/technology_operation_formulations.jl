@@ -3,6 +3,9 @@
 struct BasicDispatch <: OperationsTechnologyFormulation end
 struct BasicDispatchWithBudget <: OperationsTechnologyFormulation end
 
+abstract type ThermalCommitmentFormulation <: OperationsTechnologyFormulation end
+struct ContinuousThermalCommitment <: ThermalCommitmentFormulation end
+
 abstract type OperationsStorageFormulation <: OperationsTechnologyFormulation end
 struct ChronologicalStorageDispatch <: OperationsStorageFormulation end
 struct CyclicalStorageDispatch <: OperationsStorageFormulation end

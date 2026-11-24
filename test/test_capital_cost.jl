@@ -30,7 +30,7 @@ function _capital_cost_template(op_days)
 end
 
 # Build a container and run only the capital-cost argument + model construction stages
-# for a single technology type, so the `CapitalCost` investment expression is populated.
+# for a single technology type, so `CapitalCostExpression` is populated.
 function _build_capital_container(p, template, capital, tech_type, tech_model, names)
     settings = PSIN.Settings(p)
     model = JuMP.Model(HiGHS.Optimizer)
@@ -154,6 +154,26 @@ end
         # must equal the ratio of the capital curve slopes.
         for (cc, ce) in zip(coef_cheap, coef_expensive)
             @test cc / ce ≈ slope_cheap / slope_expensive
+        end
+
+        capital_cost = PSIN.get_expression(
+            container,
+            PSIN.CapitalCostExpression(),
+            tech_type,
+            "ContinuousInvestment",
+        )
+        build = PSIN.get_variable(
+            container,
+            PSIN.BuildCapacity(),
+            tech_type,
+            "ContinuousInvestment",
+        )
+        for (t, coefficient) in
+            zip(PSIN.get_investment_time_steps(container.time_mapping), coef_cheap)
+            @test JuMP.coefficient(
+                capital_cost["cheap_thermal", t],
+                build["cheap_thermal", t],
+            ) ≈ coefficient
         end
     end
 

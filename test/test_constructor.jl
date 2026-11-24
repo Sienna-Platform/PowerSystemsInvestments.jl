@@ -29,6 +29,21 @@ end
     )
 end
 
+@testset "Operation Formulation Validation" begin
+    @test_throws ArgumentError PSIN.TechnologyModel(
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIN.ContinuousInvestment,
+        PSIN.ContinuousThermalCommitment,
+        PSIN.BasicDispatchFeasibility,
+    )
+    @test PSIN.TechnologyModel(
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        PSIN.ContinuousInvestment,
+        PSIN.ContinuousThermalCommitment,
+        PSIN.BasicDispatchFeasibility,
+    ) isa PSIN.TechnologyModel
+end
+
 @testset "Operational weights check" begin
     _, op_days = test_2_zone_portfolio()
     periods = [
@@ -205,8 +220,8 @@ end
         [vre_model],
     )
 
-    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for wind.
-    @test length(container.expressions) == 6
+    # + build, cost and generation expressions for wind, which has no fuel curve.
+    @test length(container.expressions) == 9
     @test length(container.variables) == 2
 
     v = PSIN.get_variable(
@@ -258,8 +273,8 @@ end
         [thermal_model, thermal_model],
     )
 
-    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for thermal.
-    @test length(container.expressions) == 9
+    # + build and generation expressions for thermal.
+    @test length(container.expressions) == 15
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(
