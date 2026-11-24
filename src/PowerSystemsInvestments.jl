@@ -13,6 +13,7 @@ export InvestmentProblemResults
 export SingleInstanceSolve
 export IterativeMonitoring
 export get_monitoring_log
+export get_monitoring_converged
 export get_monitored_corridors
 
 ### Technology Models ###

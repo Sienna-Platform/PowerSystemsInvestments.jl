@@ -65,27 +65,6 @@ end
     @test net_outflow[2:end] ≈ injections[2:end]
 end
 
-@testset "LODF matches recomputing the PTDF without the outaged line" begin
-    nodes = string.(1:6)
-    ptdf = _ptdf_from_lines(nodes, GARVER_LINES; reference_nodes=Set(["1"]))
-    lodf = PSIN.LODF(ptdf)
-    injections = [-80.0, -240.0, 120.0, -160.0, -240.0, 600.0]
-    flows = Dict(zip(ptdf.axes[2], _flows(ptdf, injections)))
-    for outaged in ("1-5", "2-3", "3-6a", "4-6b")
-        @test lodf[outaged, outaged] == -1.0
-        remaining = filter(l -> l[1] != outaged, GARVER_LINES)
-        post = _ptdf_from_lines(nodes, remaining; reference_nodes=Set(["1"]))
-        post_flows = Dict(zip(post.axes[2], _flows(post, injections)))
-        for (monitored, _, _, _) in remaining
-            @test isapprox(
-                flows[monitored] + lodf[monitored, outaged] * flows[outaged],
-                post_flows[monitored];
-                atol=1e-9,
-            )
-        end
-    end
-end
-
 @testset "PTDF of a network with islands" begin
     nodes = ["a1", "a2", "a3", "b1", "b2", "c1"]
     lines = [

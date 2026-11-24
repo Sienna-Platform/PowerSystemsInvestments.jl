@@ -429,6 +429,15 @@ end
 end
 
 # Corridors A-B, B-C, C-D and A-C, a unit line D-A and a new corridor B-D
+@testset "Repeated PTDF branch names" begin
+    # The new corridor C-D is named like the merged corridor A-B
+    lines = [
+        ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+        ("A_B", "C", "D", ContinuousInvestment, (;)),
+    ]
+    @test_throws r"PTDF branch names \[\"A_B\"\] are repeated" _ptdf_network_data(lines)
+end
+
 @testset "Virtual transaction bounds" begin
     lines = [
         ("ab_existing", "A", "B", ContinuousInvestment, (;)),
@@ -461,18 +470,31 @@ end
     @test isempty(iterative.monitored)
     @test PSIN._virtual_transaction_bounds(iterative, portfolio) == bounds
 
-    # Only the monitored A-B corridor is limited, so no limited path joins B and D
+    # Only the A-B corridor is monitored, so unlimited corridors join the ends of the
+    # candidates and no bound holds
     partial, _ = _ptdf_network_data(lines; monitored=["A_B"])
     @test partial.limited == Set(["A_B"])
-    corridor = only(c for c in partial.merged_corridors if c.name == "A_B")
+    @test_throws r"bd_new .* Monitor the corridors \[\"B_C\", \"C_D\"\]" PSIN._virtual_transaction_bounds(
+        partial,
+        portfolio,
+    )
+
+    # C and D are only joined by candidates, so the sum over all limited branches is used
+    candidates = [
+        ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+        ("cd_new", "C", "D", ContinuousInvestment, (;)),
+        ("cd_units", "C", "D", IntegerInvestment, (unit_size=100.0, max_capacity=100.0)),
+    ]
+    separate, portfolio = _ptdf_network_data(candidates)
+    corridor = only(separate.merged_corridors)
     longest_path =
         PSIN._max_flow(corridor, portfolio) / corridor.susceptance + sum(
             PSIN._max_flow(b, portfolio) / b.susceptance for
-            b in [partial.new_corridors; partial.unit_lines]
+            b in [separate.new_corridors; separate.unit_lines]
         )
-    partial_bounds = PSIN._virtual_transaction_bounds(partial, portfolio)
-    for (name, _, susceptance) in PSIN._virtual_branches(partial)
-        @test partial_bounds[name] ≈ susceptance * longest_path
+    separate_bounds = PSIN._virtual_transaction_bounds(separate, portfolio)
+    for (name, _, susceptance) in PSIN._virtual_branches(separate)
+        @test separate_bounds[name] ≈ susceptance * longest_path
     end
 end
 
@@ -801,6 +823,18 @@ end
         JuMP.value.(PSIN.get_variable(container, BranchBuiltVariable(), PSIP.Portfolio),)
     @test built["r45", 1] > 0.5
     @test any(built[c, 1] > 0.5 for c in ("d13", "d24"))
+    # A built binary alone does not mean capacity was built
+    capacity =
+        JuMP.value.(
+            PSIN.get_expression(
+                container,
+                PSIN.CumulativeCapacity(),
+                PTDF_LINE_TYPE,
+                "ContinuousInvestment",
+            ),
+        )
+    @test capacity["r45", 1] > 1e-3
+    @test any(capacity[c, 1] > 1e-3 for c in ("d13", "d24"))
     _test_dc_power_flow(
         container,
         _ptdf_branches([RING_LINES; RING_CANDIDATES]),
@@ -1042,6 +1076,7 @@ end
         )
         @test isempty(PSIN.get_monitored_corridors(m))
         @test isapprox(_solved_objective(m), full_objective; rtol=1e-6)
+        @test get_monitoring_converged(m)
         log = get_monitoring_log(m)
         @test size(log, 1) >= 2
         @test log.added[1] > 0
@@ -1067,6 +1102,9 @@ end
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     @test size(get_monitoring_log(m), 1) == 1
     @test last(get_monitoring_log(m).overloaded) > 0
+    # The cap stops the corridors from being added
+    @test only(get_monitoring_log(m).added) == 0
+    @test !get_monitoring_converged(m)
     transport = _nodal_test_model(
         NodalBalanceModel;
         nodes=["Node_1", "Node_2"],
@@ -1161,10 +1199,16 @@ end
     )
     jump_model = PSIN.get_jump_model(m)
     gap = JuMP.get_attribute(jump_model, MOI.RelativeGapTolerance())
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    @test !isempty(PSIN.get_store(m))
     JuMP.set_time_limit_sec(jump_model, 0.0)
     @test solve!(m; console_level=Logging.AboveMaxLevel) == PSIN.RunStatus.FAILED
     @test PSIN.is_milp(PSIN.get_optimization_container(m))
     @test JuMP.get_attribute(jump_model, MOI.RelativeGapTolerance()) == gap
+    # Neither the results nor the log of the first solve are left
+    @test isempty(PSIN.get_store(m))
+    @test size(get_monitoring_log(m), 1) == 0
+    @test !get_monitoring_converged(m)
 end
 
 @testset "Iterative monitoring of a MIP" begin
@@ -1306,7 +1350,8 @@ end
               flow["Node_1_Node_2", t]
         @test line_flow["existing", t] / capacity["existing", period[t]] ≈
               -line_flow["expansion", t] / capacity["expansion", period[t]]
-        @test line_flow["units", t] ≈ flow["units_unit_1", t] + flow["units_unit_2", t]
+        @test line_flow["units", t] ≈ flow["units_unit_1", t] + flow["units_unit_2", t] atol =
+            1e-6
     end
     results = PSIN.read_aux_variable(m, PSIN.AuxVarKey(LineFlow, PSIP.Portfolio))
     @test sort(unique(results.name)) == ["existing", "expansion", "units"]

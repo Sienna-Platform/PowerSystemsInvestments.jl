@@ -96,25 +96,13 @@ function construct_technologies!(
     X <: TechnologyModel,
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
-
-    # TODO: Decide if we want different variables or not for feasibility
-
-    # EnergyBalance
     add_to_expression!(
         container,
         FeasibilitySurplus(),
-        ActiveInPowerVariable(),
         devices,
         D(),
         transport_model,
-    )
-    add_to_expression!(
-        container,
-        FeasibilitySurplus(),
-        ActiveOutPowerVariable(),
-        devices,
-        D(),
-        transport_model,
+        tech_model_vector,
     )
     return
 end

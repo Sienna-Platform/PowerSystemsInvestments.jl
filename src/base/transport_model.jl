@@ -24,7 +24,9 @@ Attributes of the `TransportModel`:
   - `"min_voltage"`: lines below this voltage (kV) are left out of the PTDF and dispatched like
     `BasicDispatch` lines under `NodalBalanceModel` (default 0).
   - `"relative_tol"`: leave out of a branch's flow the PTDF entries below this share of its
-    largest entry (default 0; 1e-6 is safe). Reported flows use the whole PTDF.
+    largest entry (default 0; 1e-6 is safe). Reported flows use the whole PTDF. The big-M
+    bounds of new corridors and unit lines assume exact corridor flows, so a large tolerance
+    can make them too tight.
 """
 struct NodalPTDFModel <: AbstractNodalTransportAggregation end
 
