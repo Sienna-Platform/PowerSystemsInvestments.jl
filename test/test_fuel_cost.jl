@@ -1,7 +1,5 @@
 const FUEL_TEST_THERMAL_TYPE = PSIP.SupplyTechnology{PSY.ThermalStandard}
 
-# Single region model with two thermal technologies. When a variable cost is given, it
-# replaces the one of "expensive_thermal".
 function _make_fuel_cost_model(variable_cost=nothing)
     operation_cost = nothing
     if !isnothing(variable_cost)
@@ -49,12 +47,10 @@ end
     @test PSIN.get_heat_rate(fuel_curve) == 9.5
     @test PSIN.get_fuel_price(fuel_curve) == 4.0
 
-    # Only linear fuel curves are supported.
     quadratic_fuel_curve =
         FuelCurve(; value_curve=QuadraticCurve(0.01, 9.5, 0.0), fuel_cost=4.0)
     @test_throws ErrorException PSIN.get_heat_rate(quadratic_fuel_curve)
 
-    # Fuel prices given as a time series are not supported.
     fuel_price_key = IS.StaticTimeSeriesKey(;
         time_series_type=IS.SingleTimeSeries,
         name="fuel_price",
@@ -93,7 +89,6 @@ end
         FuelCurve(; value_curve=LinearCurve(heat_rate), fuel_cost=fuel_price),
     )
 
-    # A heat rate and a fuel price cost the same as the equivalent cost per MWh.
     for t in time_steps
         @test _dispatch_cost_coefficient(m_fuel, "expensive_thermal", t) ≈
               _dispatch_cost_coefficient(m_cost, "expensive_thermal", t)
@@ -101,7 +96,6 @@ end
               _dispatch_cost_coefficient(m_cost, "cheap_thermal", t)
     end
 
-    # Fuel expressions only exist for the technologies with a fuel curve.
     cost_container = PSIN.get_optimization_container(m_cost)
     fuel_container = PSIN.get_optimization_container(m_fuel)
     consumption_key = PSIN.ExpressionKey(
@@ -135,8 +129,6 @@ end
     @test JuMP.objective_value(PSIN.get_jump_model(fuel_container)) ≈
           JuMP.objective_value(PSIN.get_jump_model(cost_container))
 
-    # Results: fuel consumption is the heat rate times the dispatch, and the fuel cost is
-    # the objective function cost of that dispatch.
     dispatch_df = filter(
         r -> r.name == "expensive_thermal",
         read_variable(
@@ -184,9 +176,6 @@ end
     )
     @test _dispatch_cost_coefficient(m_cost, "expensive_thermal", t) ≈ expected_coefficient
 
-    # The cost expressions report the same costs as the objective function. A fuel curve
-    # reports its fuel in FuelCost and its VOM in VariableOMCost. A cost curve reports both
-    # its cost and its VOM in VariableOMCost.
     function cost_coefficient(m, expression_type, name)
         container = PSIN.get_optimization_container(m)
         expression = PSIN.get_expression(

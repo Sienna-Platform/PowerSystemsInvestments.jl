@@ -106,7 +106,6 @@ function _add_variable_cost_to_objective!(
     ::String,
 )
     throw_unsupported_curve(cost_curve)
-    return
 end
 
 function _add_variable_cost_to_objective!(
@@ -125,6 +124,7 @@ function _add_variable_cost_to_objective!(
     _add_linearcurve_cost!(
         container,
         T(),
+        VariableOMCost(),
         technology,
         om_cost,
         multiplier * proportional_term,
@@ -290,7 +290,6 @@ function _add_linearcurve_cost!(
     return
 end
 
-# Committed capacity has the no-load term of its cost or fuel curve
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
     ::T,
@@ -311,7 +310,6 @@ function _add_cost_to_objective!(
     return
 end
 
-# Capacity that starts up has a start-up cost and consumes the start-up fuel of its fuel curve
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
     ::T,
@@ -372,7 +370,7 @@ _get_start_up_cost(start_up_cost::Float64, ::PSIP.Technology) = start_up_cost
 function _get_start_up_cost(::PSY.StartUpStages, technology::PSIP.Technology)
     error(
         "Technology $(PSIP.get_name(technology)) defines its start-up cost by stages (hot, " *
-        "warm, cold), which is not currently supported. Use a single start-up cost.",
+        "warm, cold), which is not supported; use a single start-up cost.",
     )
 end
 
@@ -386,7 +384,6 @@ function _add_commitment_curve_cost_to_objective!(
     ::String,
 )
     throw_unsupported_curve(cost_curve)
-    return
 end
 
 function _add_commitment_curve_cost_to_objective!(
@@ -440,6 +437,7 @@ function _add_commitment_curve_cost_to_objective!(
         _add_linearcurve_cost!(
             container,
             T(),
+            VariableOMCost(),
             technology,
             om_cost,
             objective_function_multiplier(T(), U()) * no_load_cost,
@@ -461,27 +459,6 @@ get_cost_weight(
     ::Union{StartUpCapacityVariable, ShutDownCapacityVariable},
     op_ix::Int,
 ) = get_operational_weights(container)[op_ix]
-
-# Operation costs are reported in VariableOMCost unless a cost expression is given
-function _add_linearcurve_cost!(
-    container::SingleOptimizationContainer,
-    ::T,
-    technology::PSIP.Technology,
-    om_cost::PSY.OperationalCost,
-    proportional_term::Float64,
-    tech_model::String,
-) where {T <: OperationsVariableType}
-    _add_linearcurve_cost!(
-        container,
-        T(),
-        VariableOMCost(),
-        technology,
-        om_cost,
-        proportional_term,
-        tech_model,
-    )
-    return
-end
 
 function _add_linearcurve_cost!(
     container::SingleOptimizationContainer,

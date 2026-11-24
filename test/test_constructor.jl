@@ -30,7 +30,6 @@ end
 end
 
 @testset "Operation Formulation Validation" begin
-    # Unit commitment is only implemented for thermal technologies.
     @test_throws ArgumentError PSIN.TechnologyModel(
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
         PSIN.ContinuousInvestment,
@@ -221,9 +220,7 @@ end
         [vre_model],
     )
 
-    # + CapacityAdditions, CumulativeCapacity, CapitalCostExpression, FixedOperationModelCost,
-    # WeightedEnergyGeneration and VariableOMCost for the wind supply tech. It has no fuel
-    # curve, so there is no FuelConsumptionExpression or FuelCost.
+    # + build, cost and generation expressions for wind, which has no fuel curve.
     @test length(container.expressions) == 9
     @test length(container.variables) == 2
 
@@ -276,7 +273,7 @@ end
         [thermal_model, thermal_model],
     )
 
-    # + CapacityAdditions, CumulativeCapacity and WeightedEnergyGeneration for the thermal supply tech.
+    # + build and generation expressions for thermal.
     @test length(container.expressions) == 15
     @test length(container.variables) == 4
 

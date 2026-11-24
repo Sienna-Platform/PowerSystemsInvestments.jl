@@ -616,8 +616,7 @@ end
     balance_con = PSIN.get_constraints(container)[balance_key]
     JuMP.set_normalized_rhs(first(balance_con), 1e18)
 
-    # The failure is expected, so neither the logged errors nor the solver's conflict search
-    # are printed to the console.
+    # Silences the logs and conflict search of the expected failure
     status = redirect_stdout(devnull) do
         solve!(m; export_optimization_problem=false, console_level=Logging.AboveMaxLevel)
     end
