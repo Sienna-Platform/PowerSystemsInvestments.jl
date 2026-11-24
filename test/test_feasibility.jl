@@ -292,6 +292,12 @@ function _test_nodal_feasibility(transport)
             "BasicDispatch",
         )
         @test JuMP.normalized_coefficient(flow_limit["line", t], line_build) == -1.0
+    else
+        for meta in ("ub", "lb")
+            flow_limit =
+                PSIN.get_constraint(container, FlowRateConstraint(), PSIP.Portfolio, meta)
+            @test abs(JuMP.normalized_coefficient(flow_limit["line", t], line_build)) == 1.0
+        end
     end
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED

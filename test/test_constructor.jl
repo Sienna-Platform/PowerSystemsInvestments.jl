@@ -451,6 +451,13 @@ end
         limit["cheap_thermal", 30],
         thermal_build["cheap_thermal", 2],
     ) ≈ -0.92
+    thermal = PSIP.get_technology(
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        p_5bus,
+        "expensive_thermal",
+    )
+    PSIP.set_outage_factors!(thermal, (planned=0.0, forced=1.1))
+    @test_throws IS.InvalidValue PSIN.get_availability(thermal)
 
     # StorageTechnology{EnergyReservoirStorage}
     PSIN.construct_technologies!(

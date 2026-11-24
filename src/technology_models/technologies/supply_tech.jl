@@ -607,6 +607,14 @@ end
 
 function get_availability(d::PSIP.SupplyTechnology)
     outage_factors = PSIP.get_outage_factors(d)
+    if !all(0.0 <= f <= 1.0 for f in outage_factors)
+        throw(
+            IS.InvalidValue(
+                "Technology $(PSIP.get_name(d)) has outage factors $outage_factors, which " *
+                "must be in [0, 1]",
+            ),
+        )
+    end
     return (1.0 - outage_factors.forced) * (1.0 - outage_factors.planned)
 end
 
