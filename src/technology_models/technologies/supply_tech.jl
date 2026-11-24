@@ -38,6 +38,53 @@ end
 
 ################## Expressions ###################
 
+# Scheduled removals in MW, applied at the first period starting on or after retirement.
+function get_scheduled_retirements(
+    portfolio::PSIP.Portfolio,
+    technology::PSIP.SupplyTechnology,
+    time_mapping::TimeMapping,
+)
+    periods = get_investment_time_stamps(time_mapping)
+    retirements = zeros(length(periods))
+    attributes = PSIP.get_supplemental_attributes(PSIP.RetirementPotential, technology)
+    isempty(attributes) && return retirements
+    name = PSIP.get_name(technology)
+    if length(attributes) != 1
+        error("Supply technology $name must have at most one RetirementPotential.")
+    end
+    retirement = only(attributes)
+    schedule = PSIP.get_planned_retirement_year(retirement)
+    isempty(schedule) && return retirements
+    eligible = PSIP.get_eligible_generators(retirement)
+    existing_attributes = PSIP.get_supplemental_attributes(PSIP.ExistingDevices, technology)
+    if length(existing_attributes) != 1
+        error("Supply technology $name needs one ExistingDevices attribute for retirement.")
+    end
+    existing = PSIP.get_existing_devices(only(existing_attributes))
+    for unit in keys(schedule)
+        if !(unit in eligible) || !(unit in existing)
+            error(
+                "Scheduled retirement $unit of $name must be listed in both " *
+                "RetirementPotential.eligible_generators and ExistingDevices.",
+            )
+        end
+    end
+    system = PSIP.get_base_system(portfolio)
+    PSY.with_units_base(system, "NATURAL_UNITS") do
+        for (unit_name, year) in schedule
+            unit = PSY.get_component(PSIP.get_parameter_type(technology), system, unit_name)
+            if isnothing(unit)
+                error("Retirement unit $unit_name of $name is not in the base system.")
+            end
+            period = findfirst(p -> first(p) >= Dates.Date(year, 1, 1), periods)
+            if !isnothing(period)
+                retirements[period] += PSY.get_max_active_power(unit)
+            end
+        end
+    end
+    return retirements
+end
+
 function add_expression!(
     container::SingleOptimizationContainer,
     portfolio::PSIP.Portfolio,
@@ -68,10 +115,12 @@ function add_expression!(
     for d in devices
         init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
         check_multi_region_technology(d, init_cap)
+        retirements = get_scheduled_retirements(portfolio, d, time_mapping)
         for name in get_variable_names(d)
             running = JuMP.AffExpr(init_cap)
             for t in time_steps
                 JuMP.add_to_expression!(running, var[name, t])
+                JuMP.add_to_expression!(running, -retirements[t])
                 expression[name, t] = copy(running)
             end
         end
@@ -111,10 +160,12 @@ function add_expression!(
         unit_size = get_unit_size(BuildCapacity(), d, V())
         init_cap = PSIP.get_existing_capacity_mw(portfolio, d)
         check_multi_region_technology(d, init_cap)
+        retirements = get_scheduled_retirements(portfolio, d, time_mapping)
         for name in get_variable_names(d)
             running = JuMP.AffExpr(init_cap)
             for t in time_steps
                 JuMP.add_to_expression!(running, var[name, t], unit_size)
+                JuMP.add_to_expression!(running, -retirements[t])
                 expression[name, t] = copy(running)
             end
         end

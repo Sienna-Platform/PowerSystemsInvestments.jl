@@ -316,4 +316,17 @@ end
     @test_throws r"retrofit_efficiency" link_error(
         _retrofit_model(; options=[("coal_ccs", 1e5, ["coal1"], 0.0)]),
     )
+    model = _retrofit_model()
+    portfolio = PSIN.get_portfolio(model)
+    source = PSIP.get_technology(RETROFIT_THERMAL, portfolio, "coal")
+    PSIP.add_supplemental_attribute!(
+        portfolio,
+        source,
+        RetirementPotential(;
+            id=10,
+            eligible_generators=["coal1"],
+            planned_retirement_year=Dict("coal1" => 2035),
+        ),
+    )
+    @test_throws r"combined retirement and retrofit accounting" link_error(model)
 end

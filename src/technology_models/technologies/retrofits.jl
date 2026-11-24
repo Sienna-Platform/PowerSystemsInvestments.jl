@@ -86,6 +86,17 @@ function link_retrofits!(
             for unit in PSIP.get_existing_devices(attribute)
         ]
         eligible = PSIP.get_eligible_generators(retrofit)
+        for retirement in PSIP.get_supplemental_attributes(PSIP.RetirementPotential, source)
+            overlap =
+                intersect(eligible, keys(PSIP.get_planned_retirement_year(retirement)))
+            if !isempty(overlap)
+                error(
+                    "Retrofit units $(join(overlap, ", ")) of $source_name also have " *
+                    "scheduled retirements; combined retirement and retrofit accounting " *
+                    "is not supported yet.",
+                )
+            end
+        end
         not_existing = setdiff(eligible, existing)
         if !isempty(not_existing)
             error(
