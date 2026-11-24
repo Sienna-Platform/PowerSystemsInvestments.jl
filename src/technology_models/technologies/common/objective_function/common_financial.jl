@@ -34,6 +34,8 @@ function investment_period_annuity_factor(discount_rate::Float64, inv_tuple)
     return sum(discount_factor^k for k in 0:(num_years - 1))
 end
 
+get_capex_time_series_name(::InvestmentVariableType, ::PSIP.Technology) = "inv_capex"
+
 # Present value in the base year of one unit paid at the start of each year of an investment
 # period. The payments are valued at the start of the period and discounted from its first
 # year, whatever the dates of the representative periods that stand for it.

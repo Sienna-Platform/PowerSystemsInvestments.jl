@@ -346,7 +346,7 @@ function add_to_expression!(
     S <: Union{BasicDispatch, BasicDispatchWithBudget, ThermalCommitmentFormulation},
     T <: EnergyBalance,
     U <: Vector{D},
-    V <: NodalBalanceModel,
+    V <: AbstractNodalTransportAggregation,
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -423,7 +423,7 @@ function add_to_expression!(
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Vector{D},
-    V <: Union{MultiRegionBalanceModel, NodalBalanceModel},
+    V <: Union{MultiRegionBalanceModel, AbstractNodalTransportAggregation},
     X <: TechnologyModel,
 } where {D <: PSIP.SupplyTechnology}
     IS.@assert_op length(devices) > 0
@@ -497,6 +497,7 @@ function add_constraints!(
         tech_model = tech_model_vector[ix]
         inv_model = string(get_investment_formulation(tech_model))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        availability = get_availability(d)
         for name in get_variable_names(d), op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
@@ -506,7 +507,7 @@ function add_constraints!(
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     active_power[name, t] <=
-                    ts_data[ix] * installed_cap[name, time_step_inv]
+                    availability * ts_data[ix] * installed_cap[name, time_step_inv]
                 )
             end
         end
@@ -549,13 +550,15 @@ function add_constraints!(
         tech_model = tech_model_vector[ix]
         inv_model = string(get_investment_formulation(tech_model))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        availability = get_availability(d)
         for name in get_variable_names(d), op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
-                    active_power[name, t] <= installed_cap[name, time_step_inv]
+                    active_power[name, t] <=
+                    availability * installed_cap[name, time_step_inv]
                 )
             end
         end
@@ -604,6 +607,14 @@ end
 
 function get_availability(d::PSIP.SupplyTechnology)
     outage_factors = PSIP.get_outage_factors(d)
+    if !all(0.0 <= f <= 1.0 for f in outage_factors)
+        throw(
+            IS.InvalidValue(
+                "Technology $(PSIP.get_name(d)) has outage factors $outage_factors, which " *
+                "must be in [0, 1]",
+            ),
+        )
+    end
     return (1.0 - outage_factors.forced) * (1.0 - outage_factors.planned)
 end
 
@@ -1092,13 +1103,15 @@ function add_constraints!(
         tech_model_d = tech_model_vector[ix]
         inv_model = string(get_investment_formulation(tech_model_d))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        availability = get_availability(d)
         for name in get_variable_names(d), op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
-                    active_power[name, t] <= installed_cap[name, time_step_inv]
+                    active_power[name, t] <=
+                    availability * installed_cap[name, time_step_inv]
                 )
             end
         end

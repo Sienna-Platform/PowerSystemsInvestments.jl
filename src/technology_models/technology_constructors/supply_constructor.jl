@@ -150,6 +150,13 @@ function construct_technologies!(
     )
     add_constraints!(
         container,
+        SingleUnitInvestmentConstraint(),
+        BuildCapacity(),
+        devices,
+        B(),
+    )
+    add_constraints!(
+        container,
         MinimumCumulativeCapacity(),
         CumulativeCapacity(),
         devices,

@@ -427,6 +427,38 @@ end
     @test length(c["cheap_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
 
+    # 8% forced outage
+    limit = PSIN.get_constraint(
+        container,
+        PSIN.ActivePowerLimitsConstraint(),
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        "BasicDispatch",
+    )
+    thermal_build = PSIN.get_variable(
+        container,
+        PSIN.BuildCapacity(),
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        "ContinuousInvestment",
+    )
+    @test PSIP.get_outage_factors(
+        PSIP.get_technology(
+            PSIP.SupplyTechnology{PSY.ThermalStandard},
+            p_5bus,
+            "cheap_thermal",
+        ),
+    ) == (planned=0.0, forced=0.08)
+    @test JuMP.normalized_coefficient(
+        limit["cheap_thermal", 30],
+        thermal_build["cheap_thermal", 2],
+    ) ≈ -0.92
+    thermal = PSIP.get_technology(
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        p_5bus,
+        "expensive_thermal",
+    )
+    PSIP.set_outage_factors!(thermal, (planned=0.0, forced=1.1))
+    @test_throws IS.InvalidValue PSIN.get_availability(thermal)
+
     # StorageTechnology{EnergyReservoirStorage}
     PSIN.construct_technologies!(
         container,

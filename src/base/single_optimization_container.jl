@@ -132,12 +132,9 @@ get_constraints(container::SingleOptimizationContainer) = container.constraints
 
 function is_milp(container::SingleOptimizationContainer)::Bool
     !supports_milp(container) && return false
-    if !isempty(
-        JuMP.all_constraints(get_jump_model(container), JuMP.VariableRef, JuMP.MOI.ZeroOne),
-    )
-        return true
-    end
-    return false
+    jump_model = get_jump_model(container)
+    return !isempty(JuMP.all_constraints(jump_model, JuMP.VariableRef, JuMP.MOI.ZeroOne)) ||
+           !isempty(JuMP.all_constraints(jump_model, JuMP.VariableRef, JuMP.MOI.Integer))
 end
 
 function supports_milp(container::SingleOptimizationContainer)
@@ -181,8 +178,22 @@ function get_time_step_weight(container::SingleOptimizationContainer, op_ix::Int
            get_time_step_length(get_time_mapping(container), op_ix)
 end
 
-# Weights are per year: the period length is applied when costs are discounted, so weights
-# that include it would count operation costs more than once.
+function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Portfolio)
+    discount_rate = PSIP.get_discount_rate(portfolio)
+    base_year = PSIP.get_base_year(portfolio)
+    if !isapprox(capital_model.discount_rate, discount_rate) ||
+       Dates.value(capital_model.base_year) != base_year
+        throw(
+            IS.ConflictingInputsError(
+                "DiscountedCashFlow has discount rate $(capital_model.discount_rate) and " *
+                "base year $(Dates.value(capital_model.base_year)), but the portfolio has " *
+                "discount rate $discount_rate and base year $base_year",
+            ),
+        )
+    end
+    return
+end
+
 function check_operational_weights(
     time_mapping::TimeMapping,
     operational_weights::Vector{Float64},
@@ -234,6 +245,7 @@ function init_optimization_container!(
     set_time_mapping!(container, time_map)
     set_operational_weights!(container, operation_model.series_weights)
     check_operational_weights(time_map, operation_model.series_weights)
+    check_discounting(capital_model, portfolio)
     # Set Financial Data in Container from Portfolio
     set_base_year!(container, PSIP.get_base_year(portfolio))
     set_discount_rate!(container, PSIP.get_discount_rate(portfolio))
@@ -640,7 +652,7 @@ end
 
 function _make_system_expressions!(
     container::SingleOptimizationContainer,
-    ::Type{NodalBalanceModel},
+    ::Type{<:AbstractNodalTransportAggregation},
     port::PSIP.Portfolio,
 )
     nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
@@ -682,7 +694,7 @@ function initialize_system_expressions!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel{T},
     port::PSIP.Portfolio,
-) where {T <: NodalBalanceModel}
+) where {T <: AbstractNodalTransportAggregation}
     _make_system_expressions!(container, T, port)
     return
 end
@@ -726,12 +738,17 @@ end
 function build_model!(
     container::SingleOptimizationContainer,
     template::InvestmentModelTemplate,
-    port::PSIP.Portfolio,
+    port::PSIP.Portfolio;
+    monitor_iteratively::Bool=false,
 )
     transport_model = get_transport_model(template)
     initialize_system_expressions!(container, transport_model, port)
+    initialize_network!(transport_model, template, port, monitor_iteratively)
 
-    tech_names = collect(values(template.technology_models))
+    tech_names = [
+        collect(values(template.technology_models))
+        collect(values(template.branch_models))
+    ]
 
     # Check for duplicate technologies
     flattened_list = collect(Iterators.flatten(tech_names))
@@ -935,7 +952,7 @@ end
 function compute_conflict!(container::SingleOptimizationContainer)
     jump_model = get_jump_model(container)
     settings = get_settings(container)
-    JuMP.unset_silent(jump_model)
+    get_optimizer_solve_log_print(settings) && JuMP.unset_silent(jump_model)
     jump_model.is_model_dirty = false
     conflict = container.infeasibility_conflict
     empty!(conflict)

@@ -33,7 +33,14 @@ function _feasibility_portfolio()
     return p, op_days
 end
 
-function _feasibility_model(p, op_days, transport_model, demand_names, branches)
+function _feasibility_model(
+    p,
+    op_days,
+    transport_model,
+    demand_names,
+    branches;
+    storage=false,
+)
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -68,6 +75,16 @@ function _feasibility_model(p, op_days, transport_model, demand_names, branches)
         BasicDispatch,
         BasicDispatchFeasibility,
     )
+    if storage
+        set_technology_model!(
+            template,
+            ["test_storage"],
+            PSIP.StorageTechnology{PSY.EnergyReservoirStorage},
+            ContinuousInvestment,
+            CyclicalStorageDispatch,
+            BasicDispatchFeasibility,
+        )
+    end
     for (names, branch_type) in branches
         set_technology_model!(
             template,
@@ -179,11 +196,17 @@ end
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 end
 
-@testset "Feasibility periods in nodes with transmission" begin
-    # All the supply is at Node_1, so Node_2 can only cover its demand by importing.
+# All the supply is at Node_1, so Node_2 can only cover its demand by importing
+function _test_nodal_feasibility(transport)
     p, op_days = _feasibility_portfolio()
     max_id = maximum(PSIP.get_id(r) for r in PSIP.get_regions(PSIP.RegionTopology, p))
-    nodes = [PSIP.Node(; name="Node_$i", id=max_id + i) for i in 1:2]
+    nodes = [
+        PSIP.Node(;
+            name="Node_$i",
+            id=max_id + i,
+            bus_type=i == 1 ? PSY.ACBusTypes.REF : PSY.ACBusTypes.PQ,
+        ) for i in 1:2
+    ]
     for node in nodes
         PSIP.add_region!(p, node)
     end
@@ -195,6 +218,8 @@ end
     for (technology_type, name) in supply
         PSIP.set_region!(PSIP.get_technology(technology_type, p, name), [nodes[1]])
     end
+    storage_type = PSIP.StorageTechnology{PSY.EnergyReservoirStorage}
+    PSIP.set_region!(PSIP.get_technology(storage_type, p, "test_storage"), [nodes[2]])
     for (name, node) in zip(["demand1", "demand2"], nodes)
         demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, name)
         PSIP.set_region!(demand, [node])
@@ -204,6 +229,8 @@ end
         name="line",
         start_node=nodes[1],
         end_node=nodes[2],
+        reactance=0.1 * 230.0^2,
+        voltage=230.0,
         # The demand of Node_2 reaches about 1300 MW in 2035.
         capacity_limits=(min=0, max=5000),
         capital_costs=PSIP.CapitalCost(LinearCurve(5000.0), 0.0),
@@ -224,9 +251,10 @@ end
     m = _feasibility_model(
         p,
         op_days,
-        TransportModel(NodalBalanceModel, use_slacks=false),
+        TransportModel(transport, use_slacks=false),
         ["demand1", "demand2"],
-        [(["line"], branch_type)],
+        [(["line"], branch_type)];
+        storage=true,
     )
     container = PSIN.get_optimization_container(m)
     t = _first_feasibility_step(container)
@@ -245,14 +273,32 @@ end
         PSIP.Portfolio,
     )
     @test JuMP.normalized_coefficient(feasibility["Node_2", t], line_build) == 1.0
-    @test JuMP.normalized_rhs(feasibility["Node_2", t]) == FEASIBILITY_DEMAND
-    flow_limit = PSIN.get_constraint(
+    storage_build = PSIN.get_variable(
         container,
-        PSIN.FlowActivePowerUpperBoundConstraint(),
-        branch_type,
-        "BasicDispatch",
-    )
-    @test JuMP.normalized_coefficient(flow_limit["line", t], line_build) == -1.0
+        PSIN.BuildPowerCapacity(),
+        storage_type,
+        "ContinuousInvestment",
+    )[
+        "test_storage",
+        1,
+    ]
+    @test JuMP.normalized_coefficient(feasibility["Node_2", t], storage_build) == 1.0
+    @test JuMP.normalized_rhs(feasibility["Node_2", t]) == FEASIBILITY_DEMAND
+    if transport == NodalBalanceModel
+        flow_limit = PSIN.get_constraint(
+            container,
+            PSIN.FlowActivePowerUpperBoundConstraint(),
+            branch_type,
+            "BasicDispatch",
+        )
+        @test JuMP.normalized_coefficient(flow_limit["line", t], line_build) == -1.0
+    else
+        for meta in ("ub", "lb")
+            flow_limit =
+                PSIN.get_constraint(container, FlowRateConstraint(), PSIP.Portfolio, meta)
+            @test abs(JuMP.normalized_coefficient(flow_limit["line", t], line_build)) == 1.0
+        end
+    end
 
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     line_capacity = filter(
@@ -263,4 +309,11 @@ end
         ),
     )
     @test only(line_capacity.value) >= FEASIBILITY_DEMAND - 1e-6
+    return
+end
+
+@testset "Feasibility periods in nodes with transmission" begin
+    for transport in (NodalBalanceModel, NodalPTDFModel)
+        _test_nodal_feasibility(transport)
+    end
 end

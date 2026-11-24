@@ -16,8 +16,6 @@ get_expression_multiplier(::EnergyBalance, ::ActiveOutPowerVariable, ::PSIP.Stor
 get_expression_multiplier(::EnergyBalance, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
 get_expression_multiplier(::WeightedEnergyGeneration, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = 1.0
 get_expression_multiplier(::WeightedEnergyGeneration, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::OperationsTechnologyFormulation) = -1.0
-get_expression_multiplier(::FeasibilitySurplus, ::ActiveOutPowerVariable, ::PSIP.StorageTechnology, ::FeasibilityTechnologyFormulation) = 1.0
-get_expression_multiplier(::FeasibilitySurplus, ::ActiveInPowerVariable, ::PSIP.StorageTechnology, ::FeasibilityTechnologyFormulation) = -1.0
 
 # TODO: Defaulting to using discharge values for symmetric storage, but we need to be careful if we implement asymmetric storage investments
 get_max_cap(d::PSIP.StorageTechnology, ::CumulativePowerCapacity) = PSIP.get_capacity_limits_discharge(d).max
@@ -293,7 +291,7 @@ function add_to_expression!(
     T <: EnergyBalance,
     U <: Vector{D},
     V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
-    W <: NodalBalanceModel,
+    W <: AbstractNodalTransportAggregation,
 } where {D <: Union{PSIP.StorageTechnology, PSIP.ColocatedSupplyStorageTechnology}}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
@@ -353,108 +351,45 @@ function add_to_expression!(
     return
 end
 
+# Storage counts at its installed discharge capacity, as supply counts at its installed capacity
 function add_to_expression!(
     container::SingleOptimizationContainer,
-    expression_type::T,
-    var::V,
+    ::T,
     devices::U,
-    formulation::S,
-    transport_model::TransportModel{W},
+    ::S,
+    transport_model::TransportModel,
+    tech_model_vector::Vector{X},
 ) where {
     S <: BasicDispatchFeasibility,
     T <: FeasibilitySurplus,
     U <: Vector{D},
-    V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
-    W <: SingleRegionBalanceModel,
+    X <: TechnologyModel,
 } where {D <: PSIP.StorageTechnology}
     IS.@assert_op length(devices) > 0
     time_mapping = get_time_mapping(container)
-    time_steps = get_feasibility_time_steps(time_mapping)
-    tech_model = string(S)
-
-    variable = get_variable(container, V(), D, tech_model)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     expression = get_expression(container, T(), PSIP.Portfolio)
-
-    for d in devices, t in time_steps
+    for (ix, d) in enumerate(devices)
         name = PSIP.get_name(d)
-        _add_to_jump_expression!(
-            expression[SINGLE_REGION, t],
-            variable[name, t],
-            get_expression_multiplier(T(), V(), d, S()),
-        )
+        region = _feasibility_region(d, transport_model)
+        inv_model = string(get_investment_formulation(tech_model_vector[ix]))
+        capacity = get_expression(container, CumulativePowerCapacity(), D, inv_model)
+        for op_ix in get_feasibility_indexes(time_mapping), t in consecutive_slices[op_ix]
+            _add_to_jump_expression!(
+                expression[region, t],
+                capacity[name, inverse_invest_mapping[op_ix]],
+                1.0,
+            )
+        end
     end
     return
 end
 
-function add_to_expression!(
-    container::SingleOptimizationContainer,
-    expression_type::T,
-    var::V,
-    devices::U,
-    formulation::S,
-    transport_model::TransportModel{W},
-) where {
-    S <: BasicDispatchFeasibility,
-    T <: FeasibilitySurplus,
-    U <: Vector{D},
-    V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
-    W <: MultiRegionBalanceModel,
-} where {D <: PSIP.StorageTechnology}
-    IS.@assert_op length(devices) > 0
-    time_mapping = get_time_mapping(container)
-    time_steps = get_feasibility_time_steps(time_mapping)
-    tech_model = string(S)
-
-    variable = get_variable(container, V(), D, tech_model)
-    expression = get_expression(container, T(), PSIP.Portfolio)
-
-    for d in devices, t in time_steps
-        name = PSIP.get_name(d)
-        # Only 1 region supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
-        _add_to_jump_expression!(
-            expression[region, t],
-            variable[name, t],
-            get_expression_multiplier(T(), V(), d, S()),
-        )
-    end
-    return
-end
-
-function add_to_expression!(
-    container::SingleOptimizationContainer,
-    expression_type::T,
-    var::V,
-    devices::U,
-    formulation::S,
-    transport_model::TransportModel{W},
-) where {
-    S <: BasicDispatchFeasibility,
-    T <: FeasibilitySurplus,
-    U <: Vector{D},
-    V <: Union{ActiveOutPowerVariable, ActiveInPowerVariable},
-    W <: NodalBalanceModel,
-} where {D <: PSIP.StorageTechnology}
-    IS.@assert_op length(devices) > 0
-    time_mapping = get_time_mapping(container)
-    time_steps = get_feasibility_time_steps(time_mapping)
-    tech_model = string(S)
-
-    variable = get_variable(container, V(), D, tech_model)
-    expression = get_expression(container, T(), PSIP.Portfolio)
-
-    for d in devices, t in time_steps
-        name = PSIP.get_name(d)
-        # Only 1 region (node) supported
-        region = PSIP.get_name(only(PSIP.get_region(d)))
-        _add_to_jump_expression!(
-            expression[region, t],
-            variable[name, t],
-            get_expression_multiplier(T(), V(), d, S()),
-        )
-    end
-    return
-end
+_feasibility_region(::PSIP.Technology, ::TransportModel{SingleRegionBalanceModel}) =
+    SINGLE_REGION
+_feasibility_region(d::PSIP.Technology, ::TransportModel) =
+    PSIP.get_name(only(PSIP.get_region(d)))
 
 ################### Constraints ##################
 
