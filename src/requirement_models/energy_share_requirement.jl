@@ -71,7 +71,6 @@ function construct_requirement!(
     return
 end
 
-# Eligible generation of each policy in each representative period
 function add_expression!(
     container::SingleOptimizationContainer,
     ::WeightedEnergyShareGeneration,
@@ -106,7 +105,6 @@ function add_expression!(
     return
 end
 
-# Demand plus storage losses of each policy in each representative period
 function add_expression!(
     container::SingleOptimizationContainer,
     ::WeightedEnergyShareDemand,

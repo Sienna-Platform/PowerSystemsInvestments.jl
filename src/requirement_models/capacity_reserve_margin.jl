@@ -17,7 +17,6 @@ _reserve_area(
     ::TransportModel{SingleRegionBalanceModel},
 ) = nothing
 
-# Variables of a resource in the area (one per region for supply in several regions)
 _names_in_area(technology::PSIP.Technology, ::Nothing) = get_variable_names(technology)
 _names_in_area(technology::PSIP.Technology, area::Set{String}) = [
     name for (name, region) in
@@ -25,7 +24,6 @@ _names_in_area(technology::PSIP.Technology, area::Set{String}) = [
     region in area
 ]
 
-# Reserve from the variables `names` of a technology: supply its installed capacity
 function _add_reserve_contribution!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
@@ -44,7 +42,6 @@ function _add_reserve_contribution!(
     return
 end
 
-# Technologies dispatched against a capacity factor provide that share of their capacity
 function _add_reserve_contribution!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
@@ -65,7 +62,6 @@ function _add_reserve_contribution!(
     return
 end
 
-# Storage provides its net injection to the grid
 function _add_reserve_contribution!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
@@ -115,7 +111,6 @@ function _boundary_lines(
     return Tuple{PSIP.TransmissionTechnology, Bool}[]
 end
 
-# PTDF branches that carry the flow of a line
 _line_branches(::PTDFNetworkData, ::PSIP.TransmissionTechnology) = []
 function _line_branches(network::PTDFNetworkData, line::PSIP.NodalACTransportTechnology)
     name = PSIP.get_name(line)
@@ -146,7 +141,6 @@ function _monitor_boundary_corridors!(
     return
 end
 
-# Net flow into the area of a controlled line: its flow towards the area
 function _add_link_inflow!(
     reserve::Dict{Int, JuMP.AffExpr},
     container::SingleOptimizationContainer,
@@ -265,10 +259,11 @@ function construct_requirement!(
         req = PSIP.get_requirement(T, p, name)
         _check_contributors(p, req, names_to_model_map; demands=true)
         area = _reserve_area(p, req, transport_model)
-        _monitor_boundary_corridors!(
-            transport_model,
-            _boundary_lines(p, req, area; warn=true),
-        )
+        lines = _boundary_lines(p, req, area; warn=true)
+        for (line, _) in lines
+            _contributor_model(names_to_model_map, name, line)
+        end
+        _monitor_boundary_corridors!(transport_model, lines)
         outside = [
             name for resource in _contributing_resources(p, req) for name in
             setdiff(get_variable_names(resource), _names_in_area(resource, area))

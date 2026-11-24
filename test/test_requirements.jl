@@ -32,7 +32,6 @@ function _energy_share_model(
     PSIP.set_requirements!(wind, [esr])
     PSIP.set_requirements!(demand2, [esr])
     names = ["wind_share"]
-    # A second policy: cheap_thermal supplies `thermal_fraction` of demand1
     if !isnothing(thermal_fraction)
         thermal_esr = PSIP.EnergyShareRequirements(;
             name="thermal_share",
@@ -147,7 +146,6 @@ end
 _objective(m) =
     JuMP.objective_value(PSIN.get_jump_model(PSIN.get_optimization_container(m)))
 
-# Yearly demand2 in the 2030 representative day
 function _demand_2030(demand2)
     data =
         IS.get_time_series(
@@ -181,15 +179,12 @@ end
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     dual = only(read_dual(m, ESR_KEY).value)
     @test dual > 0.0
-    # The dual is the cost of one more MWh per year of required generation
     step = 1e-3
     tighter, _ = _energy_share_model(1.5 + step)
     @test solve!(tighter) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     @test (_objective(tighter) - _objective(m)) / (step * _demand_2030(demand2)) ≈ dual rtol =
         1e-6
 
-    # A MIP's duals are those of the LP with its integer builds fixed, which is restored to
-    # a MIP before the next solve
     mip, _ = _energy_share_model(
         1.5;
         duals=[EnergyShareRequirementConstraint],
@@ -225,8 +220,6 @@ end
         WeightedEnergyShareGeneration(),
         PSIP.EnergyShareRequirements,
     )
-    # The slack covers the shortfall, which costs the penalty in each year of 2030-2034,
-    # discounted at 7% to 2025
     @test JuMP.value(slack["wind_share"]) ≈
           50.0 * _demand_2030(demand2) - JuMP.value(generation["wind_share", 1]) rtol = 1e-6
     @test JuMP.coefficient(
@@ -270,7 +263,7 @@ end
 end
 
 @testset "Energy share storage losses" begin
-    # The co-located technology exchanges energy with the grid through a 90% inverter
+    # 90% inverter
     η = 0.9
     m, demand2 = _energy_share_model(1.5; storage=true, inverter_efficiency=η)
     container = PSIN.get_optimization_container(m)
@@ -293,9 +286,6 @@ end
     colocated(variable_type) =
         variable(variable_type, ESR_COLOCATED_TYPE, "CyclicalColocatedDispatch")
     for t in (1, 24)
-        # Storage is not eligible generation: its losses, including those of the inverter,
-        # are added to the demand, so they are scaled by the required share like the rest of
-        # the demand
         for (var, coefficient) in (
             (storage_in["test_storage", t], 365.0),
             (storage_out["test_storage", t], -365.0),
@@ -305,7 +295,6 @@ end
             @test JuMP.coefficient(demand["wind_share", 1], var) ≈ coefficient
             @test JuMP.coefficient(generation["wind_share", 1], var) == 0.0
         end
-        # The wind and solar output the co-located technology delivers is eligible generation
         for variable_type in (ActivePowerWindVariable(), ActivePowerSolarVariable())
             var = colocated(variable_type)["colocated_test", t]
             @test JuMP.coefficient(generation["wind_share", 1], var) ≈ 365.0 * η
@@ -321,8 +310,6 @@ end
     end
     @test JuMP.constant(demand["wind_share", 1]) ≈ _demand_2030(demand2)
 
-    # Grid output is the inverter efficiency times the discharge, wind and solar output, and
-    # charging takes the inverter efficiency times the grid input
     balance(meta) = PSIN.get_constraint(
         container,
         PSIN.ColocatedInternalBalanceConstraint(),
@@ -355,9 +342,8 @@ const CARBON_THERMAL_TYPE = PSIP.SupplyTechnology{PSY.ThermalStandard}
 const CARBON_HEAT_RATES = Dict("cheap_thermal" => 10.0, "expensive_thermal" => 8.0)
 const CARBON_INTENSITY = 0.1
 
-# Two zone model whose thermal technologies have fuel curves. `requirement` (or nothing) is
-# attached to the thermal technologies, wind and `demands`, with `storage` to the battery too,
-# and with `line` to the zonal line from Zone_1 to Zone_2, dispatched by `line_operation`.
+# `requirement` is attached to the thermal technologies, wind and `demands`, and to the
+# battery with `storage` and to the Zone_1 to Zone_2 line with `line`
 function _policy_model(
     requirement,
     formulation;
@@ -492,8 +478,6 @@ _carbon_cap(; max_mtons=1e8, max_tons_mwh=1e8) = PSIP.CarbonCaps(;
     max_tons_mwh=max_tons_mwh,
 )
 
-# Yearly 2030-2034 emissions, generation of the thermal technologies and wind, and demand,
-# computed from the solution
 function _carbon_totals(m)
     container = PSIN.get_optimization_container(m)
     dispatch(type) =
@@ -524,7 +508,6 @@ end
     uncapped = _carbon_totals(_policy_model(nothing, nothing))
     @test uncapped.emissions > 0.0
 
-    # Each limit is set to half the uncapped emissions, so it binds
     for (formulation, requirement, limit) in (
         (
             RequirementCarbonCapMass,
@@ -565,7 +548,6 @@ end
         @test only(dual.value) < 0.0
     end
 
-    # With slacks, a cap of zero is met by paying for the shortfall
     m = _policy_model(
         _carbon_cap(; max_mtons=0.0),
         RequirementCarbonCapMass;
@@ -608,7 +590,6 @@ end
             t,
         ],
     )
-    # The tax is paid on the 2030-2034 emissions, in each of those years, discounted to 2025
     @test coefficient(taxed, 5) - coefficient(untaxed, 5) ≈
           tax * CARBON_INTENSITY * 10.0 * 365 * sum(1.07^-k for k in 0:4) * 1.07^-5
     @test coefficient(taxed, 30) ≈ coefficient(untaxed, 30)
@@ -658,7 +639,6 @@ _capacity_reserve_margin(fraction) = PSIP.CapacityReserveMargin(;
     capacity_reserve_fraction=fraction,
 )
 
-# Reserve above the requirement in each 2030 time step, computed from the solution
 function _reserve_surplus(m, fraction)
     container = PSIN.get_optimization_container(m)
     p = PSIN.get_portfolio(m)
@@ -721,7 +701,6 @@ end
         storage=true,
         duals=[CapacityReserveMarginConstraint],
     )
-    # The margin is met in every 2030 time step and binds in some
     @test minimum(_reserve_surplus(m, 0.3)) ≈ 0.0 atol = 1e-4
     @test _objective(m) > _objective(unconstrained)
 
@@ -747,7 +726,6 @@ end
     @test all(>=(-1e-6), duals[1:24])
     @test maximum(duals[1:24]) > 0.0
 
-    # With slacks cheaper than capacity, the shortfall of each time step is a slack
     m = _policy_model(
         _capacity_reserve_margin(100.0),
         RequirementCapacityReserveMargin;
@@ -767,7 +745,6 @@ end
     @test all(iszero, slack["reserve_margin", 25:48].data)
 end
 
-# Left side minus right side of a constraint at the solution
 _constraint_surplus(constraint) =
     JuMP.value(JuMP.constraint_object(constraint).func) -
     MOI.constant(JuMP.constraint_object(constraint).set)
@@ -795,7 +772,7 @@ _constraint_surplus(constraint) =
         inflow = if operation == BasicDispatch
             [flow(FlowActivePowerVariable())["test_branch", t] for t in 1:24]
         else
-            # Flows into Zone_2 arrive net of the 5% losses
+            # 5% losses
             [
                 0.95 * flow(FlowActivePowerFromToVariable())["test_branch", t] -
                 flow(FlowActivePowerToFromVariable())["test_branch", t] for t in 1:24
@@ -828,7 +805,6 @@ _constraint_surplus(constraint) =
             PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, "demand2"),
             "ops_demand",
         )
-        # Only the resources in Zone_2 contribute
         in_area(type, name) =
             PSIP.get_name.(PSIP.get_region(PSIP.get_technology(type, p, name))) ==
             ["Zone_2"]
@@ -853,7 +829,6 @@ _constraint_surplus(constraint) =
         @test any(!iszero, inflow)
     end
 
-    # With both demands attached the area holds both ends of the line
     p_5bus, _ = test_2_zone_portfolio()
     requirement = _capacity_reserve_margin(0.3)
     PSIP.add_requirement!(p_5bus, requirement)
@@ -872,7 +847,25 @@ _constraint_surplus(constraint) =
         warn=true,
     )
     @test isempty(PSIN._boundary_lines(p_5bus, requirement, area))
-    # Lines have no effect in a single region model
+
+    m = _policy_model(
+        _capacity_reserve_margin(0.3),
+        RequirementCapacityReserveMargin;
+        demands=["demand2"],
+        line=true,
+    )
+    template = PSIN.get_template(m)
+    @test_throws r"contributing technology 'test_branch' which has no technology model" PSIN.construct_requirement!(
+        PSIN.get_optimization_container(m),
+        PSIN.get_portfolio(m),
+        ["reserve_margin"],
+        IS.Optimization.ArgumentConstructStage(),
+        PSIP.CapacityReserveMargin,
+        RequirementCapacityReserveMargin,
+        PSIN.get_transport_model(template),
+        PSIN.names_to_technology_model_map(template.technology_models),
+        PSIN.RequirementModel[],
+    )
     @test_logs (
         :warn,
         r"Lines test_branch attached to requirement 'reserve_margin' do not contribute",
@@ -888,7 +881,6 @@ _capacity_requirement(type, limit) = type(;
         limit,
 )
 
-# 2030 capacity of the resources a capacity requirement counts, from the solution
 function _counted_capacity(m)
     container = PSIN.get_optimization_container(m)
     value(expression_type, technology, name) = JuMP.value(
@@ -927,7 +919,6 @@ end
             colocated=true,
             duals=[CapacityRequirementConstraint],
         )
-        # Supply capacity, storage power and co-located wind and solar capacity count
         @test _counted_capacity(m) ≈ limit rtol = 1e-6
         dual = only(
             read_dual(m, PSIN.ConstraintKey(CapacityRequirementConstraint, type)).value,
@@ -935,7 +926,6 @@ end
         @test abs(dual) > 0.0
     end
 
-    # With slacks, a maximum of zero is exceeded by the capacity built
     m = _policy_model(
         _capacity_requirement(PSIP.MaximumCapacityRequirements, 0.0),
         RequirementMaximumCapacity;
@@ -963,7 +953,6 @@ end
 
 @testset "Hourly matching" begin
     hourly_matching() = PSIP.HourlyMatching(; name="hourly_matching", id=1, available=true)
-    # Wind and the battery must cover demand2 in every hour of both periods
     matched(; kwargs...) = _policy_model(
         hourly_matching(),
         RequirementHourlyMatching;
@@ -1029,7 +1018,6 @@ end
     @test all(>=(-1e-6), duals)
     @test maximum(duals) > 0.0
 
-    # With cheap slacks the shortfall of each hour is a slack
     m = matched(; use_slacks=true, attributes=Dict{String, Any}("slack_penalty" => 1.0))
     slack =
         JuMP.value.(
@@ -1074,7 +1062,6 @@ end
         models;
         demands=true,
     )
-    # Contributors must have a technology model in the template
     @test_throws r"contributing technology 'wind' which has no technology model" PSIN._check_contributors(
         p_5bus,
         requirement,
@@ -1098,7 +1085,6 @@ end
         models;
         demands=true,
     )
-    # Demand technologies are only checked where the requirement uses them
     @test isnothing(PSIN._check_contributors(p_5bus, requirement, models; demands=false))
 end
 

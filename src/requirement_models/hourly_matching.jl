@@ -4,7 +4,6 @@ _supported_requirement_formulations(::Type{<:PSIP.HourlyMatching}) =
 get_default_attributes(::Type{<:PSIP.HourlyMatching}, ::Type{RequirementHourlyMatching}) =
     Dict{String, Any}("slack_penalty" => REQUIREMENT_SLACK_PENALTY)
 
-# Supply output, or the net injection of storage and co-located technologies, at step t
 function _add_matched_output!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,

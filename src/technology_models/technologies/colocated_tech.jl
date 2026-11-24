@@ -43,9 +43,11 @@ get_operation_cost_data(d::PSIP.ColocatedSupplyStorageTechnology, ::ActivePowerS
 function get_inverter_efficiency(d::PSIP.ColocatedSupplyStorageTechnology)
     efficiency = PSIP.get_inverter_efficiency(d)
     if !(0.0 < efficiency <= 1.0)
-        error(
-            "Technology $(PSIP.get_name(d)) has inverter efficiency $efficiency, which must " *
-            "be in (0, 1].",
+        throw(
+            IS.InvalidValue(
+                "Technology $(PSIP.get_name(d)) has inverter efficiency $efficiency, which " *
+                "must be in (0, 1]",
+            ),
         )
     end
     return efficiency

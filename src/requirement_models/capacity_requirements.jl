@@ -11,7 +11,6 @@ get_default_attributes(
     ::Type{<:Union{RequirementMinimumCapacity, RequirementMaximumCapacity}},
 ) = Dict{String, Any}("slack_penalty" => CAPACITY_REQUIREMENT_SLACK_PENALTY)
 
-# Capacity a resource counts towards a capacity requirement in an investment period
 function _add_requirement_capacity!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -40,7 +39,6 @@ function _add_requirement_capacity!(
     return
 end
 
-# Co-located technologies count their wind and solar capacity
 function _add_requirement_capacity!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,

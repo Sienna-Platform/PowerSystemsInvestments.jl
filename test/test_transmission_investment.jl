@@ -59,7 +59,7 @@ function _aggregate_line_model(
     return template, p_5bus, line_type, "test_branch"
 end
 
-function _nodal_line_model(formulation)
+function _nodal_line_model(formulation; name="nodal_line")
     template, p_5bus = _transmission_template(NodalBalanceModel)
     first_id = next_region_id(p_5bus)
     nodes = [PSIP.Node(; name="Node_$i", id=first_id + i - 1) for i in 1:2]
@@ -77,7 +77,7 @@ function _nodal_line_model(formulation)
     end
     line_type = PSIP.NodalACTransportTechnology{PSY.ACBranch}
     line = line_type(;
-        name="nodal_line",
+        name=name,
         start_node=nodes[1],
         end_node=nodes[2],
         capacity_limits=(min=0, max=1000),
@@ -98,13 +98,13 @@ function _nodal_line_model(formulation)
     PSIP.add_technology!(p_5bus, line)
     set_technology_model!(
         template,
-        ["nodal_line"],
+        [name],
         line_type,
         formulation,
         BasicDispatch,
         BasicDispatchFeasibility,
     )
-    return template, p_5bus, line_type, "nodal_line"
+    return template, p_5bus, line_type, name
 end
 
 function _build_line_model(make_model, formulation)
@@ -268,4 +268,36 @@ end
         PSIN.get_transport_model(template),
         PSIN.TechnologyModel[],
     )
+end
+
+@testset "A technology and a line cannot share a name" begin
+    template, p_5bus, _, _ = _nodal_line_model(ContinuousInvestment; name="wind")
+    requirement = PSIP.EnergyShareRequirements(;
+        name="wind_share",
+        id=1,
+        available=true,
+        target_year=2030,
+        generation_fraction_requirement=0.1,
+    )
+    PSIP.add_requirement!(p_5bus, requirement)
+    for (type, name) in (
+        (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind"),
+        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2"),
+    )
+        PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [requirement])
+    end
+    set_requirement_model!(
+        template,
+        ["wind_share"],
+        PSIP.EnergyShareRequirements,
+        RequirementEnergyShare,
+    )
+    m = InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+    )
+    @test occursin("Multiple technology models defined", build_expecting_failure(m))
 end

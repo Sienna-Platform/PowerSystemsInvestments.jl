@@ -1202,8 +1202,6 @@ end
     end
 end
 
-# The duals of a MIP leave its discrete variables fixed until the next solve, which must still
-# screen it as a MIP
 @testset "Iterative monitoring of a MIP with duals" begin
     m = _ring_model(
         [RING_LINES; RING_CANDIDATES];
@@ -1379,7 +1377,6 @@ end
         Set(["n3"]);
         warn=true,
     )
-    # expensive_thermal, at n2, does not contribute
     for (name, contributes) in (("cheap_thermal", true), ("expensive_thermal", false))
         technology = PSIP.get_technology(thermal_type, p, name)
         @test !isempty(PSIN._names_in_area(technology, Set(["n3"]))) == contributes
@@ -1392,7 +1389,6 @@ end
     )
     @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
           IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
-    # The corridors entering the area are monitored so that their flows are in the model
     network = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m)))
     @test network.monitored == Set(["n1_n3", "n2_n3"])
     _solved_objective(m)

@@ -17,7 +17,6 @@ _has_fuel_consumption(d::PSIP.SupplyTechnology) = has_fuel_curve(d)
 _emitters(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
     filter(_has_fuel_consumption, _contributing_resources(p, requirement))
 
-# The demand rate cap is set by the policy's demand
 _uses_demands(::Type{<:CarbonCapFormulation}) = false
 _uses_demands(::Type{RequirementCarbonCapDemandRate}) = true
 
@@ -195,7 +194,6 @@ function add_expression!(
     return
 end
 
-# Yearly emission limit of a carbon cap in the operational indexes of its target period
 function _add_carbon_limit!(
     limit::JuMP.AffExpr,
     ::SingleOptimizationContainer,

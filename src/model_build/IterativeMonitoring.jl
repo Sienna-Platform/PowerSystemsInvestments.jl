@@ -126,7 +126,10 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
                 @timed calculate_dual_variables!(container, portfolio, milp)
             set_run_status!(model, status)
             status == RunStatus.SUCCESSFULLY_FINALIZED || _solve_failed(model)
-            milp && calculate_network_values!(container, transport_model, portfolio)
+            if milp
+                calculate_network_values!(container, transport_model, portfolio)
+                loading = _corridor_loading(container, network)
+            end
         end
 
         converged = all(ratio <= 1 + tolerance for (ratio, _) in values(loading))

@@ -5,7 +5,6 @@ _is_demand(::PSIP.DemandTechnology) = true
 _is_line(::PSIP.Technology) = false
 _is_line(::PSIP.TransmissionTechnology) = true
 
-# Available technologies attached to a requirement, of the kind selected by `is_kind`
 _contributing(p::PSIP.Portfolio, requirement::PSIP.Requirement, is_kind) = [
     t for t in PSIP.get_contributing_technologies(p, requirement) if
     is_kind(t) && PSIP.get_available(t)
@@ -47,9 +46,11 @@ function _target_investment_period(time_mapping::TimeMapping, requirement::PSIP.
         get_investment_time_stamps(time_mapping),
     )
     if isnothing(period)
-        error(
-            "Requirement $(PSIP.get_name(requirement)) has target year $target_year, which " *
-            "is not within any investment period of the capital model.",
+        throw(
+            IS.ConflictingInputsError(
+                "Requirement $(PSIP.get_name(requirement)) has target year $target_year, " *
+                "which is not within any investment period of the capital model",
+            ),
         )
     end
     return period
@@ -63,7 +64,6 @@ function _period_cost_factor(container::SingleOptimizationContainer, period::Int
            (1.0 + discount_rate)^(get_base_year(container) - Dates.year(first(inv_tuple)))
 end
 
-# Warns that attached technologies of a kind do not contribute to a requirement
 function _warn_ignored_contributors(
     technologies::Vector,
     requirement::PSIP.Requirement,
@@ -97,7 +97,6 @@ function _add_slack_container!(
     )
 end
 
-# Adds a shortfall variable to `expression`, priced at `cost` per unit in the objective
 function _add_requirement_slack!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -135,8 +134,10 @@ function _add_requirement_duals!(
                 ],
             )
             if isempty(found)
-                error(
-                    "$(nameof(T)) has no $(nameof(constraint_type)) to take the duals of.",
+                throw(
+                    ArgumentError(
+                        "$(nameof(T)) has no $(nameof(constraint_type)) to take the duals of",
+                    ),
                 )
             end
             container.duals[only(found)] = constraints[only(found)]
@@ -145,7 +146,6 @@ function _add_requirement_duals!(
     return
 end
 
-# Technology model of a contributing technology
 function _contributor_model(
     names_to_model_map::Dict{String, TechnologyModel},
     req_name::String,
@@ -153,15 +153,16 @@ function _contributor_model(
 )
     name = PSIP.get_name(technology)
     if !haskey(names_to_model_map, name)
-        error(
-            "Requirement '$(req_name)' lists contributing technology '$(name)' " *
-            "which has no technology model in the template.",
+        throw(
+            IS.ConflictingInputsError(
+                "Requirement '$(req_name)' lists contributing technology '$(name)' " *
+                "which has no technology model in the template",
+            ),
         )
     end
     return names_to_model_map[name]
 end
 
-# Weighted energy of a variable over the time steps of a representative period
 function _weighted_energy(
     container::SingleOptimizationContainer,
     variable::VariableType,
@@ -269,7 +270,6 @@ function _add_storage_losses!(
     return
 end
 
-# Net injection (out - in) of a storage or co-located technology at time step t
 function _add_net_injection!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -285,7 +285,6 @@ function _add_net_injection!(
     return
 end
 
-# Eligible generation of every contributing resource of a requirement
 function _add_eligible_generation!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
@@ -316,7 +315,6 @@ function _requirement_demand(
     return demand
 end
 
-# Weighted demand of a requirement plus the losses of its contributing storage
 function _add_demand_and_storage_losses!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,
