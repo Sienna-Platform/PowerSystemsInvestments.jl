@@ -348,8 +348,6 @@ function add_constraints!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     map_to_op = get_investment_map_to_operational_slices(time_mapping)
     jump_model = get_jump_model(container)
-    store_names = get_store_variable_names(get_settings(container))
-
     con = add_constraints_container!(
         container,
         CapacityReserveMarginConstraint(),
@@ -357,21 +355,8 @@ function add_constraints!(
         PSIP.get_name.(requirements),
         time_steps,
     )
-    slack_names = [
-        PSIP.get_name(req) for
-        (req, model) in zip(requirements, requirement_model_vector) if get_use_slacks(model)
-    ]
-    slacks = if isempty(slack_names)
-        nothing
-    else
-        add_variable_container!(
-            container,
-            RequirementSlackVariable(),
-            T,
-            slack_names,
-            time_steps,
-        )
-    end
+    slacks =
+        _add_slack_container!(container, requirements, requirement_model_vector, time_steps)
 
     for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
@@ -422,27 +407,18 @@ function add_constraints!(
             end
         end
 
-        if req_name in slack_names
+        if get_use_slacks(model)
             cost_factor =
                 get_attributes(model)["slack_penalty"] *
                 _target_period_cost_factor(container, req)
-            for t in time_steps
-                slacks[req_name, t] = JuMP.@variable(
-                    jump_model,
-                    lower_bound = 0.0,
-                    base_name =
-                        store_names ? "RequirementSlackVariable_{$(req_name), $(t)}" : "",
-                )
-                haskey(reserve, t) || JuMP.fix(slacks[req_name, t], 0.0; force=true)
-            end
             for op_ix in op_indexes, t in consecutive_slices[op_ix]
-                JuMP.add_to_expression!(reserve[t], slacks[req_name, t])
-                add_to_objective_operations_expression!(
-                    container,
-                    cost_factor *
-                    get_time_step_weight(container, op_ix) *
-                    slacks[req_name, t],
-                )
+                cost = cost_factor * get_time_step_weight(container, op_ix)
+                _add_requirement_slack!(reserve[t], container, slacks, cost, req_name, t)
+            end
+            # Time steps outside the target period have no constraint
+            for t in setdiff(time_steps, keys(reserve))
+                slacks[req_name, t] = JuMP.@variable(jump_model)
+                JuMP.fix(slacks[req_name, t], 0.0)
             end
         end
 

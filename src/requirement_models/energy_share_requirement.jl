@@ -155,25 +155,22 @@ function add_constraints!(
     share_gen = get_expression(container, WeightedEnergyShareGeneration(), T)
     share_demand = get_expression(container, WeightedEnergyShareDemand(), T)
     map_to_op = get_investment_map_to_operational_slices(time_mapping)
-    _add_requirement_slacks!(container, requirements, requirement_model_vector)
-    slacks = if has_container_key(container, RequirementSlackVariable, T)
-        get_variable(container, RequirementSlackVariable(), T)
-    else
-        nothing
-    end
-
+    slacks = _add_slack_container!(container, requirements, requirement_model_vector)
     con = add_constraints_container!(
         container,
         EnergyShareRequirementConstraint(),
         T,
         PSIP.get_name.(requirements),
     )
-    for req in requirements
+    for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
         op_indexes = map_to_op[_target_investment_period(time_mapping, req)]
         lhs = JuMP.AffExpr(0.0)
-        if !isnothing(slacks) && req_name in axes(slacks, 1)
-            JuMP.add_to_expression!(lhs, slacks[req_name])
+        if get_use_slacks(model)
+            cost =
+                get_attributes(model)["slack_penalty"] *
+                _target_period_cost_factor(container, req)
+            _add_requirement_slack!(lhs, container, slacks, cost, req_name)
         end
         for op_ix in op_indexes
             JuMP.add_to_expression!(lhs, share_gen[req_name, op_ix])

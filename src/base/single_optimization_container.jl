@@ -939,6 +939,7 @@ function build_model!(
         requirement_technology_models,
         transport_model,
     )
+    _add_requirement_duals!(container, requirement_map, requirement_names_to_model_map)
 
     # Branches Model Arguments #
     for (ix, type_map) in enumerate(br_maps)

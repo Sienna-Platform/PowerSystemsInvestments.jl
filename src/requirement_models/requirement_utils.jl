@@ -88,64 +88,74 @@ function _warn_ignored_contributors(
     return
 end
 
-# Shortfall variables of the requirements whose model uses slacks. A unit of shortfall in a
-# target period costs the "slack_penalty" in every year of that period.
-function _add_requirement_slacks!(
+# Slack container of the requirements whose model uses slacks; nothing when none does
+function _add_slack_container!(
     container::SingleOptimizationContainer,
     requirements::Vector{T},
-    requirement_model_vector::Vector{<:RequirementModel};
+    requirement_model_vector::Vector{<:RequirementModel},
+    axs...;
     meta::String=IS.Optimization.CONTAINER_KEY_EMPTY_META,
 ) where {T <: PSIP.Requirement}
-    with_slacks = [
-        (req, model) for (req, model) in zip(requirements, requirement_model_vector) if
-        get_use_slacks(model)
+    names = [
+        PSIP.get_name(req) for
+        (req, model) in zip(requirements, requirement_model_vector) if get_use_slacks(model)
     ]
-    isempty(with_slacks) && return
-    jump_model = get_jump_model(container)
-    store_names = get_store_variable_names(get_settings(container))
-    slacks = add_variable_container!(
+    isempty(names) && return nothing
+    return add_variable_container!(
         container,
         RequirementSlackVariable(),
         T,
-        [PSIP.get_name(req) for (req, _) in with_slacks];
+        names,
+        axs...;
         meta=meta,
     )
-    for (req, model) in with_slacks
-        name = PSIP.get_name(req)
-        slacks[name] = JuMP.@variable(
-            jump_model,
-            lower_bound = 0.0,
-            base_name = store_names ? "RequirementSlackVariable_{$(name)}" : "",
-        )
-        cost =
-            get_attributes(model)["slack_penalty"] *
-            _target_period_cost_factor(container, req)
-        add_to_objective_operations_expression!(container, cost * slacks[name])
-    end
+end
+
+# Adds a shortfall variable to `expression`, priced at `cost` per unit in the objective
+function _add_requirement_slack!(
+    expression::JuMP.AffExpr,
+    container::SingleOptimizationContainer,
+    slacks,
+    cost::Float64,
+    index...,
+)
+    store_names = get_store_variable_names(get_settings(container))
+    slack = JuMP.@variable(
+        get_jump_model(container),
+        lower_bound = 0.0,
+        base_name =
+            store_names ? "RequirementSlackVariable_{$(join(index, ", "))}" : "",
+    )
+    slacks[index...] = slack
+    JuMP.add_to_expression!(expression, slack)
+    add_to_objective_operations_expression!(container, cost * slack)
     return
 end
 
-# Stores the duals of the constraints listed by the requirement models. The constraints of a
-# requirement type have the formulation as meta when the type has several formulations.
+# Stores the duals of the constraints listed by the requirement models. Constraints have the
+# formulation as meta when their requirement type has several formulations.
 function _add_requirement_duals!(
     container::SingleOptimizationContainer,
-    ::Type{T},
-    ::Type{B},
-    requirement_model_vector::Vector{<:RequirementModel},
-) where {T <: PSIP.Requirement, B <: RequirementFormulation}
+    requirement_map::Dict{Tuple{Type, Type}, Vector{String}},
+    requirement_names_to_model_map::Dict{String, RequirementModel},
+)
     constraints = get_constraints(container)
-    for model in requirement_model_vector, constraint_type in get_duals(model)
-        found = filter(
-            k -> haskey(constraints, k),
-            [
-                ConstraintKey(constraint_type, T),
-                ConstraintKey(constraint_type, T, string(B)),
-            ],
-        )
-        if isempty(found)
-            error("$(nameof(T)) has no $(nameof(constraint_type)) to take the duals of.")
+    for ((T, B), names) in requirement_map, name in names
+        for constraint_type in get_duals(requirement_names_to_model_map[name])
+            found = filter(
+                k -> haskey(constraints, k),
+                [
+                    ConstraintKey(constraint_type, T),
+                    ConstraintKey(constraint_type, T, string(B)),
+                ],
+            )
+            if isempty(found)
+                error(
+                    "$(nameof(T)) has no $(nameof(constraint_type)) to take the duals of.",
+                )
+            end
+            container.duals[only(found)] = constraints[only(found)]
         end
-        container.duals[only(found)] = constraints[only(found)]
     end
     return
 end

@@ -96,31 +96,15 @@ function add_constraints!(
     operational_indexes = get_operational_indexes(time_mapping)
     time_steps = [t for op_ix in operational_indexes for t in consecutive_slices[op_ix]]
     jump_model = get_jump_model(container)
-    store_names = get_store_variable_names(get_settings(container))
-
-    names = PSIP.get_name.(requirements)
     con = add_constraints_container!(
         container,
         HourlyMatchingConstraint(),
         T,
-        names,
+        PSIP.get_name.(requirements),
         time_steps,
     )
-    slack_names = [
-        PSIP.get_name(req) for
-        (req, model) in zip(requirements, requirement_model_vector) if get_use_slacks(model)
-    ]
-    slacks = if isempty(slack_names)
-        nothing
-    else
-        add_variable_container!(
-            container,
-            RequirementSlackVariable(),
-            T,
-            slack_names,
-            time_steps,
-        )
-    end
+    slacks =
+        _add_slack_container!(container, requirements, requirement_model_vector, time_steps)
 
     for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
@@ -137,13 +121,10 @@ function add_constraints!(
                 time_series = retrieve_ops_time_series(d, op_ix, time_mapping)
                 demand .+= TimeSeries.values(time_series.data)
             end
-            slack_cost = if req_name in slack_names
+            slack_cost =
                 get_attributes(model)["slack_penalty"] *
                 get_time_step_weight(container, op_ix) *
                 _period_cost_factor(container, inverse_invest_mapping[op_ix])
-            else
-                0.0
-            end
             for (ix, t) in enumerate(time_slices)
                 output = JuMP.AffExpr(0.0)
                 for (resource, tech_model) in zip(resources, resource_models)
@@ -156,18 +137,14 @@ function add_constraints!(
                         t,
                     )
                 end
-                if req_name in slack_names
-                    slacks[req_name, t] = JuMP.@variable(
-                        jump_model,
-                        lower_bound = 0.0,
-                        base_name =
-                            store_names ?
-                            "RequirementSlackVariable_{$(req_name), $(t)}" : "",
-                    )
-                    JuMP.add_to_expression!(output, slacks[req_name, t])
-                    add_to_objective_operations_expression!(
+                if get_use_slacks(model)
+                    _add_requirement_slack!(
+                        output,
                         container,
-                        slack_cost * slacks[req_name, t],
+                        slacks,
+                        slack_cost,
+                        req_name,
+                        t,
                     )
                 end
                 con[req_name, t] = JuMP.@constraint(jump_model, output >= demand[ix])

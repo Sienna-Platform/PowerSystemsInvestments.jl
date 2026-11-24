@@ -255,12 +255,8 @@ function add_constraints!(
     map_to_op = get_investment_map_to_operational_slices(time_mapping)
     meta = string(B)
     emissions = get_expression(container, WeightedCarbonEmissions(), T, meta)
-    _add_requirement_slacks!(container, requirements, requirement_model_vector; meta=meta)
-    slacks = if has_container_key(container, RequirementSlackVariable, T, meta)
-        get_variable(container, RequirementSlackVariable(), T, meta)
-    else
-        nothing
-    end
+    slacks =
+        _add_slack_container!(container, requirements, requirement_model_vector; meta=meta)
     con = add_constraints_container!(
         container,
         CarbonCapConstraint(),
@@ -268,7 +264,7 @@ function add_constraints!(
         PSIP.get_name.(requirements);
         meta=meta,
     )
-    for req in requirements
+    for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
         op_indexes = map_to_op[_target_investment_period(time_mapping, req)]
         limit = JuMP.AffExpr(0.0)
@@ -281,8 +277,11 @@ function add_constraints!(
             names_to_model_map,
             op_indexes,
         )
-        if !isnothing(slacks) && req_name in axes(slacks, 1)
-            JuMP.add_to_expression!(limit, slacks[req_name])
+        if get_use_slacks(model)
+            cost =
+                get_attributes(model)["slack_penalty"] *
+                _target_period_cost_factor(container, req)
+            _add_requirement_slack!(limit, container, slacks, cost, req_name)
         end
         con[req_name] = JuMP.@constraint(
             jump_model,
