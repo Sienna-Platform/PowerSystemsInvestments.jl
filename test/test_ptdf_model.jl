@@ -1222,6 +1222,23 @@ end
     end
 end
 
+@testset "Iterative monitoring of a MIP with duals" begin
+    m = _ring_model(
+        [RING_LINES; RING_CANDIDATES];
+        candidate_cost=1.0,
+        algorithm=IterativeMonitoring,
+    )
+    container = PSIN.get_optimization_container(m)
+    key = PSIN.ConstraintKey(IslandBalanceConstraint, PSIP.Portfolio)
+    container.duals[key] = PSIN.get_constraints(container)[key]
+    for _ in 1:2
+        @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        @test first(get_monitoring_log(m).stage) == "relaxed"
+        @test !any(isnan, PSIN.get_duals(container)[key].data)
+        @test !PSIN.is_milp(container)
+    end
+end
+
 @testset "Flow variables" begin
     expressions = _triangle_model(NodalPTDFModel)
     objective = _solved_objective(expressions)
@@ -1332,6 +1349,160 @@ end
     end
     results = PSIN.read_aux_variable(m, PSIN.AuxVarKey(LineFlow, PSIP.Portfolio))
     @test sort(unique(results.name)) == ["existing", "expansion", "units"]
+end
+
+# The area of the reserve margin is n3, the node of demand2: l13 and l23 enter it, l12 is
+# fully outside, and expensive_thermal at n2 is outside
+@testset "Capacity reserve margin with PTDF flows" begin
+    m = _nodal_test_model(
+        NodalPTDFModel;
+        nodes=["n1", "n2", "n3"],
+        placement=Dict(
+            "cheap_thermal" => "n3",
+            "expensive_thermal" => "n2",
+            "wind" => "n3",
+            "demand1" => "n2",
+            "demand2" => "n3",
+            "test_storage" => "n2",
+        ),
+        lines=TRIANGLE_LINES,
+        ratings=Dict("1" => 100.0),
+        use_slacks=true,
+        attributes=Dict{String, Any}("monitored" => String[]),
+    )
+    p = PSIN.get_portfolio(m)
+    requirement = PSIP.CapacityReserveMargin(;
+        name="reserve_margin",
+        id=1,
+        available=true,
+        target_year=2030,
+        capacity_reserve_fraction=0.3,
+    )
+    PSIP.add_requirement!(p, requirement)
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    demand_type = PSIP.DemandRequirement{PSY.PowerLoad}
+    for (type, name) in (
+        (thermal_type, "cheap_thermal"),
+        (thermal_type, "expensive_thermal"),
+        (demand_type, "demand2"),
+        (PTDF_LINE_TYPE, "l12"),
+        (PTDF_LINE_TYPE, "l13"),
+        (PTDF_LINE_TYPE, "l23"),
+    )
+        PSIP.set_requirements!(PSIP.get_technology(type, p, name), [requirement])
+    end
+    @test_logs (:warn, r"l12 is fully outside the area") PSIN._boundary_lines(
+        p,
+        requirement,
+        Set(["n3"]);
+        warn=true,
+    )
+    for (name, contributes) in (("cheap_thermal", true), ("expensive_thermal", false))
+        technology = PSIP.get_technology(thermal_type, p, name)
+        @test !isempty(PSIN._names_in_area(technology, Set(["n3"]))) == contributes
+    end
+    set_requirement_model!(
+        PSIN.get_template(m),
+        ["reserve_margin"],
+        PSIP.CapacityReserveMargin,
+        RequirementCapacityReserveMargin,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    network = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m)))
+    @test network.monitored == Set(["n1_n3", "n2_n3"])
+    _solved_objective(m)
+
+    container = PSIN.get_optimization_container(m)
+    constraints = PSIN.get_constraint(
+        container,
+        CapacityReserveMarginConstraint(),
+        PSIP.CapacityReserveMargin,
+    )
+    flow = PSIN.get_aux_variables(container)[PSIN.AuxVarKey(BranchFlow, PSIP.Portfolio)]
+    capacity =
+        JuMP.value.(
+            PSIN.get_expression(
+                container,
+                PSIN.CumulativeCapacity(),
+                thermal_type,
+                "ContinuousInvestment",
+            ),
+        )
+    demand = TimeSeries.values(
+        IS.get_time_series(
+            IS.SingleTimeSeries,
+            PSIP.get_technology(demand_type, p, "demand2"),
+            "ops_demand";
+            year="2030",
+            rep_day=1,
+        ).data,
+    )
+    for t in 1:24
+        constraint = JuMP.constraint_object(constraints["reserve_margin", t])
+        @test constraint.set isa MOI.GreaterThan
+        surplus = JuMP.value(constraint.func) - MOI.constant(constraint.set)
+        @test surplus ≈
+              capacity["cheap_thermal", 1] + flow["n1_n3", t] + flow["n2_n3", t] -
+              1.3 * demand[t] atol = 1e-4
+    end
+end
+
+# The line named n1_n2 runs from n2 to n3, so it only belongs to corridor n2_n3. No unit of
+# "tiny" fits under its capacity limit, so it has no branch and carries no flow.
+@testset "Capacity reserve margin lines matched by corridor membership" begin
+    m = _nodal_test_model(
+        NodalPTDFModel;
+        nodes=["n1", "n2", "n3"],
+        placement=Dict(
+            "cheap_thermal" => "n3",
+            "expensive_thermal" => "n2",
+            "wind" => "n3",
+            "demand1" => "n2",
+            "demand2" => "n3",
+            "test_storage" => "n2",
+        ),
+        lines=[
+            ("l12", "n1", "n2", 0.1, "1"),
+            ("n1_n2", "n2", "n3", 0.2, "4"),
+            ("l13", "n1", "n3", 0.3, "3"),
+        ],
+        discrete_lines=[("tiny", "n1", "n3", 0.3, IntegerInvestment, 100.0, 50.0)],
+        use_slacks=true,
+        attributes=Dict{String, Any}("monitored" => String[]),
+    )
+    p = PSIN.get_portfolio(m)
+    requirement = PSIP.CapacityReserveMargin(;
+        name="reserve_margin",
+        id=1,
+        available=true,
+        target_year=2030,
+        capacity_reserve_fraction=0.1,
+    )
+    PSIP.add_requirement!(p, requirement)
+    for (type, name) in (
+        (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal"),
+        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2"),
+        (PTDF_LINE_TYPE, "n1_n2"),
+        (PTDF_LINE_TYPE, "tiny"),
+    )
+        PSIP.set_requirements!(PSIP.get_technology(type, p, name), [requirement])
+    end
+    set_requirement_model!(
+        PSIN.get_template(m),
+        ["reserve_margin"],
+        PSIP.CapacityReserveMargin,
+        RequirementCapacityReserveMargin,
+    )
+    @test build!(m; output_dir=mktempdir(; cleanup=true)) ==
+          IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.BUILT
+    network = PSIN.get_network_data(PSIN.get_transport_model(PSIN.get_template(m)))
+    @test network.monitored == Set(["n2_n3"])
+    line(name) = PSIP.get_technology(PTDF_LINE_TYPE, p, name)
+    @test [b.name for b in PSIN._line_branches(network, line("n1_n2"))] == ["n2_n3"]
+    @test isempty(PSIN._line_branches(network, line("tiny")))
+    @test !PSIN._is_link(network, line("tiny"))
+    _solved_objective(m)
 end
 
 @testset "Lines below the minimum voltage" begin

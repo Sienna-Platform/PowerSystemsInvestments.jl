@@ -43,8 +43,9 @@ end
 const CorridorLines =
     Dict{Tuple{String, String}, Vector{Tuple{PSIP.NodalACTransportTechnology, LineKey}}}
 
-_names(c::MergedCorridor) =
-    [c.name; [l.name for l in c.expandable_lines]; [l.name for (l, _) in c.fixed_lines]]
+_line_names(c::MergedCorridor) =
+    [[l.name for l in c.expandable_lines]; [l.name for (l, _) in c.fixed_lines]]
+_names(c::MergedCorridor) = [c.name; _line_names(c)]
 
 _is_continuous(::Type{ContinuousInvestment}) = true
 _is_continuous(::Type{<:Union{IntegerInvestment, BinaryInvestment}}) = false
