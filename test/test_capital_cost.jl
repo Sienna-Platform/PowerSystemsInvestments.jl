@@ -241,10 +241,10 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
         )
 
         stor = PSIP.get_technology(storage_type, p, "test_storage")
-        scost = PSIP.get_capital_costs_storage(stor)
+        scost = PSIP.get_capital_costs(stor)
         discharge_slope = _curve_slope(PSIP.get_discharge_capital_cost(scost))
         interconnection = 0.5 * discharge_slope
-        PSIP.set_capital_costs_storage!(
+        PSIP.set_capital_costs!(
             stor,
             PSIP.StorageCapitalCost(
                 charge_capital_cost=PSIP.get_charge_capital_cost(scost),
@@ -386,8 +386,8 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
             PSIN.BasicDispatchFeasibility,
         )
         stor = PSIP.get_technology(storage_type, p, "test_storage")
-        scost = PSIP.get_capital_costs_storage(stor)
-        PSIP.set_capital_costs_storage!(
+        scost = PSIP.get_capital_costs(stor)
+        PSIP.set_capital_costs!(
             stor,
             PSIP.StorageCapitalCost(;
                 charge_capital_cost=LinearCurve(1000.0),
