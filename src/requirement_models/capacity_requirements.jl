@@ -56,9 +56,9 @@ function _add_requirement_capacity!(
     return
 end
 
-_capacity_limit(requirement::PSIP.MinimumCapacityRequirements) =
+_requirement_limit(requirement::PSIP.MinimumCapacityRequirements) =
     PSIP.get_min_capacity_mw(requirement)
-_capacity_limit(requirement::PSIP.MaximumCapacityRequirements) =
+_requirement_limit(requirement::PSIP.MaximumCapacityRequirements) =
     PSIP.get_max_capacity_mw(requirement)
 
 _capacity_constraint(
@@ -181,7 +181,7 @@ function add_constraints!(
             JuMP.add_to_expression!(capacity, _slack_sign(formulation), slacks[req_name])
         end
         con[req_name] =
-            _capacity_constraint(jump_model, capacity, formulation, _capacity_limit(req))
+            _capacity_constraint(jump_model, capacity, formulation, _requirement_limit(req))
     end
     return
 end

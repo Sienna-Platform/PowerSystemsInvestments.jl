@@ -18,7 +18,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
     max_iterations = get(attributes, "max_iterations", 20)
     tolerance = get(attributes, "overload_tolerance", 1e-4)
     jump_model = get_jump_model(container)
-    
+
     # A MIP is left with its discrete variables fixed after its duals are computed
     unfix_discrete_variables!(container)
     milp = is_milp(container)
