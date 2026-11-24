@@ -44,7 +44,6 @@ _flows(ptdf, injections) = transpose(ptdf.data) * injections
     for (branch, row) in expected, (node, value) in zip(nodes, row)
         @test isapprox(ptdf[branch, node], value; atol=1e-4)
     end
-    # Parallel lines split the corridor flow by susceptance
     for node in nodes
         @test ptdf["3-5a", node] ≈ ptdf["3-5b", node]
         @test ptdf["4-6a", node] ≈ ptdf["4-6c", node]
@@ -97,7 +96,6 @@ end
         )
     @test haskey(two_references.subnetworks, "a1")
 
-    # A candidate joining two islands with a reference node each does not warn
     joined = [lines; ("a3b1", "a3", "b1", 0.1)]
     @test_logs (:warn, r"reference nodes") match_mode = :any _ptdf_from_lines(
         nodes,
@@ -110,7 +108,7 @@ end
         reference_nodes=Set(["a1", "b1"]),
         candidate_branches=Set(["a3b1"]),
     )
-    @test_throws ErrorException _ptdf_from_lines(
+    @test_throws IS.DataFormatError _ptdf_from_lines(
         nodes,
         [("bad", "a1", "a1", 0.1)];
         reference_nodes=Set(["a1"]),

@@ -468,7 +468,6 @@ function add_constraints!(
             time_slices = consecutive_slices[op_ix]
             time_step_length = get_time_step_length(time_mapping, op_ix)
             for t in time_slices
-                # The state of charge of the first time step follows the last one
                 previous_t = get_previous_time_step(time_mapping, op_ix, t)
                 con_soc[name, t] = JuMP.@constraint(
                     get_jump_model(container),

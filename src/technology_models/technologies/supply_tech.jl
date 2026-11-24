@@ -610,7 +610,6 @@ function get_availability(d::PSIP.SupplyTechnology)
     return (1.0 - outage_factors.forced) * (1.0 - outage_factors.planned)
 end
 
-# Number of time steps covered by a minimum up or down time, minimum one.
 function get_commitment_time_steps(time_mapping::TimeMapping, op_ix::Int, duration::Float64)
     num_time_steps = ceil(
         Int,
@@ -619,8 +618,14 @@ function get_commitment_time_steps(time_mapping::TimeMapping, op_ix::Int, durati
     return max(num_time_steps, 1)
 end
 
-# Sum of a variable over the `num_time_steps` time steps ending at `t`
-function get_cyclic_window_sum(var, name, time_mapping, op_ix, t, num_time_steps)
+function get_cyclic_window_sum(
+    var::DenseAxisArray,
+    name::String,
+    time_mapping::TimeMapping,
+    op_ix::Int,
+    t::Int,
+    num_time_steps::Int,
+)
     time_slices = get_consecutive_slices(time_mapping)[op_ix]
     full_periods, partial = divrem(num_time_steps, length(time_slices))
     window_sum = JuMP.AffExpr(0.0)
@@ -1053,8 +1058,6 @@ function objective_function!(
     add_fixed_om_cost!(container, CumulativeCapacity(), devices, formulation, tech_model)
     return
 end
-
-################ Hydro Dispatch + BasicDispatchWithBudget Constraints ################
 
 function add_constraints!(
     container::SingleOptimizationContainer,

@@ -75,11 +75,8 @@ end
 
 _curve_slope(vc) = PSY.get_proportional_term(PSY.get_function_data(vc))
 
-# Capital coefficients ($/MW) per investment period computed by hand, independently of the
-# package: the overnight cost is paid in 30 annual payments at the WACC of the test data,
-# 0.6·0.04·(1 − 0.21) + 0.4·0.10 = 0.05896, whose value at the build year is discounted at 7%
-# over 30 years and then to 2025. `multipliers` are the "inv_capex" values of the periods
-# starting in 2030 and 2035.
+# Annuity of the overnight cost over 30 years at WACC 0.6·0.04·(1 − 0.21) + 0.4·0.10,
+# discounted at 7% to 2025; `multipliers` are the 2030 and 2035 "inv_capex" values
 function _hand_capital_coefficients(proportional_term, multipliers)
     wacc = 0.05896
     annualized = wacc / (1 - (1 + wacc)^-30) * (1 - 1.07^-30) / 0.07
@@ -131,8 +128,6 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
 
         @test all(>(0), coef_cheap)
         @test all(>(0), coef_expensive)
-        # Both techs share financial data, so the ratio of capital coefficients is the ratio
-        # of the capital curve slopes times the ratio of their capex multipliers.
         @test coef_cheap ./ coef_expensive ≈
               slope_cheap / slope_expensive .* CHEAP_THERMAL_CAPEX ./
               EXPENSIVE_THERMAL_CAPEX
@@ -337,8 +332,7 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
         @test ic_coef ≈
               _hand_capital_coefficients(slope + interconnection, CHEAP_THERMAL_CAPEX)
 
-        # Costs given in dollars of a later year are deflated to the base year at the 5%
-        # inflation rate of the portfolio
+        # Deflated to the base year at the portfolio's 5% inflation rate
         PSIP.set_technology_base_year!(PSIP.get_financial_data(cheap), 2030)
         inflated_container =
             _build_capital_container(p, template, capital, tech_type, tm, ["cheap_thermal"])

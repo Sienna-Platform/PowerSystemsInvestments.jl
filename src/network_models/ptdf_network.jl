@@ -93,9 +93,9 @@ function _limit_units(
 )
     if count > MAX_UNIT_LINES
         error(
-            "Line $(PSIP.get_name(technology)) can build $count units, each a separate " *
-            "PTDF branch, more than the limit of $(MAX_UNIT_LINES). Lower its capacity " *
-            "limit, raise its unit size or use ContinuousInvestment.",
+            "Line $(PSIP.get_name(technology)) can build $count units, each a PTDF branch, " *
+            "more than the limit of $(MAX_UNIT_LINES); lower its capacity limit, raise its " *
+            "unit size or use ContinuousInvestment",
         )
     end
     return count
@@ -209,13 +209,17 @@ function PTDFNetworkData(
         monitored_corridors = monitor_iteratively ? Set{String}() : copy(all_corridors)
     else
         below_voltage = intersect(monitored, transport_lines)
-        isempty(below_voltage) || error(
-            "Monitored lines $below_voltage are below the minimum voltage of " *
-            "$(min_voltage) kV and are not in the PTDF",
+        isempty(below_voltage) || throw(
+            ArgumentError(
+                "Monitored lines $below_voltage are below the minimum voltage of " *
+                "$(min_voltage) kV and are not in the PTDF",
+            ),
         )
         unknown = setdiff(monitored, Iterators.flatten(_names.(merged_corridors)))
-        isempty(unknown) || error(
-            "Monitored names $unknown are not merged corridors or lines on merged corridors",
+        isempty(unknown) || throw(
+            ArgumentError(
+                "Monitored names $unknown are not merged corridors or lines on merged corridors",
+            ),
         )
         monitored_corridors =
             Set(c.name for c in merged_corridors if any(in(monitored), _names(c)))
@@ -224,8 +228,8 @@ function PTDFNetworkData(
     names = [b.name for b in branches]
     allunique(names) || error(
         "PTDF branch names $(unique(filter(n -> count(==(n), names) > 1, names))) are " *
-        "repeated. Merged corridors are named by their node names joined by `_`, so node " *
-        "names that contain `_` can collide.",
+        "repeated; merged corridors are named by their node names joined by `_`, so node " *
+        "names that contain `_` can collide",
     )
     nodes = sort!(collect(PSIP.get_regions(PSIP.Node, portfolio)); by=PSIP.get_name)
     ptdf = PTDF(

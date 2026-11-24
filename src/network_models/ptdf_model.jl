@@ -9,7 +9,6 @@ _virtual_branches(network::PTDFNetworkData) = [
 _monitored_corridors(network::PTDFNetworkData) =
     [c for c in network.merged_corridors if c.name in network.monitored]
 
-# Monitored merged corridors and every branch that may not be built
 _limited_branches(network::PTDFNetworkData) = [
     [c.name for c in _monitored_corridors(network)]
     first.(_virtual_branches(network))
@@ -303,7 +302,6 @@ function add_constraints!(
     return
 end
 
-# Copy of a container with rows added for `names`
 function _add_rows!(containers::Dict, key, names::Vector{String})
     old = containers[key]
     new = DenseAxisArray{eltype(old)}(undef, [axes(old, 1); names], axes(old, 2))
@@ -312,8 +310,7 @@ function _add_rows!(containers::Dict, key, names::Vector{String})
     return new
 end
 
-# Adds the flows and limits of merged corridors to a built model, skipping names that are not
-# merged corridors or are already monitored
+# Skips names that are not merged corridors or are already monitored
 function add_monitored_corridors!(
     container::SingleOptimizationContainer,
     transport_model::TransportModel{NodalPTDFModel},
@@ -453,7 +450,7 @@ function add_constraints!(
     return
 end
 
-# Dijkstra from `source`: the distance to each node and the node before it on the path
+# Dijkstra: the distance from `source` to each node and the previous node on its path
 function _shortest_paths(neighbors::Vector{Vector{Tuple{Int, Float64}}}, source::Int)
     distance = fill(Inf, length(neighbors))
     previous = zeros(Int, length(neighbors))
@@ -474,10 +471,8 @@ function _shortest_paths(neighbors::Vector{Vector{Tuple{Int, Float64}}}, source:
     return distance, previous
 end
 
-# Big-M of each virtual transaction: its branch's susceptance times a bound on the angle
-# difference across it, the shortest path of Fmax / b over limited merged corridors. When only
-# other branches that may not be built join its ends, the sum over all limited branches is used;
-# when unlimited corridors join them, no bound holds.
+# Susceptance times the shortest path of Fmax / b over limited merged corridors between the
+# branch's ends, or the sum over all limited branches when only virtual branches join them
 function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.Portfolio)
     nodes = network.ptdf.axes[1]
     node_lookup = network.ptdf.lookup[1]
@@ -512,10 +507,12 @@ function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.P
                     push!(path, join(minmax(nodes[previous[node]], nodes[node]), "_"))
                     node = previous[node]
                 end
-                error(
-                    "The ends of $name are only joined by corridors without flow limits, so " *
-                    "its virtual transaction has no valid bound. Monitor the corridors " *
-                    "$(reverse!(path)) or solve with IterativeMonitoring.",
+                throw(
+                    IS.ConflictingInputsError(
+                        "The ends of $name are only joined by corridors without flow " *
+                        "limits, so its virtual transaction has no valid bound; monitor the " *
+                        "corridors $(reverse!(path)) or solve with IterativeMonitoring",
+                    ),
                 )
             end
         end

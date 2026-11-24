@@ -103,9 +103,11 @@ function construct_technologies!(
     C <: BasicDispatchWithLosses,
     X <: TechnologyModel,
 }
-    error(
-        "BasicDispatchWithLosses has no effect under SingleRegionBalanceModel; use " *
-        "BasicDispatch for links $names",
+    throw(
+        IS.ConflictingInputsError(
+            "BasicDispatchWithLosses has no effect under SingleRegionBalanceModel; use " *
+            "BasicDispatch for links $names",
+        ),
     )
 end
 

@@ -21,7 +21,6 @@ end
     @test PSIN.get_time_step_length(two_hourly, 1) == 2.0
     @test PSIN.get_time_step_length(two_hourly, 2) == 2.0
 
-    # Sub-hourly steps and periods with a single time step.
     half_hourly_day =
         collect(DateTime(2030, 1, 1, 0):Minute(30):DateTime(2030, 1, 1, 23, 30))
     single_step = [DateTime(2035, 1, 1, 0)]
@@ -33,32 +32,27 @@ end
     @test PSIN.get_time_step_length(mixed, 1) == 0.5
     @test PSIN.get_time_step_length(mixed, 2) == 1.0
 
-    # Time stamps must be evenly spaced within a representative period.
     uneven_day = [DateTime(2030, 1, 1, 0), DateTime(2030, 1, 1, 1), DateTime(2030, 1, 1, 3)]
-    @test_throws ErrorException PSIN.TimeMapping(
+    @test_throws IS.DataFormatError PSIN.TimeMapping(
         TIME_STEP_TEST_PERIODS,
         [uneven_day, single_step],
         no_feasibility,
     )
 
-    # The second day of the 2-hour mapping covers time steps 13:24.
     @test PSIN.get_previous_time_step(two_hourly, 1, 5) == 4
     @test PSIN.get_previous_time_step(two_hourly, 2, 14) == 13
-    # Representative periods are cyclic.
     @test PSIN.get_previous_time_step(two_hourly, 1, 1) == 12
     @test PSIN.get_previous_time_step(two_hourly, 2, 13) == 24
     @test PSIN.get_previous_time_step(two_hourly, 2, 14, 3) == 23
     @test PSIN.get_previous_time_step(two_hourly, 2, 14, 0) == 14
     @test PSIN.get_previous_time_step(mixed, 2, 49) == 49
 
-    # Minimum up and down times are rounded up to a whole number of time steps, at least one.
     @test PSIN.get_commitment_time_steps(hourly, 1, 3.0) == 3
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 3.0) == 2
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 4.0) == 2
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 0.5) == 1
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 0.0) == 1
     @test PSIN.get_commitment_time_steps(two_hourly, 1, 100.0) == 50
-    # Exact multiples of the time step do not round up an extra step.
     @test PSIN.get_commitment_time_steps(mixed, 1, 0.9 + 0.6) == 3
     six_minute_day = collect(DateTime(2030, 1, 1, 0):Minute(6):DateTime(2030, 1, 1, 23, 54))
     six_minute = PSIN.TimeMapping(
@@ -70,10 +64,7 @@ end
     @test PSIN.get_commitment_time_steps(six_minute, 1, 0.1 + 0.2) == 3
 end
 
-# One zone with a gas technology defined by a fuel curve, wind, storage and a demand. The
-# profiles are constant over blocks of two hours, so a model with hourly time steps and a
-# model with 2-hour time steps describe the same system. The gas technology uses the given
-# operation formulation. Its commitment data is only used by the commitment formulation.
+# Profiles are constant over 2-hour blocks, so the 1-hour and 2-hour models are one system
 function _time_step_test_model(step_hours::Int, gas_formulation=BasicDispatch)
     days = _time_step_test_days(step_hours)
     steps_per_block = 2 ÷ step_hours
@@ -257,22 +248,17 @@ end
     hourly = PSIN.get_optimization_container(m_hourly)
     two_hourly = PSIN.get_optimization_container(m_two_hourly)
 
-    # The weights describe one year in both models.
     @test_logs min_level = Logging.Warn PSIN.check_operational_weights(
         PSIN.get_time_mapping(two_hourly),
         [365.0, 365.0],
     )
     @test PSIN.get_time_step_weight(hourly, 1) == 365.0
     @test PSIN.get_time_step_weight(two_hourly, 1) == 730.0
-    # Costs per MWh are weighted by hours. Costs of starting up or shutting down capacity are
-    # per event, so they do not depend on the length of the time step.
     @test PSIN.get_cost_weight(two_hourly, PSIN.ActivePowerVariable(), 1) == 730.0
     @test PSIN.get_cost_weight(two_hourly, PSIN.CommittedCapacityVariable(), 1) == 730.0
     @test PSIN.get_cost_weight(two_hourly, PSIN.StartUpCapacityVariable(), 1) == 365.0
     @test PSIN.get_cost_weight(two_hourly, PSIN.ShutDownCapacityVariable(), 1) == 365.0
 
-    # A MW dispatched during a 2-hour time step costs and burns twice as much as during a
-    # 1-hour time step.
     dispatch(container) = PSIN.get_variable(
         container,
         PSIN.ActivePowerVariable(),
@@ -292,7 +278,6 @@ end
     @test JuMP.coefficient(fuel(two_hourly)["gas", 1], dispatch(two_hourly)["gas", 1]) ==
           14.0
 
-    # Charging during a 2-hour time step stores twice the energy.
     charge(container) = PSIN.get_variable(
         container,
         PSIN.ActiveInPowerVariable(),
@@ -314,8 +299,6 @@ end
         charge(hourly)["battery", 2],
     )
 
-    # Both models describe the same system, so they have the same cost, build the same
-    # capacity and see the same energy.
     @test solve!(m_hourly) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     @test solve!(m_two_hourly) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
     @test JuMP.objective_value(PSIN.get_jump_model(two_hourly)) ≈
@@ -369,8 +352,6 @@ end
     start_up = PSIN.StartUpCapacityVariable()
     shut_down = PSIN.ShutDownCapacityVariable()
 
-    # Dispatch and the no-load cost of committed capacity are per hour, so they cost twice as
-    # much during a 2-hour time step. Start-up and shut-down costs are per event.
     for variable_type in (PSIN.ActivePowerVariable(), committed)
         @test objective_coefficient(two_hourly, variable_type) ≈
               2.0 * objective_coefficient(hourly, variable_type)
@@ -381,19 +362,15 @@ end
               objective_coefficient(hourly, variable_type)
     end
 
-    # No-load fuel is burned per hour committed, start-up fuel once per MW started.
     @test JuMP.coefficient(fuel(hourly), variable(hourly, committed)) == 1.5
     @test JuMP.coefficient(fuel(two_hourly), variable(two_hourly, committed)) == 3.0
     @test JuMP.coefficient(fuel(hourly), variable(hourly, start_up)) == 3.0
     @test JuMP.coefficient(fuel(two_hourly), variable(two_hourly, start_up)) == 3.0
 
-    # Committed capacity can ramp by 0.3 of its capacity per hour.
     ramp_up(container) = constraint(container, PSIN.RampRateConstraint(), "$(meta)_up")
     @test coefficient(ramp_up(hourly), variable(hourly, committed)) ≈ -0.3
     @test coefficient(ramp_up(two_hourly), variable(two_hourly, committed)) ≈ -0.6
 
-    # The 4-hour minimum up time covers 4 hourly time steps or 2 time steps of 2 hours, and
-    # the 2-hour minimum down time covers 2 hourly time steps or a single time step.
     min_up(container) = constraint(container, PSIN.MinimumUpTimeConstraint())
     min_down(container) = constraint(container, PSIN.MinimumDownTimeConstraint())
     @test coefficient(min_up(hourly), variable(hourly, start_up, 22)) == -1.0
