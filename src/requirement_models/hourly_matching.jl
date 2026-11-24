@@ -45,12 +45,12 @@ function construct_requirement!(
     ::Type{T},
     ::Type{B},
     ::TransportModel{<:AbstractTransportAggregation},
-    ::Dict{String, TechnologyModel},
+    names_to_model_map::Dict{String, TechnologyModel},
     ::Vector{X},
 ) where {T <: PSIP.HourlyMatching, B <: RequirementHourlyMatching, X <: RequirementModel}
     for name in names
         req = PSIP.get_requirement(T, p, name)
-        _check_contributors(p, req; demands=true)
+        _check_contributors(p, req, names_to_model_map; demands=true)
         _warn_ignored_contributors(_contributing_lines(p, req), req, "Lines")
     end
     return

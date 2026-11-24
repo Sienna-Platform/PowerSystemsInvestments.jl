@@ -16,6 +16,7 @@ function _energy_share_model(
     thermal_investment=ContinuousInvestment,
     storage=false,
     inverter_efficiency=1.0,
+    thermal_fraction=nothing,
 )
     p_5bus, op_days = test_2_zone_portfolio()
     wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
@@ -30,6 +31,25 @@ function _energy_share_model(
     PSIP.add_requirement!(p_5bus, esr)
     PSIP.set_requirements!(wind, [esr])
     PSIP.set_requirements!(demand2, [esr])
+    names = ["wind_share"]
+    # A second policy: cheap_thermal supplies `thermal_fraction` of demand1
+    if !isnothing(thermal_fraction)
+        thermal_esr = PSIP.EnergyShareRequirements(;
+            name="thermal_share",
+            id=2,
+            available=true,
+            target_year=2030,
+            generation_fraction_requirement=thermal_fraction,
+        )
+        PSIP.add_requirement!(p_5bus, thermal_esr)
+        for (type, name) in (
+            (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal"),
+            (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1"),
+        )
+            PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [thermal_esr])
+        end
+        push!(names, "thermal_share")
+    end
     PSIP.set_inverter_efficiency!(
         PSIP.get_technology(ESR_COLOCATED_TYPE, p_5bus, "colocated_test"),
         inverter_efficiency,
@@ -102,7 +122,7 @@ function _energy_share_model(
     end
     set_requirement_model!(
         template,
-        ["wind_share"],
+        names,
         RequirementModel(
             PSIP.EnergyShareRequirements,
             RequirementEnergyShare;
@@ -219,6 +239,34 @@ end
             PSIN.VariableKey(RequirementSlackVariable, PSIP.EnergyShareRequirements),
         ).value,
     ) ≈ JuMP.value(slack["wind_share"])
+end
+
+@testset "Results of several policies" begin
+    m, _ = _energy_share_model(
+        50.0;
+        thermal_fraction=0.5,
+        use_slacks=true,
+        duals=[EnergyShareRequirementConstraint],
+    )
+    @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+    container = PSIN.get_optimization_container(m)
+    slack = PSIN.get_variable(
+        container,
+        RequirementSlackVariable(),
+        PSIP.EnergyShareRequirements,
+    )
+    slacks = read_variable(
+        m,
+        PSIN.VariableKey(RequirementSlackVariable, PSIP.EnergyShareRequirements),
+    )
+    duals = read_dual(m, ESR_KEY)
+    for results in (slacks, duals)
+        @test sort(results.name) == ["thermal_share", "wind_share"]
+        @test all(==(1), results.time_index)
+    end
+    for row in eachrow(slacks)
+        @test row.value ≈ JuMP.value(slack[row.name]) atol = 1e-6
+    end
 end
 
 @testset "Energy share storage losses" begin
@@ -975,21 +1023,48 @@ end
     p_5bus, _ = test_2_zone_portfolio()
     requirement = _capacity_reserve_margin(0.1)
     PSIP.add_requirement!(p_5bus, requirement)
+    wind_type = PSIP.SupplyTechnology{PSY.RenewableDispatch}
+    demand_type = PSIP.DemandRequirement{PSY.PowerLoad}
+    models = Dict{String, PSIN.TechnologyModel}()
     @test_throws r"Requirement 'reserve_margin' has no available contributing resources or demand technologies." PSIN._check_contributors(
         p_5bus,
-        requirement;
+        requirement,
+        models;
         demands=true,
     )
-    PSIP.set_requirements!(
-        PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind"),
-        [requirement],
-    )
+    PSIP.set_requirements!(PSIP.get_technology(wind_type, p_5bus, "wind"), [requirement])
     @test_throws r"has no available contributing demand technologies." PSIN._check_contributors(
         p_5bus,
-        requirement;
+        requirement,
+        models;
         demands=true,
     )
-    @test isnothing(PSIN._check_contributors(p_5bus, requirement; demands=false))
+    # Contributors must have a technology model in the template
+    @test_throws r"contributing technology 'wind' which has no technology model" PSIN._check_contributors(
+        p_5bus,
+        requirement,
+        models;
+        demands=false,
+    )
+    models["wind"] = TechnologyModel(
+        wind_type,
+        ContinuousInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    @test isnothing(PSIN._check_contributors(p_5bus, requirement, models; demands=false))
+    PSIP.set_requirements!(
+        PSIP.get_technology(demand_type, p_5bus, "demand2"),
+        [requirement],
+    )
+    @test_throws r"contributing technology 'demand2' which has no technology model" PSIN._check_contributors(
+        p_5bus,
+        requirement,
+        models;
+        demands=true,
+    )
+    # Demand technologies are only checked where the requirement uses them
+    @test isnothing(PSIN._check_contributors(p_5bus, requirement, models; demands=false))
 end
 
 @testset "Inverter efficiency must be in (0, 1]" begin

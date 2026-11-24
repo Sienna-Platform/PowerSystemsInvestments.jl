@@ -19,19 +19,23 @@ _contributing_lines(p::PSIP.Portfolio, requirement::PSIP.Requirement) =
 
 function _check_contributors(
     p::PSIP.Portfolio,
-    requirement::PSIP.Requirement;
+    requirement::PSIP.Requirement,
+    names_to_model_map::Dict{String, TechnologyModel};
     demands::Bool,
 )
+    resources = _contributing_resources(p, requirement)
+    demand_technologies = demands ? _contributing_demands(p, requirement) : []
     missing_kinds = String[]
-    isempty(_contributing_resources(p, requirement)) && push!(missing_kinds, "resources")
-    if demands && isempty(_contributing_demands(p, requirement))
-        push!(missing_kinds, "demand technologies")
-    end
+    isempty(resources) && push!(missing_kinds, "resources")
+    demands && isempty(demand_technologies) && push!(missing_kinds, "demand technologies")
     if !isempty(missing_kinds)
         error(
             "Requirement '$(PSIP.get_name(requirement))' has no available contributing " *
             "$(join(missing_kinds, " or ")).",
         )
+    end
+    for technology in [resources; demand_technologies]
+        _contributor_model(names_to_model_map, PSIP.get_name(requirement), technology)
     end
     return
 end
@@ -176,9 +180,6 @@ function _weighted_energy(
     return get_time_step_weight(container, op_ix) * sum(values[name, t] for t in slices)
 end
 
-# Eligible generation of a contributing resource: the output of supply technologies and the
-# wind and solar output that co-located technologies deliver through their inverter. Storage
-# only shifts energy.
 function _add_eligible_generation!(
     expression::JuMP.AffExpr,
     container::SingleOptimizationContainer,

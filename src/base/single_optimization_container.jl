@@ -825,6 +825,10 @@ function build_model!(
         get_requirement_formulation_to_names_map(get_requirement_models(template), port)
     # Requirements can have technologies and lines attached
     requirement_technology_models = merge(names_to_model_map, br_names_to_model_map)
+    shared_names = intersect(keys(names_to_model_map), keys(br_names_to_model_map))
+    if !isempty(requirement_map) && !isempty(shared_names)
+        @warn "Technologies and lines share the names $(sort!(collect(shared_names))); requirements treat them as the lines."
+    end
 
     # Only build the feasibility model if there are feasibility timesteps
     if is_feasibility_empty(get_time_mapping(container))

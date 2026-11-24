@@ -95,11 +95,17 @@ _line_branches(::PTDFNetworkData, ::PSIP.TransmissionTechnology) = []
 function _line_branches(network::PTDFNetworkData, line::PSIP.NodalACTransportTechnology)
     name = PSIP.get_name(line)
     return [
-        [c for c in network.merged_corridors if name in _names(c)]
+        [c for c in network.merged_corridors if name in _line_names(c)]
         [c for c in network.new_corridors if c.line.name == name]
         [u for u in network.unit_lines if u.line.name == name]
     ]
 end
+
+# Lines dispatched as links outside the PTDF. An AC line in the PTDF without branches (no unit
+# can be built) carries no flow.
+_is_link(::PTDFNetworkData, ::PSIP.TransmissionTechnology) = true
+_is_link(network::PTDFNetworkData, line::PSIP.NodalACTransportTechnology) =
+    PSIP.get_name(line) in network.transport_lines
 
 # Under the PTDF model, the corridors of the boundary lines are monitored so that their flows
 # are in the model
@@ -111,7 +117,8 @@ function _monitor_boundary_corridors!(
     network = get_network_data(transport_model)
     line_names = Set(PSIP.get_name(line) for (line, _) in lines)
     for corridor in network.merged_corridors
-        isdisjoint(line_names, _names(corridor)) || push!(network.monitored, corridor.name)
+        isdisjoint(line_names, _line_names(corridor)) ||
+            push!(network.monitored, corridor.name)
     end
     return
 end
@@ -233,8 +240,7 @@ function _add_line_inflows!(
             flow[branch.name, t],
         )
     end
-    controlled =
-        [(line, into) for (line, into) in lines if isempty(_line_branches(network, line))]
+    controlled = [(line, into) for (line, into) in lines if _is_link(network, line)]
     _add_controlled_line_inflows!(
         reserve,
         container,
@@ -254,7 +260,7 @@ function construct_requirement!(
     ::Type{T},
     ::Type{B},
     transport_model::TransportModel{<:AbstractTransportAggregation},
-    ::Dict{String, TechnologyModel},
+    names_to_model_map::Dict{String, TechnologyModel},
     ::Vector{X},
 ) where {
     T <: PSIP.CapacityReserveMargin,
@@ -263,7 +269,7 @@ function construct_requirement!(
 }
     for name in names
         req = PSIP.get_requirement(T, p, name)
-        _check_contributors(p, req; demands=true)
+        _check_contributors(p, req, names_to_model_map; demands=true)
         _monitor_boundary_corridors!(transport_model, _boundary_lines(p, req; warn=true))
     end
     return

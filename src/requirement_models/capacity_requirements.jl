@@ -85,7 +85,7 @@ function construct_requirement!(
     ::Type{T},
     ::Type{B},
     ::TransportModel{<:AbstractTransportAggregation},
-    ::Dict{String, TechnologyModel},
+    names_to_model_map::Dict{String, TechnologyModel},
     ::Vector{X},
 ) where {
     T <: CapacityRequirements,
@@ -94,7 +94,7 @@ function construct_requirement!(
 }
     for name in names
         req = PSIP.get_requirement(T, p, name)
-        _check_contributors(p, req; demands=false)
+        _check_contributors(p, req, names_to_model_map; demands=false)
         _warn_ignored_contributors(_contributing_lines(p, req), req, "Lines")
         _warn_ignored_contributors(
             _contributing_demands(p, req),
