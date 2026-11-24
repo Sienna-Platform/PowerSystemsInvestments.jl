@@ -18,6 +18,9 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
     max_iterations = get(attributes, "max_iterations", 20)
     tolerance = get(attributes, "overload_tolerance", 1e-4)
     jump_model = get_jump_model(container)
+    
+    # A MIP is left with its discrete variables fixed after its duals are computed
+    unfix_discrete_variables!(container)
     milp = is_milp(container)
 
     undo_relax = nothing
@@ -64,7 +67,7 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
         for iteration in Iterators.countfrom(0)
             stage =
                 !isnothing(undo_relax) ? "relaxed" : gap_pending ? "screening gap" : "final"
-            status = solve_model!(container, portfolio)
+            status = solve_model!(container, portfolio; duals=false)
             set_run_status!(model, status)
             status == RunStatus.SUCCESSFULLY_FINALIZED || _solve_failed(model)
             calculate_network_values!(container, transport_model, portfolio)
@@ -107,6 +110,16 @@ function solve_impl!(model::InvestmentModel{IterativeMonitoring})
             end
             _add_corridors!(container, transport_model, portfolio, added)
             rounds += 1
+        end
+
+        # Duals of the last solve only. Those of a MIP re-solve it with its discrete
+        # variables fixed, which can change the network values.
+        if !isempty(get_duals(container))
+            status, get_optimizer_stats(container).timed_calculate_dual_variables =
+                @timed calculate_dual_variables!(container, portfolio, milp)
+            set_run_status!(model, status)
+            status == RunStatus.SUCCESSFULLY_FINALIZED || _solve_failed(model)
+            milp && calculate_network_values!(container, transport_model, portfolio)
         end
 
         converged = all(ratio <= 1 + tolerance for (ratio, _) in values(loading))

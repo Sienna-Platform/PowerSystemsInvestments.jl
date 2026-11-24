@@ -756,7 +756,11 @@ function _calculate_dual_variables_discrete_model!(
     end
     @warn "Duals not computed: the LP with fixed discrete variables returned $(JuMP.termination_status(jump_model))"
     unfix_discrete_variables!(container)
-    JuMP.set_start_value.(variables, values)
+    try
+        JuMP.set_start_value.(variables, values)
+    catch err
+        err isa MOI.UnsupportedAttribute || rethrow()
+    end
     JuMP.optimize!(jump_model)
     constraints = get_constraints(container)
     for key in collect(keys(get_duals(container)))
@@ -969,7 +973,11 @@ end
 """
 Default solve method for OptimizationContainer
 """
-function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfolio)
+function solve_model!(
+    container::SingleOptimizationContainer,
+    port::PSIP.Portfolio;
+    duals::Bool=true,
+)
     optimizer_stats = get_optimizer_stats(container)
 
     jump_model = get_jump_model(container)
@@ -997,6 +1005,7 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     # Needs to be called here to avoid issues when getting duals from MILPs
     write_optimizer_stats!(container)
 
+    duals || return RunStatus.SUCCESSFULLY_FINALIZED
     status, optimizer_stats.timed_calculate_dual_variables =
         @timed calculate_dual_variables!(container, port, is_milp(container))
 

@@ -1241,6 +1241,25 @@ end
     end
 end
 
+# The duals of a MIP leave its discrete variables fixed until the next solve, which must still
+# screen it as a MIP
+@testset "Iterative monitoring of a MIP with duals" begin
+    m = _ring_model(
+        [RING_LINES; RING_CANDIDATES];
+        candidate_cost=1.0,
+        algorithm=IterativeMonitoring,
+    )
+    container = PSIN.get_optimization_container(m)
+    key = PSIN.ConstraintKey(IslandBalanceConstraint, PSIP.Portfolio)
+    container.duals[key] = PSIN.get_constraints(container)[key]
+    for _ in 1:2
+        @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
+        @test first(get_monitoring_log(m).stage) == "relaxed"
+        @test !any(isnan, PSIN.get_duals(container)[key].data)
+        @test !PSIN.is_milp(container)
+    end
+end
+
 @testset "Flow variables" begin
     expressions = _triangle_model(NodalPTDFModel)
     objective = _solved_objective(expressions)
