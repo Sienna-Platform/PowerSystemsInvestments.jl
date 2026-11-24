@@ -240,6 +240,11 @@ end
     end
     @test objectives[2] > objectives[1]
 
+    template, p_5bus, line_type, name = _aggregate_line_model(ContinuousInvestment)
+    line = PSIP.get_technology(line_type, p_5bus, name)
+    PSIP.set_line_loss!(line, -0.05)
+    @test_throws IS.DataFormatError PSIN._loss_terms(line)
+
     template, p_5bus, line_type, name = _aggregate_line_model(
         ContinuousInvestment;
         operation=BasicDispatchWithLosses,

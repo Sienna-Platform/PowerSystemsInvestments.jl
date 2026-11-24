@@ -30,7 +30,6 @@ _arc(d::PSIP.AggregateTransportTechnology) = (PSIP.get_name(PSIP.get_start_regio
 _arc(d::PSIP.TransmissionTechnology) = (PSIP.get_name(PSIP.get_start_node(d)), PSIP.get_name(PSIP.get_end_node(d)))
 
 # Proportional loss rate, and constant loss per MW of capacity
-_loss_terms(d::ControllableTransportTechnology) = _loss_terms(PSIP.get_line_loss(d))
 _loss_terms(loss::Float64) = (loss, 0.0)
 _loss_terms(loss::PSY.LinearCurve) = (PSY.get_proportional_term(loss), PSY.get_constant_term(loss))
 _loss_terms(::PSY.PiecewiseIncrementalCurve) = error("Piecewise line losses are not supported")
@@ -40,6 +39,18 @@ _has_losses(d::ControllableTransportTechnology) = _has_losses(PSIP.get_line_loss
 _has_losses(loss::Union{Float64, PSY.LinearCurve}) = any(!iszero, _loss_terms(loss))
 _has_losses(::PSY.PiecewiseIncrementalCurve) = true
 #! format: on
+
+function _loss_terms(d::ControllableTransportTechnology)
+    rate, constant = _loss_terms(PSIP.get_line_loss(d))
+    if rate < 0.0 || constant < 0.0
+        throw(
+            IS.DataFormatError(
+                "Line $(PSIP.get_name(d)) has negative losses (rate $rate, constant $constant)",
+            ),
+        )
+    end
+    return rate, constant
+end
 
 function get_default_attributes(
     ::Type{U},

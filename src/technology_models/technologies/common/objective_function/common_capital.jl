@@ -145,7 +145,7 @@ function add_capital_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        storage_capital_costs = PSIP.get_capital_costs_storage(d)
+        storage_capital_costs = PSIP.get_capital_costs(d)
         value_curve = PSIP.get_energy_capital_cost(storage_capital_costs)
         _add_cost_to_objective!(container, U(), d, value_curve, V(), tech_model)
     end
@@ -164,7 +164,7 @@ function get_power_capital_cost(
     if PSIP.get_charge_capital_cost(capital_costs) != PSY.LinearCurve(0.0)
         error(
             "Technology $(PSIP.get_name(technology)) has a charge capital cost, which is " *
-            "not supported: storage power capacity is priced with the discharge capital cost.",
+            "not currently supported: storage power capacity is priced with the discharge capital cost.",
         )
     end
     return PSIP.get_discharge_capital_cost(capital_costs)
@@ -182,7 +182,7 @@ function add_capital_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        storage_capital_costs = PSIP.get_capital_costs_storage(d)
+        storage_capital_costs = PSIP.get_capital_costs(d)
         value_curve = get_power_capital_cost(d, storage_capital_costs)
         interconnection_cost = PSIP.get_interconnection_cost(storage_capital_costs)
         _add_cost_to_objective!(

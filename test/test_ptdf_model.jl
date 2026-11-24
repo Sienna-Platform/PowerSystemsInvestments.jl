@@ -480,6 +480,26 @@ end
     for (name, _, susceptance) in PSIN._virtual_branches(separate)
         @test separate_bounds[name] ≈ susceptance * longest_path
     end
+
+    mixed, portfolio = _ptdf_network_data(
+        [
+            ("ab_existing", "A", "B", ContinuousInvestment, (;)),
+            ("ac_new", "A", "C", ContinuousInvestment, (;)),
+            ("bc_new", "B", "C", ContinuousInvestment, (;)),
+        ];
+        monitored=String[],
+    )
+    @test_throws r"ac_new .* without flow limits connect to them" PSIN._virtual_transaction_bounds(
+        mixed,
+        portfolio,
+    )
+
+    negative, portfolio = _ptdf_network_data([
+        ("ab_existing", "A", "B", ContinuousInvestment, (reactance=-0.1,)),
+        ("bc_existing", "B", "C", ContinuousInvestment, (;)),
+        ("ac_new", "A", "C", ContinuousInvestment, (;)),
+    ])
+    @test all(>(0.0), values(PSIN._virtual_transaction_bounds(negative, portfolio)))
 end
 
 @testset "PTDF network data is built with the model" begin

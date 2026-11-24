@@ -253,7 +253,8 @@ above its limit. It is `false` when the solve failed, stopped at `"max_iteration
 corridors overloaded, or left monitored corridors overloaded because of `"relative_tol"`.
 """
 get_monitoring_converged(model::InvestmentModel{IterativeMonitoring}) =
-    model.ext["monitoring_converged"]
+    model.ext["monitoring_converged"] &&
+    get_run_status(model) == RunStatus.SUCCESSFULLY_FINALIZED
 
 """
 Corridors whose flow is limited in a model with the `NodalPTDFModel` transport model.

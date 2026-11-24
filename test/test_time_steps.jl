@@ -138,7 +138,7 @@ function _time_step_test_model(step_hours::Int, gas_formulation=BasicDispatch)
         capacity_limits_discharge=(min=0.0, max=1_000.0),
         capacity_limits_energy=(min=0.0, max=8_000.0),
         efficiency=(in=0.9, out=0.9),
-        capital_costs_storage=PSIP.StorageCapitalCost(;
+        capital_costs=PSIP.StorageCapitalCost(;
             charge_capital_cost=LinearCurve(0.0),
             discharge_capital_cost=LinearCurve(200_000.0),
             energy_capital_cost=LinearCurve(100_000.0),

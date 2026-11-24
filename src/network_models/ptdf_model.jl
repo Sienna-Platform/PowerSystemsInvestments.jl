@@ -229,7 +229,7 @@ function _add_flow_limits!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     jump_model = get_jump_model(container)
-    for op_ix in get_operational_indexes(time_mapping)
+    for op_ix in get_all_indexes(time_mapping)
         period_limit = limit(inverse_invest_mapping[op_ix])
         for t in consecutive_slices[op_ix]
             con_ub[name, t] = JuMP.@constraint(jump_model, flow[name, t] <= period_limit)
@@ -471,16 +471,24 @@ function _shortest_paths(neighbors::Vector{Vector{Tuple{Int, Float64}}}, source:
     return distance, previous
 end
 
-# Susceptance times the shortest path of Fmax / b over limited merged corridors between the
-# branch's ends, or the sum over all limited branches when only virtual branches join them
+# |b| times the shortest path of Fmax / |b| over limited merged corridors between the branch's
+# ends, or the sum over all limited branches when only virtual branches join them
 function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.Portfolio)
     nodes = network.ptdf.axes[1]
     node_lookup = network.ptdf.lookup[1]
     neighbors = [Tuple{Int, Float64}[] for _ in nodes]
     all_neighbors = [Tuple{Int, Float64}[] for _ in nodes]
+    connected = [Int[] for _ in nodes]
+    for (_, arc, _) in _virtual_branches(network)
+        from, to = (node_lookup[n] for n in arc)
+        push!(connected[from], to)
+        push!(connected[to], from)
+    end
     for corridor in network.merged_corridors
-        weight = _max_flow(corridor, portfolio) / corridor.susceptance
+        weight = _max_flow(corridor, portfolio) / abs(corridor.susceptance)
         from, to = (node_lookup[n] for n in corridor.arc)
+        push!(connected[from], to)
+        push!(connected[to], from)
         push!(all_neighbors[from], (to, weight))
         push!(all_neighbors[to], (from, weight))
         corridor.name in network.limited || continue
@@ -489,7 +497,7 @@ function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.P
     end
     longest_path =
         sum(weight for links in neighbors for (_, weight) in links; init=0.0) / 2 + sum(
-            _max_flow(b, portfolio) / b.susceptance for
+            _max_flow(b, portfolio) / abs(b.susceptance) for
             b in [network.new_corridors; network.unit_lines];
             init=0.0,
         )
@@ -515,8 +523,31 @@ function _virtual_transaction_bounds(network::PTDFNetworkData, portfolio::PSIP.P
                     ),
                 )
             end
+            # The fallback bound only holds if every corridor its ends can reach is limited
+            component = Set([from])
+            stack = [from]
+            while !isempty(stack)
+                for next in connected[pop!(stack)]
+                    next in component && continue
+                    push!(component, next)
+                    push!(stack, next)
+                end
+            end
+            unlimited = [
+                c.name for c in network.merged_corridors if
+                !(c.name in network.limited) && node_lookup[first(c.arc)] in component
+            ]
+            isempty(unlimited) || throw(
+                IS.ConflictingInputsError(
+                    "The ends of $name are only joined by branches that may not be built, " *
+                    "and corridors $unlimited without flow limits connect to them, so its " *
+                    "virtual transaction has no valid bound; monitor those corridors or " *
+                    "solve with IterativeMonitoring",
+                ),
+            )
         end
-        bounds[name] = susceptance * (isinf(distance[to]) ? longest_path : distance[to])
+        bounds[name] =
+            abs(susceptance) * (isinf(distance[to]) ? longest_path : distance[to])
     end
     return bounds
 end
@@ -539,7 +570,7 @@ function add_constraints!(
     jump_model = get_jump_model(container)
     bounds = _virtual_transaction_bounds(network, portfolio)
 
-    for name in names, op_ix in get_operational_indexes(time_mapping)
+    for name in names, op_ix in get_all_indexes(time_mapping)
         period = inverse_invest_mapping[op_ix]
         limit = bounds[name] * (1 - built[name, period])
         for t in consecutive_slices[op_ix]
