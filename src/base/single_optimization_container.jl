@@ -862,6 +862,8 @@ function build_model!(
                 tech_model_vector,
             )
         end
+        # Retrofits reduce source capacity before the operations and feasibility models copy it
+        ix == 1 && link_retrofits!(container, port, names_to_model_map)
     end
 
     # Requirements (policies spanning multiple technologies/regions) — argument stage

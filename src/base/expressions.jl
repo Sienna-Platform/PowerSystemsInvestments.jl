@@ -36,6 +36,8 @@ struct CapitalCostExpression <: InvestmentExpressionType end
 struct FixedOperationModelCost <: InvestmentExpressionType end
 
 struct TotalCapitalCost <: ISOPT.ExpressionType end
+# Source capacity converted by retrofits up to each investment period (MW of source)
+struct RetrofitCapacity <: ISOPT.ExpressionType end
 
 struct VariableOMCost <: OperationsExpressionType end
 # Value of the product of an end-use technology, a negative operating cost

@@ -36,6 +36,7 @@ export RepresentativePeriods
 ### Investment Formulations ###
 export StaticLoadInvestment
 export ContinuousInvestment
+export RetrofitInvestment
 export IntegerInvestment
 export BinaryInvestment
 
@@ -69,6 +70,7 @@ export SingleRegionBalanceModel
 export MultiRegionBalanceModel
 export NodalBalanceModel
 export NodalPTDFModel
+export RetrofitPotentialConstraint
 export NodalBalanceConstraint
 export IslandBalanceConstraint
 export FlowRateConstraint
@@ -108,6 +110,7 @@ export FlowActivePowerVariable
 export FlowActivePowerFromToVariable
 export FlowActivePowerToFromVariable
 export BranchBuiltVariable
+export RetrofitAllocationVariable
 export VirtualTransactionVariable
 export LineFlow
 export BranchFlow
@@ -117,6 +120,7 @@ export CapacityAdditions
 export PowerCapacityAdditions
 export EnergyCapacityAdditions
 export CumulativeCapacity
+export RetrofitCapacity
 export CapitalCostExpression
 export TotalCapitalCost
 export FixedOperationModelCost
@@ -358,6 +362,7 @@ include("technology_models/technologies/common/fuel_curve.jl")
 include("technology_models/technologies/supply_tech.jl")
 include("technology_models/technologies/demand_tech.jl")
 include("technology_models/technologies/demand_side_tech.jl")
+include("technology_models/technologies/retrofits.jl")
 include("technology_models/technologies/storage_tech.jl")
 include("technology_models/technologies/colocated_tech.jl")
 include("technology_models/technologies/branch_tech.jl")

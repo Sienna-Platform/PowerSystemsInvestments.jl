@@ -111,7 +111,7 @@ Formatter (self-activates its own environment):
 julia --project=scripts/formatter -e 'include("scripts/formatter/formatter_code.jl")'
 ```
 
-Tests — `test/runtests.jl` uses a `@includetests` macro (TestSetExtensions-style) that auto-discovers `test_*.jl` files (`test_capacity_limits.jl`, `test_capital_cost.jl`, `test_constructor.jl`, `test_demand.jl`, `test_demand_side.jl`, `test_fuel_cost.jl`, `test_model.jl`, `test_multi_region_supply.jl`, `test_network_matrices.jl`, `test_printing.jl`, `test_ptdf_model.jl`, `test_requirements.jl`, `test_thermal_commitment.jl`, `test_time_steps.jl`, `test_transmission_investment.jl`) and runs Aqua checks; solver is HiGHS. Test deps live in `test/Project.toml`.
+Tests — `test/runtests.jl` uses a `@includetests` macro (TestSetExtensions-style) that auto-discovers `test_*.jl` files (`test_capacity_limits.jl`, `test_capital_cost.jl`, `test_constructor.jl`, `test_demand.jl`, `test_demand_side.jl`, `test_fuel_cost.jl`, `test_model.jl`, `test_multi_region_supply.jl`, `test_network_matrices.jl`, `test_printing.jl`, `test_ptdf_model.jl`, `test_requirements.jl`, `test_retrofits.jl`, `test_thermal_commitment.jl`, `test_time_steps.jl`, `test_transmission_investment.jl`) and runs Aqua checks; solver is HiGHS. Test deps live in `test/Project.toml`.
 
 ```sh
 julia --project=test test/runtests.jl                 # full suite
