@@ -705,7 +705,6 @@ function add_constraints!(
     return
 end
 
-# Minimum and maximum cumulative capacity
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -737,7 +736,6 @@ function add_constraints!(
     for d in devices
         name = PSIP.get_name(d)
         limits = get_cumulative_limits(d, V())
-        _check_cumulative_limits(d, limits)
         for t in time_steps
             con[name, t] = JuMP.@constraint(
                 get_jump_model(container),

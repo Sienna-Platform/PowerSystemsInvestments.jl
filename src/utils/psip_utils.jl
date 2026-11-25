@@ -58,13 +58,3 @@ function check_time_series(
     end
     return
 end
-
-function _check_cumulative_limits(d::PSIP.Technology, limits::NamedTuple)
-    if limits.min > limits.max
-        error(
-            "The minimum capacity of $(PSIP.get_name(d)) ($(limits.min)) is above its " *
-            "maximum ($(limits.max)).",
-        )
-    end
-    return
-end

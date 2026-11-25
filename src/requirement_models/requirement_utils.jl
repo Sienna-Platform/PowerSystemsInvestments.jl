@@ -31,14 +31,14 @@ function _check_contributors(
     end_use_capacity::Bool=false,
 )
     resources = _contributing_resources(p, requirement)
+    demand_technologies =
+        demands ? _contributing_demands(p, requirement) : PSIP.Technology[]
     end_uses = _contributing_end_uses(p, requirement)
     missing_kinds = String[]
     if isempty(resources) && !(end_use_capacity && !isempty(end_uses))
         push!(missing_kinds, "resources")
     end
-    if demands &&
-       isempty(_contributing_demands(p, requirement)) &&
-       !(end_use_demand && !isempty(end_uses))
+    if demands && isempty(demand_technologies) && !(end_use_demand && !isempty(end_uses))
         push!(missing_kinds, "demand technologies")
     end
     if !isempty(missing_kinds)
@@ -47,9 +47,8 @@ function _check_contributors(
             "$(join(missing_kinds, " or ")).",
         )
     end
-    # Demands without a technology model have a fixed demand
     used_end_uses = end_use_demand || end_use_capacity ? end_uses : PSIP.Technology[]
-    for technology in [resources; used_end_uses]
+    for technology in [resources; demand_technologies; used_end_uses]
         _contributor_model(names_to_model_map, PSIP.get_name(requirement), technology)
     end
     return
@@ -73,12 +72,12 @@ function _target_investment_period(time_mapping::TimeMapping, requirement::PSIP.
 end
 
 # Present value at the base year of one unit paid in every year of an investment period
-function _period_cost_factor(container::SingleOptimizationContainer, period::Int)
-    inv_tuple = get_investment_time_stamps(get_time_mapping(container))[period]
-    discount_rate = get_discount_rate(container)
-    return investment_period_annuity_factor(discount_rate, inv_tuple) *
-           (1.0 + discount_rate)^(get_base_year(container) - Dates.year(first(inv_tuple)))
-end
+_period_cost_factor(container::SingleOptimizationContainer, period::Int) =
+    investment_period_present_value_factor(
+        get_discount_rate(container),
+        get_base_year(container),
+        get_investment_time_stamps(get_time_mapping(container))[period],
+    )
 
 function _warn_ignored_contributors(
     technologies::Vector,
@@ -179,18 +178,10 @@ function _contributor_model(
     return names_to_model_map[name]
 end
 
-# Operations formulation of a demand attached to a requirement. A demand without a model in
-# the template has a fixed demand.
-function _demand_formulation(
+_demand_formulation(
     names_to_model_map::Dict{String, TechnologyModel},
     d::PSIP.ProjectedDemand,
-)
-    name = PSIP.get_name(d)
-    if haskey(names_to_model_map, name)
-        return get_operations_formulation(names_to_model_map[name])()
-    end
-    return BasicDispatch()
-end
+) = get_operations_formulation(names_to_model_map[PSIP.get_name(d)])()
 
 function _weighted_energy(
     container::SingleOptimizationContainer,

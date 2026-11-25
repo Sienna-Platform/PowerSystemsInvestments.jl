@@ -782,7 +782,6 @@ end
 
         run_status = solve!(model; output_dir=path)
         @test run_status == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
-        # The JuMP model is only written to the output directory when asked for
         @test !isfile(joinpath(path, "jump_model.json"))
         @test solve!(model; output_dir=path, export_optimization_problem=true) ==
               PSIN.RunStatus.SUCCESSFULLY_FINALIZED

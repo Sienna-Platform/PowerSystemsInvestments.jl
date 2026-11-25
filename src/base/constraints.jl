@@ -1,6 +1,5 @@
 ### Investment Constraints ###
 
-# Minimum and maximum of a cumulative capacity in every investment period
 abstract type CumulativeInvestmentLimitConstraint <: ISOPT.ConstraintType end
 
 struct CumulativeCapacityLimit <: CumulativeInvestmentLimitConstraint end

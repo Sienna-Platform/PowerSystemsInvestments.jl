@@ -257,7 +257,6 @@ end
     @test isnothing(PSIN.check_multi_region_technology(wind, 0.0))
     # Existing capacity cannot be assigned to a region.
     @test_throws ErrorException PSIN.check_multi_region_technology(wind, 100.0)
-    # A minimum capacity limit applies to the total over the regions, so it is allowed.
     PSIP.set_capacity_limits!(wind, (min=10.0, max=1e8))
     @test isnothing(PSIN.check_multi_region_technology(wind, 0.0))
 end

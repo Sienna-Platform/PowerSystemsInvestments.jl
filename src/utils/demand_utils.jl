@@ -1,12 +1,10 @@
 # Demand of each ProjectedDemand in MW (DemandExpression): its normalized "ops_demand" shape
 # times its peak in the year of each representative period
 function initialize_demands!(container::SingleOptimizationContainer, p::PSIP.Portfolio)
-    demands = collect(PSIP.get_technologies(PSIP.ProjectedDemand, p))
-    isempty(demands) && return
+    demands = collect(PSIP.get_technologies(PSIP.get_available, PSIP.ProjectedDemand, p))
     time_mapping = get_time_mapping(container)
     consecutive_slices = get_consecutive_slices(time_mapping)
     time_stamps = get_time_stamps(time_mapping)
-    # Year of the first time stamp of each representative period
     years = Dict(
         op_ix => Dates.year(time_stamps[first(consecutive_slices[op_ix])]) for
         op_ix in get_all_indexes(time_mapping)
@@ -26,13 +24,17 @@ function initialize_demands!(container::SingleOptimizationContainer, p::PSIP.Por
         conformity = PSIP.get_conformity(d)
         if PSIP.is_new(d)
             if conformity == PSY.LoadConformity.UNDEFINED
-                error(
-                    "New demand $name has an undefined conformity. Set it to CONFORMING " *
-                    "or NON_CONFORMING.",
+                throw(
+                    IS.DataFormatError(
+                        "New demand $name has an undefined conformity; set it to " *
+                        "CONFORMING or NON_CONFORMING",
+                    ),
                 )
             end
             if PSIP.get_peak_demand_mw(d) <= 0.0
-                error("New demand $name needs a positive peak_demand_mw.")
+                throw(
+                    IS.DataFormatError("New demand $name needs a positive peak_demand_mw"),
+                )
             end
             if PSIP.get_construction_year(d) > last_year
                 @warn "Demand $name is built in $(PSIP.get_construction_year(d)), after " *
@@ -43,7 +45,7 @@ function initialize_demands!(container::SingleOptimizationContainer, p::PSIP.Por
                   "its peak comes from the base system."
         end
         if !IS.has_time_series(d, IS.SingleTimeSeries, series_name)
-            error("Demand $name needs a \"$series_name\" time series.")
+            throw(IS.DataFormatError("Demand $name needs a \"$series_name\" time series"))
         end
         # Only conforming demands grow (an undefined conformity is conforming)
         growth = PSIP.get_growth_rate(d)

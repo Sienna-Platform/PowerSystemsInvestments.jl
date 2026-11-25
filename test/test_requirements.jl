@@ -1079,8 +1079,13 @@ end
         PSIP.get_technology(demand_type, p_5bus, "demand2"),
         [requirement],
     )
-    # A demand without a technology model has a fixed demand
-    @test isnothing(PSIN._check_contributors(p_5bus, requirement, models; demands=true))
+    @test_throws r"contributing technology 'demand2' which has no technology model" PSIN._check_contributors(
+        p_5bus,
+        requirement,
+        models;
+        demands=true,
+    )
+    @test isnothing(PSIN._check_contributors(p_5bus, requirement, models; demands=false))
 end
 
 @testset "Inverter efficiency must be in (0, 1]" begin

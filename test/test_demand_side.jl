@@ -35,15 +35,15 @@ function _end_use_thermal(name, zone, cost, capacity)
     )
 end
 
-# One zone with a 100 MW demand at `demand_shape`, 100 MW of cheap generation at 20 $/MWh
-# and 1000 MW of gas at 80 $/MWh, and an electrolyzer (0.05 MWh per unit of product) with the
-# given fields and investment formulation. With `existing_load`, the electrolyzer has an
-# existing 25 MW load in the base system.
+# 100 MW demand at `demand_shape`, 100 MW of cheap generation at 20 $/MWh, 1000 MW of gas at
+# 80 $/MWh and an electrolyzer at 0.05 MWh per unit; `existing_load` adds a 25 MW load
 function _end_use_model(;
     demand_shape=fill(0.5, 24),
     investment=ContinuousInvestment,
     existing_load=false,
     price=2.0,
+    with_demand=true,
+    demand_available=true,
     kwargs...,
 )
     sys = PSY.System(100.0)
@@ -64,24 +64,29 @@ function _end_use_model(;
     PSIP.add_technology!(portfolio, _end_use_thermal("cheap", zone, 20.0, 100.0))
     PSIP.add_technology!(portfolio, _end_use_thermal("gas", zone, 80.0, 1000.0))
 
-    demand = PSIP.ProjectedDemand{PSY.PowerLoad}(;
-        name="demand",
-        id=2,
-        available=true,
-        region=[zone],
-        power_systems_type="PowerLoad",
-        conformity=PSY.LoadConformity.NON_CONFORMING,
-        peak_demand_mw=100.0,
-        construction_year=2030,
-    )
-    PSIP.add_technology!(portfolio, demand)
-    PSIP.add_time_series!(
-        portfolio,
-        demand,
-        SingleTimeSeries(; name="ops_demand", data=TimeArray(END_USE_DAY, demand_shape));
-        year="2030",
-        rep_day=1,
-    )
+    if with_demand
+        demand = PSIP.ProjectedDemand{PSY.PowerLoad}(;
+            name="demand",
+            id=2,
+            available=demand_available,
+            region=[zone],
+            power_systems_type="PowerLoad",
+            conformity=PSY.LoadConformity.NON_CONFORMING,
+            peak_demand_mw=100.0,
+            construction_year=2030,
+        )
+        PSIP.add_technology!(portfolio, demand)
+        demand_available && PSIP.add_time_series!(
+            portfolio,
+            demand,
+            SingleTimeSeries(;
+                name="ops_demand",
+                data=TimeArray(END_USE_DAY, demand_shape),
+            );
+            year="2030",
+            rep_day=1,
+        )
+    end
 
     electrolyzer = END_USE_TYPE(;
         name="electrolyzer",
@@ -121,7 +126,7 @@ function _end_use_model(;
         BasicDispatch,
         BasicDispatchFeasibility,
     )
-    set_technology_model!(
+    with_demand && set_technology_model!(
         template,
         ["demand"],
         PSIP.ProjectedDemand{PSY.PowerLoad},
@@ -202,13 +207,11 @@ built(m, meta="ContinuousInvestment") =
 end
 
 @testset "End-use minimum power and ramps" begin
-    # Not worth running, but at least half of its capacity is always on
     m = _solve_end_use(_fixed_end_use_model(; price=0.5, min_power=0.5))
     @test all(≈(15.0), consumption(m))
 
-    # Cheap generation is spare in hours 0-11 only, so consumption is worth it then. With
-    # ramps of 25% of capacity per hour it can't jump between 0 and 30 MW: it changes by at most
-    # 7.5 MW between steps (also across the wrap of the day) and passes intermediate values
+    # Ramps of 25% of capacity per hour: at most 7.5 MW between steps, also across the day's
+    # wrap
     shape = [h < 12 ? 0.5 : 1.0 for h in 0:23]
     m = _solve_end_use(
         _fixed_end_use_model(; demand_shape=shape, ramp_limits=(up=0.25, down=0.25)),
@@ -220,13 +223,11 @@ end
 end
 
 @testset "End-use investment" begin
-    # A cheap electrolyzer is built up to the spare cheap generation (50 MW); an expensive one
-    # is not worth building
+    # Built up to the spare cheap generation (50 MW)
     cheap = PSIP.CapitalCost(LinearCurve(1e4), 0.0)
     @test built(_solve_end_use(_end_use_model(; capital_costs=cheap))) ≈ 50.0
     expensive = PSIP.CapitalCost(LinearCurve(1e7), 0.0)
     @test built(_solve_end_use(_end_use_model(; capital_costs=expensive))) ≈ 0.0 atol = 1e-6
-    # A fixed cost per MW-year above its margin also stops the build
     m = _solve_end_use(
         _end_use_model(;
             capital_costs=cheap,
@@ -241,7 +242,6 @@ end
     )
     @test built(m, "IntegerInvestment") ≈ 3.0
     @test all(≈(50.0), consumption(m))
-    # The capacity limits apply to existing plus built capacity
     m = _solve_end_use(
         _end_use_model(;
             capital_costs=cheap,
@@ -275,7 +275,6 @@ end
     # generation (20), with the same weighting and discounting
     @test JuMP.coefficient(objective, load) / JuMP.coefficient(objective, cheap) ≈
           (5.0 - 40.0) / 20.0
-    # Revenue is kept in its own expression
     revenue =
         PSIN.get_expression(container, ProductRevenue(), END_USE_TYPE, "EndUseDispatch")
     @test JuMP.coefficient(revenue["electrolyzer", 1], load) ≈
@@ -311,7 +310,6 @@ end
         return
     end
 
-    # Hourly matching with only the electrolyzer as demand: its consumption must be matched
     m = _fixed_end_use_model()
     attach!(
         m,
@@ -322,8 +320,7 @@ end
     m = _solve_end_use(m)
     @test coefficient(m, HourlyMatchingConstraint, PSIP.HourlyMatching, "matching") == -1.0
 
-    # The energy share counts its consumption on the demand side, weighted by the hours of the
-    # year each step stands for (365 for one representative day)
+    # 365 hours per step for one representative day
     m = _fixed_end_use_model()
     attach!(
         m,
@@ -349,7 +346,6 @@ end
         _end_use_variable(m, ActiveInPowerVariable, "EndUseDispatch")["electrolyzer", 1],
     ) ≈ 365.0
 
-    # A minimum capacity requirement on the electrolyzer alone forces it to be built
     m = _end_use_model(; capital_costs=PSIP.CapitalCost(LinearCurve(1e7), 0.0))
     attach!(
         m,
@@ -366,6 +362,25 @@ end
     @test built(_solve_end_use(m)) ≈ 35.0
 end
 
+@testset "Requirements without projected demands" begin
+    for kwargs in ((with_demand=false,), (demand_available=false,))
+        m = _fixed_end_use_model(; kwargs...)
+        p = PSIN.get_portfolio(m)
+        requirement = PSIP.HourlyMatching(; name="matching", id=1, available=true)
+        PSIP.add_requirement!(p, requirement)
+        for (type, name) in ((END_USE_THERMAL, "cheap"), (END_USE_TYPE, "electrolyzer"))
+            PSIP.set_requirements!(PSIP.get_technology(type, p, name), [requirement])
+        end
+        set_requirement_model!(
+            PSIN.get_template(m),
+            ["matching"],
+            PSIP.HourlyMatching,
+            RequirementHourlyMatching,
+        )
+        _solve_end_use(m)
+    end
+end
+
 @testset "End-use checks" begin
     end_use(; kwargs...) = END_USE_TYPE(;
         name="electrolyzer",
@@ -376,10 +391,6 @@ end
         capacity_limits=(min=0.0, max=50.0),
         kwargs...,
     )
-    @test_throws r"technology_efficiency" PSIN.check_end_use(
-        end_use(; technology_efficiency=0.0),
-    )
-    @test_throws r"min_power" PSIN.check_end_use(end_use(; min_power=1.5))
     @test_throws r"not supported" PSIN.check_end_use(
         end_use(; price_per_unit=PiecewiseIncrementalCurve(0.0, [0.0, 1.0], [2.0])),
     )

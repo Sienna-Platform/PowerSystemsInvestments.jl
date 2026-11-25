@@ -1003,7 +1003,6 @@ function add_constraints!(
         name = PSIP.get_name(d)
         variable_names = get_variable_names(d)
         limits = get_cumulative_limits(d, V())
-        _check_cumulative_limits(d, limits)
         for t in time_steps
             con[name, t] = JuMP.@constraint(
                 get_jump_model(container),

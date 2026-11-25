@@ -139,7 +139,6 @@ function add_constraints!(
                     -1.0,
                 )
             end
-            # The consumption of end-use technologies must be matched too
             for (d, formulation) in zip(end_uses, end_use_formulations)
                 _add_end_use_consumption!(
                     t -> adjustment[t],

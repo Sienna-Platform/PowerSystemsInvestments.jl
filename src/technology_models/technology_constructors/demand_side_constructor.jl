@@ -37,7 +37,6 @@ function construct_technologies!(
 
     add_variable!(container, ActiveInPowerVariable(), devices, C())
 
-    # EnergyBalance
     add_to_expression!(
         container,
         EnergyBalance(),
@@ -47,7 +46,6 @@ function construct_technologies!(
         transport_model,
     )
 
-    # Variable cost and product revenue, for results
     add_expression!(container, VariableOMCost(), devices, C())
     add_expression!(container, ProductRevenue(), devices, C())
     return
@@ -89,10 +87,8 @@ function construct_technologies!(
 }
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    # Capital Component of objective function
     objective_function!(container, devices, B())
 
-    # Capacity constraints
     add_constraints!(
         container,
         CumulativeCapacityLimit(),
@@ -123,10 +119,8 @@ function construct_technologies!(
 ) where {T <: PSIP.DemandSideTechnology, C <: EndUseDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    # Operations Component of objective function
     objective_function!(container, devices, C())
 
-    # Consumption limits and ramps
     add_constraints!(
         container,
         InputActivePowerVariableLimitsConstraint(),
