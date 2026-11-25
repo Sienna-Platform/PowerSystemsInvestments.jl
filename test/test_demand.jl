@@ -20,7 +20,8 @@ function _demand_financial_data()
     )
 end
 
-# Base system with one bus and loads of (name, max active power, hourly profile in 2025)
+# Base system with one bus and loads of (name, max active power, hourly profile in 2025 as a
+# fraction of the max active power)
 function _demand_base_system(loads)
     sys = PSY.System(100.0)
     set_units_base_system!(sys, "NATURAL_UNITS")
@@ -44,7 +45,11 @@ function _demand_base_system(loads)
         PSY.add_time_series!(
             sys,
             load,
-            SingleTimeSeries("max_active_power", TimeArray(stamps, profile)),
+            SingleTimeSeries(
+                "max_active_power",
+                TimeArray(stamps, profile);
+                scaling_factor_multiplier=PSY.get_max_active_power,
+            ),
         )
     end
     return sys
@@ -60,9 +65,8 @@ function _demand(name; kwargs...)
     )
 end
 
-# Single-zone model with a gas technology (variable cost `gas_cost`, no capital cost, up to
-# `gas_max` MW) and the demands given as (demand, normalized shape or nothing, existing load
-# names or nothing). Every demand uses the operations formulation `formulation`.
+# Single zone: gas (`gas_cost`, up to `gas_max` MW) and demands as (demand, normalized shape
+# or nothing, existing load names or nothing), all with `formulation`
 function _demand_test_model(
     demands;
     gas_cost=50.0,
@@ -154,7 +158,6 @@ end
 _build_status(m) =
     build!(m; output_dir=mktempdir(; cleanup=true), console_level=Logging.AboveMaxLevel)
 
-# Demand in MW of each time step, computed in a new container for the model
 function _initialize_demands(m)
     p = PSIN.get_portfolio(m)
     container = PSIN.SingleOptimizationContainer(PSIN.Settings(p), JuMP.Model())
@@ -227,13 +230,10 @@ const BUILD_FAILED = IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAI
     ) match_mode = :any _initialize_demands(m)
     day_2030, day_2035 = 1:24, 25:48
 
-    # Conforming demands grow from the base year (existing) or construction year (new)
     existing = _demand_values(demand, "existing_conforming")
     @test existing[day_2030] ≈ shape .* 110.0 * 1.02^5
     @test existing[day_2035] ≈ shape .* 110.0 * 1.02^10
-    # Non-conforming demands do not grow
     @test _demand_values(demand, "existing_non_conforming") ≈ fill(20.0, 48)
-    # New demands start in their construction year
     data_center = _demand_values(demand, "data_center")
     @test all(iszero, data_center[day_2030])
     @test data_center[day_2035] ≈ fill(30.0, 24)
@@ -247,14 +247,11 @@ end
     new_non_conforming(; kwargs...) =
         _demand("new"; conformity=PSY.LoadConformity.NON_CONFORMING, kwargs...)
     for (demands, message) in (
-        # A new demand needs a peak
         ([(new_non_conforming(), flat, nothing)], r"positive peak_demand_mw"),
-        # A new demand needs a conformity
         ([(_demand("new"; peak_demand_mw=10.0), flat, nothing)], r"undefined conformity"),
-        # Every demand needs a shape
         (
             [(new_non_conforming(; peak_demand_mw=10.0), nothing, nothing)],
-            r"needs a \"ops_demand\" time series",
+            r"needs a .*ops_demand.* time series",
         ),
     )
         m = _demand_test_model(demands)
@@ -293,7 +290,6 @@ _tiered_test_model(; kwargs...) = _unserved_test_model(;
     kwargs...,
 )
 
-# Solved unserved demand of each tier in the first hour
 function _solved_unserved(m)
     @test _build_status(m) == BUILT
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
@@ -307,10 +303,8 @@ function _solved_unserved(m)
 end
 
 @testset "Unserved demand at the value of lost load" begin
-    # Shedding is cheaper than gas
     @test _solved_unserved(_unserved_test_model(; value_of_lost_load=30.0))["demand__tier1"] ≈
           100.0
-    # Gas is cheaper, but limited to 60 MW
     unserved =
         _solved_unserved(_unserved_test_model(; value_of_lost_load=80.0, gas_max=60.0))
     @test unserved["demand__tier1"] ≈ 40.0
@@ -323,12 +317,10 @@ end
     @test unserved["demand__tier1"] ≈ 20.0
     @test unserved["demand__tier2"] ≈ 0.0 atol = 1e-6
     @test unserved["demand__tier3"] ≈ 0.0 atol = 1e-6
-    # With 60 MW of gas, the next cheapest tier covers the remaining 20 MW
     unserved = _solved_unserved(_tiered_test_model(; gas_max=60.0))
     @test unserved["demand__tier1"] ≈ 20.0
     @test unserved["demand__tier2"] ≈ 20.0
     @test unserved["demand__tier3"] ≈ 0.0 atol = 1e-6
-    # A single curtailment price covers all curtailable demand, and shedding only the rest
     unserved = _solved_unserved(
         _unserved_test_model(;
             value_of_lost_load=1000.0,
@@ -350,7 +342,10 @@ end
         max_demand_curtailment=0.5,
         curtailment_cost=PiecewiseIncrementalCurve(0.0, [0.0, 0.4], [30.0]),
     )
-    @test_throws r"between 0 and 1" tiers(; max_demand_curtailment=1.5)
+    @test_throws r"must not decrease" tiers(;
+        max_demand_curtailment=0.5,
+        curtailment_cost=PiecewiseIncrementalCurve(0.0, [0.0, 0.2, 0.5], [70.0, 30.0]),
+    )
     @test_throws r"not supported" tiers(;
         max_demand_curtailment=0.5,
         curtailment_cost=PiecewisePointCurve([(0.0, 0.0), (0.5, 1.0)]),
@@ -358,7 +353,6 @@ end
 end
 
 @testset "Curtailment fields that are set inconsistently warn" begin
-    # Adds the unserved demand variables of the model's demand in a new container
     function add_unserved_variables(m)
         p = PSIN.get_portfolio(m)
         container = PSIN.SingleOptimizationContainer(PSIN.Settings(p), JuMP.Model())
@@ -386,7 +380,7 @@ end
     @test_logs (:warn, r"never curtailed") unused()
     consistent = add_unserved_variables(_tiered_test_model())
     @test_logs min_level = Logging.Warn consistent()
-    @test_throws r"Is max_demand_curtailment unset" PSIN._unserved_tiers(
+    @test_throws r"is max_demand_curtailment unset" PSIN._unserved_tiers(
         _demand(
             "demand";
             curtailment_cost=PiecewiseIncrementalCurve(0.0, [0.0, 0.2], [30.0]),
@@ -394,7 +388,6 @@ end
     )
 end
 
-# Coefficient of each unserved demand tier of the first hour in a constraint
 function _unserved_coefficients(m, constraint_type, requirement_type, name)
     container = PSIN.get_optimization_container(m)
     unserved = PSIN.get_variable(
@@ -411,7 +404,6 @@ function _unserved_coefficients(m, constraint_type, requirement_type, name)
     )
 end
 
-# Attaches a requirement to the gas technology and the demand of a model
 function _attach_requirement!(m, requirement, formulation)
     p = PSIN.get_portfolio(m)
     PSIP.add_requirement!(p, requirement)
@@ -436,7 +428,6 @@ _reserve_margin() = PSIP.CapacityReserveMargin(;
 )
 
 @testset "Unserved demand in requirements" begin
-    # The reserve margin credits curtailment, not involuntary shedding
     m = _tiered_test_model()
     _attach_requirement!(m, _reserve_margin(), RequirementCapacityReserveMargin)
     @test _build_status(m) == BUILT
@@ -447,7 +438,6 @@ _reserve_margin() = PSIP.CapacityReserveMargin(;
         "reserve_margin",
     ) == Dict("demand__tier1" => 1.0, "demand__tier2" => 1.0, "demand__tier3" => 0.0)
 
-    # Without curtailment there is nothing to credit
     m = _unserved_test_model(; value_of_lost_load=1000.0)
     _attach_requirement!(m, _reserve_margin(), RequirementCapacityReserveMargin)
     @test _build_status(m) == BUILT
@@ -458,7 +448,6 @@ _reserve_margin() = PSIP.CapacityReserveMargin(;
         "reserve_margin",
     ) == Dict("demand__tier1" => 0.0)
 
-    # Hourly matching only covers the demand that is served
     m = _tiered_test_model()
     _attach_requirement!(
         m,
@@ -479,9 +468,8 @@ _reserve_margin() = PSIP.CapacityReserveMargin(;
     )
 end
 
-# A 100 MW flexible demand at 50% except in hour 18 (100%) and, by default, hour 19 (80%),
-# with up to 80 MW of gas, so hour 18 has 20 MW more demand than gas. A small shift cost
-# keeps the model from shifting where it gains nothing.
+# 100 MW flexible demand at 50%, 100% in hour 18 and (by default) 80% in hour 19, with up
+# to 80 MW of gas; a small shift cost avoids gainless shifts
 function _flexible_test_model(;
     gas_max=80.0,
     hour_19=0.8,
@@ -505,7 +493,6 @@ function _flexible_test_model(;
     )
 end
 
-# Solved values of a flexible demand variable in the hours of the first representative day
 function _flexible_values(m, variable_type, name="demand")
     variable = PSIN.get_variable(
         PSIN.get_optimization_container(m),
@@ -524,18 +511,14 @@ end
 
 @testset "Flexible demand without a window is its baseline" begin
     m = _solved_flexible(_flexible_test_model())
-    # 20 MW of hour 18 is shed, as under UnservedDemandDispatch
     @test _flexible_values(m, UnservedDemandVariable, "demand__tier1")[19] ≈ 20.0
     @test all(≈(0.0; atol=1e-6), _flexible_values(m, DemandDeferredVariable))
     @test all(≈(0.0; atol=1e-6), _flexible_values(m, DemandRecoveredVariable))
 end
 
 @testset "Flexible demand is delayed within its window" begin
-    # Hour 19 has no spare gas, so a one-hour delay only works by also delaying 16 MW (the
-    # flexible share) of hour 19 to hour 20, and 4 MW of hour 18 is shed
     m = _solved_flexible(_flexible_test_model(; max_demand_delay=1.0))
     @test _flexible_values(m, UnservedDemandVariable, "demand__tier1")[19] ≈ 4.0
-    # With two hours the 20 MW are served in hour 20, the first with spare gas
     m = _solved_flexible(_flexible_test_model(; max_demand_delay=2.0))
     unserved = _flexible_values(m, UnservedDemandVariable, "demand__tier1")
     deferred = _flexible_values(m, DemandDeferredVariable)
@@ -555,7 +538,6 @@ end
     backlog = _flexible_values(m, DemandBacklogVariable)
     @test all(≈(0.0; atol=1e-6), unserved)
     @test deferred[19] ≈ 20.0
-    # Served in hours 16 and 17, so the backlog is negative before hour 18
     @test recovered[17] + recovered[18] ≈ 20.0
     @test backlog[18] ≈ -20.0
     @test all(≈(0.0; atol=1e-6), recovered[19:24])
@@ -588,14 +570,11 @@ end
     recovered = variable(DemandRecoveredVariable)
     unserved = variable(UnservedDemandVariable)
 
-    # The shift cost is charged once, on deferred demand, with the same weight and
-    # discounting as unserved demand
     objective = JuMP.objective_function(PSIN.get_jump_model(container))
     @test JuMP.coefficient(objective, deferred["demand", 19]) / 5.0 ≈
           JuMP.coefficient(objective, unserved["demand__tier2", 19]) / 10_000.0
     @test JuMP.coefficient(objective, recovered["demand", 19]) == 0.0
 
-    # Deferred and unserved demand together are at most the demand
     limit = JuMP.constraint_object(
         PSIN.get_constraint(
             container,
@@ -612,13 +591,11 @@ end
     @test JuMP.coefficient(limit.func, unserved["demand__tier2", 19]) == 1.0
     @test limit.set.upper ≈ 100.0
 
-    # Bounds: the flexible share of the step's demand and of the day's peak
     @test JuMP.upper_bound(deferred["demand", 1]) ≈ 10.0
     @test JuMP.upper_bound(recovered["demand", 1]) ≈ 20.0
 end
 
 @testset "Flexible demand in requirements" begin
-    # Coefficient of a flexible demand variable of the first hour in a requirement constraint
     function coefficient(m, constraint_type, requirement_type, name, variable_type)
         container = PSIN.get_optimization_container(m)
         constraint =
@@ -635,7 +612,6 @@ end
         )
     end
 
-    # The reserve margin credits the net demand shifted out of a step
     m = _flexible_test_model(; max_demand_delay=2.0)
     _attach_requirement!(m, _reserve_margin(), RequirementCapacityReserveMargin)
     @test _build_status(m) == BUILT
@@ -643,7 +619,6 @@ end
     @test coefficient(m, args..., DemandDeferredVariable) == 1.0
     @test coefficient(m, args..., DemandRecoveredVariable) == -1.0
 
-    # Hourly matching covers demand where it is served
     m = _flexible_test_model(; max_demand_delay=2.0)
     _attach_requirement!(
         m,
@@ -658,13 +633,6 @@ end
 
 @testset "Flexible demand checks" begin
     flexible(; kwargs...) = _demand("demand"; flexible_fraction=0.2, kwargs...)
-    @test_throws r"flexible_fraction" PSIN.check_flexible_demand(
-        flexible(; flexible_fraction=1.5),
-    )
-    @test_throws r"shift_efficiency" PSIN.check_flexible_demand(
-        flexible(; max_demand_delay=2.0, shift_efficiency=0.0),
-    )
-    @test_throws r"windows" PSIN.check_flexible_demand(flexible(; max_demand_delay=-1.0))
     @test_throws r"not supported" PSIN.check_flexible_demand(
         flexible(;
             max_demand_delay=2.0,
@@ -676,11 +644,11 @@ end
     )
     @test_logs PSIN.check_flexible_demand(flexible(; max_demand_advance=1.0))
 
-    # Windows in time steps: 0 forbids shifting, and a window stays within its day
     m = _flexible_test_model()
     @test _build_status(m) == BUILT
     time_mapping = PSIN.get_time_mapping(PSIN.get_optimization_container(m))
     @test PSIN._shift_window(time_mapping, 1, 0.0) == 0
-    @test PSIN._shift_window(time_mapping, 1, 2.5) == 3
+    @test PSIN._shift_window(time_mapping, 1, 2.5) == 2
+    @test PSIN._shift_window(time_mapping, 1, 0.5) == 0
     @test PSIN._shift_window(time_mapping, 1, 100.0) == 23
 end

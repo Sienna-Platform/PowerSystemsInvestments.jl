@@ -1,4 +1,3 @@
-# Nodal power balance model: energy balance constraint at each bus (node).
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::Type{T},
@@ -12,5 +11,15 @@ function add_constraints!(
     for t in time_steps, n in nodes
         constraint[n, t] = JuMP.@constraint(jump_model, expressions[n, t] == 0)
     end
+    return
+end
+
+function add_constraints!(
+    container::SingleOptimizationContainer,
+    ::Type{T},
+    port::U,
+) where {T <: NodalBalanceFeasibilityConstraint, U <: PSIP.Portfolio}
+    nodes = PSIP.get_name.(PSIP.get_regions(PSIP.Node, port))
+    _add_feasibility_constraints!(container, T, U, nodes)
     return
 end

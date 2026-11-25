@@ -1,56 +1,16 @@
 const FUEL_TEST_THERMAL_TYPE = PSIP.SupplyTechnology{PSY.ThermalStandard}
 
-# Single region model with two thermal technologies. When a variable cost is given, it
-# replaces the one of "expensive_thermal".
 function _make_fuel_cost_model(variable_cost=nothing)
-    p_5bus, op_days = test_2_zone_portfolio()
-    thermal = PSIP.get_technology(FUEL_TEST_THERMAL_TYPE, p_5bus, "expensive_thermal")
+    operation_cost = nothing
     if !isnothing(variable_cost)
-        PSIP.set_operation_costs!(
-            thermal,
-            ThermalGenerationCost(;
-                variable=variable_cost,
-                fixed=0.0,
-                start_up=0.0,
-                shut_down=0.0,
-            ),
+        operation_cost = ThermalGenerationCost(;
+            variable=variable_cost,
+            fixed=0.0,
+            start_up=0.0,
+            shut_down=0.0,
         )
     end
-
-    periods = [
-        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
-        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
-    ]
-    template = InvestmentModelTemplate(
-        DiscountedCashFlow(0.07, Year(2025), periods),
-        OperationalRepresentativeDays(op_days, [365, 365]),
-        RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel),
-    )
-    set_technology_model!(
-        template,
-        ["demand1"],
-        PSIP.ProjectedDemand{PSY.PowerLoad},
-        StaticLoadInvestment,
-        BasicDispatch,
-        BasicDispatchFeasibility,
-    )
-    set_technology_model!(
-        template,
-        ["cheap_thermal", "expensive_thermal"],
-        FUEL_TEST_THERMAL_TYPE,
-        ContinuousInvestment,
-        BasicDispatch,
-        BasicDispatchFeasibility,
-    )
-    return InvestmentModel(
-        template,
-        SingleInstanceSolve,
-        p_5bus;
-        optimizer=HiGHS.Optimizer,
-        portfolio_to_file=false,
-        store_variable_names=true,
-    )
+    return thermal_test_model(BasicDispatch; operation_cost=operation_cost)
 end
 
 function _build_fuel_cost_model(variable_cost=nothing)
@@ -60,7 +20,6 @@ function _build_fuel_cost_model(variable_cost=nothing)
     return m
 end
 
-# Objective function coefficient of the dispatch of a thermal technology in a time step.
 function _dispatch_cost_coefficient(m::InvestmentModel, name::String, t::Int)
     container = PSIN.get_optimization_container(m)
     dispatch = PSIN.get_variable(
@@ -88,12 +47,10 @@ end
     @test PSIN.get_heat_rate(fuel_curve) == 9.5
     @test PSIN.get_fuel_price(fuel_curve) == 4.0
 
-    # Only linear fuel curves are supported.
     quadratic_fuel_curve =
         FuelCurve(; value_curve=QuadraticCurve(0.01, 9.5, 0.0), fuel_cost=4.0)
     @test_throws ErrorException PSIN.get_heat_rate(quadratic_fuel_curve)
 
-    # Fuel prices given as a time series are not supported.
     fuel_price_key = IS.StaticTimeSeriesKey(;
         time_series_type=IS.SingleTimeSeries,
         name="fuel_price",
@@ -132,7 +89,6 @@ end
         FuelCurve(; value_curve=LinearCurve(heat_rate), fuel_cost=fuel_price),
     )
 
-    # A heat rate and a fuel price cost the same as the equivalent cost per MWh.
     for t in time_steps
         @test _dispatch_cost_coefficient(m_fuel, "expensive_thermal", t) ≈
               _dispatch_cost_coefficient(m_cost, "expensive_thermal", t)
@@ -140,7 +96,6 @@ end
               _dispatch_cost_coefficient(m_cost, "cheap_thermal", t)
     end
 
-    # Fuel expressions only exist for the technologies with a fuel curve.
     cost_container = PSIN.get_optimization_container(m_cost)
     fuel_container = PSIN.get_optimization_container(m_fuel)
     consumption_key = PSIN.ExpressionKey(
@@ -174,8 +129,6 @@ end
     @test JuMP.objective_value(PSIN.get_jump_model(fuel_container)) ≈
           JuMP.objective_value(PSIN.get_jump_model(cost_container))
 
-    # Results: fuel consumption is the heat rate times the dispatch, and the fuel cost is
-    # the objective function cost of that dispatch.
     dispatch_df = filter(
         r -> r.name == "expensive_thermal",
         read_variable(
@@ -222,17 +175,38 @@ end
         CostCurve(; value_curve=LinearCurve(cost_per_mwh), vom_cost=LinearCurve(vom)),
     )
     @test _dispatch_cost_coefficient(m_cost, "expensive_thermal", t) ≈ expected_coefficient
+
+    function cost_coefficient(m, expression_type, name)
+        container = PSIN.get_optimization_container(m)
+        expression = PSIN.get_expression(
+            container,
+            expression_type(),
+            FUEL_TEST_THERMAL_TYPE,
+            "BasicDispatch",
+        )
+        dispatch = PSIN.get_variable(
+            container,
+            PSIN.ActivePowerVariable(),
+            FUEL_TEST_THERMAL_TYPE,
+            "BasicDispatch",
+        )
+        return JuMP.coefficient(expression[name, t], dispatch[name, t])
+    end
+    @test cost_coefficient(m_fuel, FuelCost, "expensive_thermal") ≈ base_coefficient
+    @test cost_coefficient(m_fuel, VariableOMCost, "expensive_thermal") ≈
+          expected_coefficient - base_coefficient
+    @test cost_coefficient(m_cost, VariableOMCost, "expensive_thermal") ≈
+          expected_coefficient
+    @test cost_coefficient(m_cost, VariableOMCost, "cheap_thermal") ≈
+          _dispatch_cost_coefficient(m_cost, "cheap_thermal", t)
 end
 
 @testset "Unsupported fuel curves fail at build" begin
     m = _make_fuel_cost_model(
         FuelCurve(; value_curve=QuadraticCurve(0.01, 10.0, 0.0), fuel_cost=3.0),
     )
-    @test build!(
-        m;
-        output_dir=mktempdir(; cleanup=true),
-        console_level=Logging.AboveMaxLevel,
-    ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+    build_log = build_expecting_failure(m)
+    @test occursin("Variable cost curves of type", build_log)
 end
 
 @testset "Unsupported cost curves fail at build" begin
@@ -240,9 +214,6 @@ end
     @test_throws ErrorException PSIN.throw_unsupported_curve(quadratic_cost_curve)
 
     m = _make_fuel_cost_model(quadratic_cost_curve)
-    @test build!(
-        m;
-        output_dir=mktempdir(; cleanup=true),
-        console_level=Logging.AboveMaxLevel,
-    ) == IS.Optimization.ModelBuildStatusModule.ModelBuildStatus.FAILED
+    build_log = build_expecting_failure(m)
+    @test occursin("Variable cost curves of type", build_log)
 end

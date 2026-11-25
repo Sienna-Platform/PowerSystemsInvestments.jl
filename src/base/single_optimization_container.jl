@@ -181,23 +181,23 @@ function get_time_step_weight(container::SingleOptimizationContainer, op_ix::Int
            get_time_step_length(get_time_mapping(container), op_ix)
 end
 
-# The objective is discounted with the discount rate and base year of the portfolio
 function check_discounting(capital_model::DiscountedCashFlow, portfolio::PSIP.Portfolio)
     discount_rate = PSIP.get_discount_rate(portfolio)
     base_year = PSIP.get_base_year(portfolio)
     if !isapprox(capital_model.discount_rate, discount_rate) ||
        Dates.value(capital_model.base_year) != base_year
-        error(
-            "DiscountedCashFlow has discount rate $(capital_model.discount_rate) and base " *
-            "year $(Dates.value(capital_model.base_year)), but the portfolio has discount " *
-            "rate $discount_rate and base year $base_year.",
+        throw(
+            IS.ConflictingInputsError(
+                "DiscountedCashFlow has discount rate $(capital_model.discount_rate) and " *
+                "base year $(Dates.value(capital_model.base_year)), but the portfolio has " *
+                "discount rate $discount_rate and base year $base_year",
+            ),
         )
     end
     return
 end
 
-# Weights are per year: the period length is applied when costs are discounted, so weights
-# that include it would count operation costs more than once.
+# Weights are per year: the period length is applied when costs are discounted
 function check_operational_weights(
     time_mapping::TimeMapping,
     operational_weights::Vector{Float64},
@@ -219,9 +219,8 @@ function check_operational_weights(
         if abs(represented_years - 1.0) > OPERATIONAL_WEIGHTS_TOLERANCE
             @warn "The operational weights of investment period $(investment_time_stamps[stage]) " *
                   "represent $(round(represented_years; digits=3)) years of operation. " *
-                  "Weights must be per-year: the weighted duration of the representative " *
-                  "slices of each investment period should add up to one year. The length " *
-                  "of the period is applied separately when costs are discounted."
+                  "The weighted duration of the representative slices of each investment " *
+                  "period should add up to one year."
         end
     end
     return
@@ -647,6 +646,8 @@ function _make_system_expressions!(
             _make_container_array(regions, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
             _make_container_array(regions, time_steps),
+        ExpressionKey(FeasibilityImportCapacity, PSIP.Portfolio) =>
+            _make_container_array(regions, time_steps),
         ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) =>
             _make_container_array(regions, operational_indexes),
     )
@@ -666,6 +667,8 @@ function _make_system_expressions!(
         ExpressionKey(EnergyBalance, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
         ExpressionKey(FeasibilitySurplus, PSIP.Portfolio) =>
+            _make_container_array(nodes, time_steps),
+        ExpressionKey(FeasibilityImportCapacity, PSIP.Portfolio) =>
             _make_container_array(nodes, time_steps),
         ExpressionKey(WeightedEnergyDemand, PSIP.Portfolio) =>
             _make_container_array(nodes, operational_indexes),
@@ -713,33 +716,26 @@ function calculate_aux_variables!(
     return RunStatus.SUCCESSFULLY_FINALIZED
 end
 
-function _calculate_dual_variables_continous_model!(
+function _calculate_dual_variables_continuous_model!(
     container::SingleOptimizationContainer,
     ::PSIP.Portfolio,
 )
     constraints = get_constraints(container)
     for key in collect(keys(get_duals(container)))
-        container.duals[key] = _dual_values(constraints[key])
+        constraint = constraints[key]
+        # Entries without a constraint (e.g. outside a requirement's target period) stay NaN
+        values = DenseAxisArray(fill(NaN, size(constraint)), axes(constraint)...)
+        for i in eachindex(constraint.data)
+            if isassigned(constraint.data, i)
+                values.data[i] = JuMP.dual(constraint.data[i])
+            end
+        end
+        container.duals[key] = values
     end
     return RunStatus.SUCCESSFULLY_FINALIZED
 end
 
-# Entries of a container without a constraint (e.g. time steps outside a requirement's
-# target period) get NaN
-function _dual_values(constraints::DenseAxisArray; available=true)
-    values = DenseAxisArray(fill(NaN, size(constraints)), axes(constraints)...)
-    available || return values
-    for i in eachindex(constraints.data)
-        if isassigned(constraints.data, i)
-            values.data[i] = JuMP.dual(constraints.data[i])
-        end
-    end
-    return values
-end
-
-# The duals of a MIP are those of the LP with its discrete variables fixed at their solution.
-# The model stays fixed, so the solution can still be read, until the next solve. If that LP
-# fails, the MIP is solved again from its solution and the duals are NaN.
+# Duals of the LP with the discrete variables fixed, which stay fixed until the next solve
 function _calculate_dual_variables_discrete_model!(
     container::SingleOptimizationContainer,
     port::PSIP.Portfolio,
@@ -750,15 +746,21 @@ function _calculate_dual_variables_discrete_model!(
     container.unfix_discrete_variables = JuMP.fix_discrete_variables(jump_model)
     JuMP.optimize!(jump_model)
     if JuMP.dual_status(jump_model) == MOI.FEASIBLE_POINT
-        return _calculate_dual_variables_continous_model!(container, port)
+        return _calculate_dual_variables_continuous_model!(container, port)
     end
     @warn "Duals not computed: the LP with fixed discrete variables returned $(JuMP.termination_status(jump_model))"
     unfix_discrete_variables!(container)
-    JuMP.set_start_value.(variables, values)
+    try
+        JuMP.set_start_value.(variables, values)
+    catch err
+        err isa MOI.UnsupportedAttribute || rethrow()
+    end
     JuMP.optimize!(jump_model)
     constraints = get_constraints(container)
     for key in collect(keys(get_duals(container)))
-        container.duals[key] = _dual_values(constraints[key]; available=false)
+        constraint = constraints[key]
+        container.duals[key] =
+            DenseAxisArray(fill(NaN, size(constraint)), axes(constraint)...)
     end
     if JuMP.primal_status(jump_model) != MOI.FEASIBLE_POINT
         return RunStatus.FAILED
@@ -782,7 +784,7 @@ function calculate_dual_variables!(
     if is_milp
         return _calculate_dual_variables_discrete_model!(container, port)
     end
-    return _calculate_dual_variables_continous_model!(container, port)
+    return _calculate_dual_variables_continuous_model!(container, port)
 end
 
 ##### Build Models #######
@@ -790,11 +792,12 @@ end
 function build_model!(
     container::SingleOptimizationContainer,
     template::InvestmentModelTemplate,
-    port::PSIP.Portfolio,
+    port::PSIP.Portfolio;
+    monitor_iteratively::Bool=false,
 )
     transport_model = get_transport_model(template)
     initialize_system_expressions!(container, transport_model, port)
-    initialize_network!(transport_model, template, port)
+    initialize_network!(transport_model, template, port, monitor_iteratively)
     initialize_demands!(container, port)
 
     tech_names = [
@@ -932,6 +935,7 @@ function build_model!(
         requirement_technology_models,
         transport_model,
     )
+    _add_requirement_duals!(container, requirement_map, requirement_names_to_model_map)
 
     # Branches Model Arguments #
     for (ix, type_map) in enumerate(br_maps)
@@ -966,7 +970,11 @@ end
 """
 Default solve method for OptimizationContainer
 """
-function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfolio)
+function solve_model!(
+    container::SingleOptimizationContainer,
+    port::PSIP.Portfolio;
+    duals::Bool=true,
+)
     optimizer_stats = get_optimizer_stats(container)
 
     jump_model = get_jump_model(container)
@@ -981,11 +989,10 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     model_status = JuMP.primal_status(jump_model)
 
     if model_status != MOI.FEASIBLE_POINT::MOI.ResultStatusCode
+        @error "Optimizer returned $(model_status) (termination_status = $(JuMP.termination_status(jump_model)))"
         if get_calculate_conflict(get_settings(container))
-            @warn "Optimizer returned $model_status; computing conflict"
             compute_conflict!(container)
         end
-        @error "Optimizer returned $(model_status) (termination_status = $(JuMP.termination_status(jump_model)))"
         return RunStatus.FAILED
     end
 
@@ -995,6 +1002,7 @@ function solve_model!(container::SingleOptimizationContainer, port::PSIP.Portfol
     # Needs to be called here to avoid issues when getting duals from MILPs
     write_optimizer_stats!(container)
 
+    duals || return RunStatus.SUCCESSFULLY_FINALIZED
     status, optimizer_stats.timed_calculate_dual_variables =
         @timed calculate_dual_variables!(container, port, is_milp(container))
 
@@ -1018,9 +1026,6 @@ function compute_conflict!(container::SingleOptimizationContainer)
         conflict_status = MOI.get(jump_model, MOI.ConflictStatus())
         if conflict_status != MOI.CONFLICT_FOUND
             @error "No conflict could be found for the model. Status: $conflict_status"
-            if !get_optimizer_solve_log_print(settings)
-                JuMP.set_silent(jump_model)
-            end
             return conflict_status
         end
 
@@ -1042,12 +1047,13 @@ function compute_conflict!(container::SingleOptimizationContainer)
 
         return conflict_status
     catch e
-        jump_model.is_model_dirty = true
         if isa(e, MethodError)
             @info "Can't compute conflict, check that your optimizer supports conflict refining/IIS"
         else
             @error "Can't compute conflict" exception = (e, catch_backtrace())
         end
+    finally
+        !get_optimizer_solve_log_print(settings) && JuMP.set_silent(jump_model)
     end
 
     return MOI.NO_CONFLICT_EXISTS

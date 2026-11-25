@@ -1,11 +1,11 @@
 ### Investment Constraints ###
 
-# Minimum and maximum of a cumulative capacity in every investment period
 abstract type CumulativeInvestmentLimitConstraint <: ISOPT.ConstraintType end
 
 struct CumulativeCapacityLimit <: CumulativeInvestmentLimitConstraint end
 
 struct SingleUnitInvestmentConstraint <: ISOPT.ConstraintType end
+struct MinimumCumulativeCapacity <: ISOPT.ConstraintType end
 
 struct RetrofitPotentialConstraint <: ISOPT.ConstraintType end
 
@@ -95,6 +95,8 @@ struct DemandAdvanceConstraint <: ISOPT.ConstraintType end
 
 struct DemandDeferralLimitConstraint <: ISOPT.ConstraintType end
 
+struct NodalBalanceFeasibilityConstraint <: ISOPT.ConstraintType end
+
 ### Requirement Constraints ###
 
 struct EnergyShareRequirementConstraint <: ISOPT.ConstraintType end
@@ -107,6 +109,5 @@ struct CapacityRequirementConstraint <: ISOPT.ConstraintType end
 
 struct HourlyMatchingConstraint <: ISOPT.ConstraintType end
 
-# Duals are stored as operation entries
 is_operation_entry(::Type{<:ISOPT.ConstraintType}) = true
 is_investment_entry(::Type{<:ISOPT.ConstraintType}) = false

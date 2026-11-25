@@ -26,10 +26,8 @@ function construct_technologies!(
 ) where {T <: PSIP.ProjectedDemand, C <: BasicDispatch, X <: TechnologyModel}
     devices = [PSIP.get_technology(T, p, n) for n in names]
 
-    # EnergyBalance
     add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
 
-    # WeightedEnergyDemand
     add_to_expression!(container, WeightedEnergyDemand(), devices, C(), transport_model)
 
     return
@@ -50,7 +48,6 @@ function construct_technologies!(
 
     add_variable!(container, UnservedDemandVariable(), devices, C())
 
-    # EnergyBalance
     add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
     add_to_expression!(
         container,
@@ -61,7 +58,6 @@ function construct_technologies!(
         transport_model,
     )
 
-    # WeightedEnergyDemand
     add_to_expression!(container, WeightedEnergyDemand(), devices, C(), transport_model)
 
     return
@@ -86,7 +82,6 @@ function construct_technologies!(
     add_variable!(container, DemandRecoveredVariable(), devices, C())
     add_variable!(container, DemandBacklogVariable(), devices, C())
 
-    # EnergyBalance
     add_to_expression!(container, EnergyBalance(), devices, C(), transport_model)
     add_to_expression!(
         container,
@@ -113,7 +108,6 @@ function construct_technologies!(
         transport_model,
     )
 
-    # WeightedEnergyDemand
     add_to_expression!(container, WeightedEnergyDemand(), devices, C(), transport_model)
 
     return

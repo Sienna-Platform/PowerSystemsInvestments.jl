@@ -30,7 +30,7 @@ function _capital_cost_template(op_days)
 end
 
 # Build a container and run only the capital-cost argument + model construction stages
-# for a single technology type, so the `CapitalCost` investment expression is populated.
+# for a single technology type, so `CapitalCostExpression` is populated.
 function _build_capital_container(p, template, capital, tech_type, tech_model, names)
     settings = PSIN.Settings(p)
     model = JuMP.Model(HiGHS.Optimizer)
@@ -75,11 +75,8 @@ end
 
 _curve_slope(vc) = PSY.get_proportional_term(PSY.get_function_data(vc))
 
-# Capital coefficients ($/MW) per investment period computed by hand, independently of the
-# package: the overnight cost is paid in 30 annual payments at the WACC of the test data,
-# 0.6·0.04·(1 − 0.21) + 0.4·0.10 = 0.05896, whose value at the build year is discounted at 7%
-# over 30 years and then to 2025. `multipliers` are the "inv_capex" values of the periods
-# starting in 2030 and 2035.
+# Annuity of the overnight cost over 30 years at WACC 0.6·0.04·(1 − 0.21) + 0.4·0.10,
+# discounted at 7% to 2025; `multipliers` are the 2030 and 2035 "inv_capex" values
 function _hand_capital_coefficients(proportional_term, multipliers)
     wacc = 0.05896
     annualized = wacc / (1 - (1 + wacc)^-30) * (1 - 1.07^-30) / 0.07
@@ -131,13 +128,31 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
 
         @test all(>(0), coef_cheap)
         @test all(>(0), coef_expensive)
-        # Both techs share financial data, so the ratio of capital coefficients is the ratio
-        # of the capital curve slopes times the ratio of their capex multipliers.
         @test coef_cheap ./ coef_expensive ≈
               slope_cheap / slope_expensive .* CHEAP_THERMAL_CAPEX ./
               EXPENSIVE_THERMAL_CAPEX
         @test coef_expensive ≈
               _hand_capital_coefficients(slope_expensive, EXPENSIVE_THERMAL_CAPEX)
+
+        capital_cost = PSIN.get_expression(
+            container,
+            PSIN.CapitalCostExpression(),
+            tech_type,
+            "ContinuousInvestment",
+        )
+        build = PSIN.get_variable(
+            container,
+            PSIN.BuildCapacity(),
+            tech_type,
+            "ContinuousInvestment",
+        )
+        for (t, coefficient) in
+            zip(PSIN.get_investment_time_steps(container.time_mapping), coef_cheap)
+            @test JuMP.coefficient(
+                capital_cost["cheap_thermal", t],
+                build["cheap_thermal", t],
+            ) ≈ coefficient
+        end
     end
 
     @testset "Supply interconnection cost adds to the per-MW capital term" begin
@@ -226,10 +241,10 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
         )
 
         stor = PSIP.get_technology(storage_type, p, "test_storage")
-        scost = PSIP.get_capital_costs_storage(stor)
+        scost = PSIP.get_capital_costs(stor)
         discharge_slope = _curve_slope(PSIP.get_discharge_capital_cost(scost))
         interconnection = 0.5 * discharge_slope
-        PSIP.set_capital_costs_storage!(
+        PSIP.set_capital_costs!(
             stor,
             PSIP.StorageCapitalCost(
                 charge_capital_cost=PSIP.get_charge_capital_cost(scost),
@@ -317,8 +332,7 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
         @test ic_coef ≈
               _hand_capital_coefficients(slope + interconnection, CHEAP_THERMAL_CAPEX)
 
-        # Costs given in dollars of a later year are deflated to the base year at the 5%
-        # inflation rate of the portfolio
+        # Deflated to the base year at the portfolio's 5% inflation rate
         PSIP.set_technology_base_year!(PSIP.get_financial_data(cheap), 2030)
         inflated_container =
             _build_capital_container(p, template, capital, tech_type, tm, ["cheap_thermal"])
@@ -372,8 +386,8 @@ const EXPENSIVE_THERMAL_CAPEX = [1.0, 3664.307 / 3823.56]
             PSIN.BasicDispatchFeasibility,
         )
         stor = PSIP.get_technology(storage_type, p, "test_storage")
-        scost = PSIP.get_capital_costs_storage(stor)
-        PSIP.set_capital_costs_storage!(
+        scost = PSIP.get_capital_costs(stor)
+        PSIP.set_capital_costs!(
             stor,
             PSIP.StorageCapitalCost(;
                 charge_capital_cost=LinearCurve(1000.0),

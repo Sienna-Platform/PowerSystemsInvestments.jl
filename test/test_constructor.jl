@@ -29,6 +29,21 @@ end
     )
 end
 
+@testset "Operation Formulation Validation" begin
+    @test_throws ArgumentError PSIN.TechnologyModel(
+        PSIP.SupplyTechnology{PSY.RenewableDispatch},
+        PSIN.ContinuousInvestment,
+        PSIN.ContinuousThermalCommitment,
+        PSIN.BasicDispatchFeasibility,
+    )
+    @test PSIN.TechnologyModel(
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        PSIN.ContinuousInvestment,
+        PSIN.ContinuousThermalCommitment,
+        PSIN.BasicDispatchFeasibility,
+    ) isa PSIN.TechnologyModel
+end
+
 @testset "Operational weights check" begin
     _, op_days = test_2_zone_portfolio()
     periods = [
@@ -55,24 +70,37 @@ end
     )
 end
 
-@testset "Time series initial timestamp check" begin
-    p_5bus, op_days = test_2_zone_portfolio()
-    wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
-    time_series = IS.get_time_series(
-        IS.SingleTimeSeries,
-        wind,
-        "ops_variable_cap_factor";
-        year="2030",
-        rep_day=1,
+@testset "Time series checks" begin
+    # Every operational time series, including the hydro budget, must have one value per time
+    # step of its representative period, starting at its first time stamp.
+    p, op_days = test_hydro_portfolio()
+    hydro = PSIP.get_technology(PSIP.SupplyTechnology{PSY.HydroDispatch}, p, "hydro")
+    demand = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p, "demand")
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    no_feasibility = Vector{Vector{DateTime}}()
+    time_mapping = PSIN.TimeMapping(periods, op_days, no_feasibility)
+    budget = PSIN.retrieve_ops_time_series(hydro, 1, time_mapping, "ops_hydro_budget")
+    @test length(budget.data) == length(op_days[1])
+    @test length(PSIN.retrieve_ops_time_series(demand, 2, time_mapping).data) ==
+          length(op_days[2])
+
+    later_day =
+        PSIN.TimeMapping(periods, [op_days[1] .+ Hour(1), op_days[2]], no_feasibility)
+    @test_throws "starts at" PSIN.retrieve_ops_time_series(
+        hydro,
+        1,
+        later_day,
+        "ops_hydro_budget",
     )
-    @test isnothing(PSIN.check_initial_timestamp(time_series, wind, first(op_days[1]), 1))
-    # A time series that starts on a different time stamp than its representative period
-    # is an error.
-    @test_throws ErrorException PSIN.check_initial_timestamp(
-        time_series,
-        wind,
-        first(op_days[2]),
-        2,
+    shorter_day = PSIN.TimeMapping(periods, [op_days[1][1:12], op_days[2]], no_feasibility)
+    @test_throws "has 24 values but representative period 1 has 12 time steps" PSIN.retrieve_ops_time_series(
+        hydro,
+        1,
+        shorter_day,
+        "ops_hydro_budget",
     )
 end
 
@@ -194,8 +222,8 @@ end
         [vre_model],
     )
 
-    # + CumulativeCapacity and WeightedEnergyGeneration for the wind supply tech.
-    @test length(container.expressions) == 6
+    # + build, cost and generation expressions for wind, which has no fuel curve.
+    @test length(container.expressions) == 10
     @test length(container.variables) == 2
 
     v = PSIN.get_variable(
@@ -247,8 +275,8 @@ end
         [thermal_model, thermal_model],
     )
 
-    # + CumulativeCapacity and WeightedEnergyGeneration for the thermal supply tech.
-    @test length(container.expressions) == 8
+    # + build and generation expressions for thermal.
+    @test length(container.expressions) == 16
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(
@@ -401,7 +429,7 @@ end
     @test length(c["cheap_thermal", :]) ==
           length(PSIN.get_investment_time_steps(container.time_mapping))
 
-    # Dispatch is limited to the installed capacity that is not on a forced outage (8%)
+    # 8% forced outage
     limit = PSIN.get_constraint(
         container,
         PSIN.ActivePowerLimitsConstraint(),
@@ -425,6 +453,13 @@ end
         limit["cheap_thermal", 30],
         thermal_build["cheap_thermal", 2],
     ) ≈ -0.92
+    thermal = PSIP.get_technology(
+        PSIP.SupplyTechnology{PSY.ThermalStandard},
+        p_5bus,
+        "expensive_thermal",
+    )
+    PSIP.set_outage_factors!(thermal, (planned=0.0, forced=1.1))
+    @test_throws IS.InvalidValue PSIN.get_availability(thermal)
 
     # StorageTechnology{EnergyReservoirStorage}
     PSIN.construct_technologies!(

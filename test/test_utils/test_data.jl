@@ -8,6 +8,63 @@ using Dates
 const PSIP = PowerSystemsInvestmentsPortfolios
 const IS = InfrastructureSystems
 
+function next_region_id(portfolio::PSIP.Portfolio)
+    regions = PSIP.get_regions(PSIP.RegionTopology, portfolio)
+    return maximum(PSIP.get_id(r) for r in regions; init=0) + 1
+end
+
+function thermal_test_model(
+    operation_formulation;
+    operation_cost=nothing,
+    time_limits=nothing,
+    ramp_limits=nothing,
+    min_generation_fraction=nothing,
+)
+    p_5bus, op_days = test_2_zone_portfolio()
+    thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
+    thermal = PSIP.get_technology(thermal_type, p_5bus, "expensive_thermal")
+    !isnothing(operation_cost) && PSIP.set_operation_costs!(thermal, operation_cost)
+    !isnothing(time_limits) && PSIP.set_time_limits!(thermal, time_limits)
+    !isnothing(ramp_limits) && PSIP.set_ramp_limits!(thermal, ramp_limits)
+    !isnothing(min_generation_fraction) &&
+        PSIP.set_min_generation_fraction!(thermal, min_generation_fraction)
+
+    periods = [
+        (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
+        (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
+    ]
+    template = InvestmentModelTemplate(
+        DiscountedCashFlow(0.07, Year(2025), periods),
+        OperationalRepresentativeDays(op_days, [365, 365]),
+        RepresentativePeriods(Vector{Vector{DateTime}}()),
+        TransportModel(SingleRegionBalanceModel),
+    )
+    set_technology_model!(
+        template,
+        ["demand1"],
+        PSIP.ProjectedDemand{PSY.PowerLoad},
+        StaticLoadInvestment,
+        BasicDispatch,
+        BasicDispatchFeasibility,
+    )
+    set_technology_model!(
+        template,
+        ["cheap_thermal", "expensive_thermal"],
+        thermal_type,
+        ContinuousInvestment,
+        operation_formulation,
+        BasicDispatchFeasibility,
+    )
+    return InvestmentModel(
+        template,
+        SingleInstanceSolve,
+        p_5bus;
+        optimizer=HiGHS.Optimizer,
+        portfolio_to_file=false,
+        store_variable_names=true,
+    )
+end
+
 function test_2_zone_portfolio()
     ########################
     #### Financial Data ####
@@ -239,9 +296,9 @@ function test_2_zone_portfolio()
         capacity_limits_discharge=(min=0.0, max=300.0),
         capacity_limits_energy=(min=0.0, max=1000.0),
         power_systems_type="EnergyReservoirStorage",
-        prime_mover_type=PrimeMovers.BT,
+        prime_mover_type=PrimeMovers.BA,
         available=true,
-        capital_costs_storage=PSIP.StorageCapitalCost(
+        capital_costs=PSIP.StorageCapitalCost(
             charge_capital_cost=LinearCurve(0.0),
             discharge_capital_cost=LinearCurve(stor_kw_capex * 1000),
             energy_capital_cost=LinearCurve(stor_kwh_capex * 1000),

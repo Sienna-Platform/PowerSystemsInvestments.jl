@@ -34,16 +34,14 @@ end
 function _add_proportional_term!(
     container::SingleOptimizationContainer,
     ::T,
-    technology::U,
+    ::U,
+    name::String,
     linear_term::Float64,
     time_period::Int,
     tech_model::String,
 ) where {T <: InvestmentVariableType, U <: PSIP.Technology}
     variable = get_variable(container, T(), U, tech_model)
-    lin_cost = JuMP.AffExpr(0.0)
-    for name in get_variable_names(technology)
-        JuMP.add_to_expression!(lin_cost, linear_term, variable[name, time_period])
-    end
+    lin_cost = linear_term * variable[name, time_period]
     add_to_objective_investment_expression!(container, lin_cost)
     return lin_cost
 end
@@ -92,16 +90,14 @@ end
 function _add_proportional_term!(
     container::SingleOptimizationContainer,
     ::T,
-    technology::U,
+    ::U,
+    name::String,
     linear_term::Float64,
     time_period::Int,
     tech_model::String,
 ) where {T <: InvestmentExpressionType, U <: PSIP.Technology}
     expr = get_expression(container, T(), U, tech_model)
-    lin_cost = JuMP.AffExpr(0.0)
-    for name in get_variable_names(technology)
-        JuMP.add_to_expression!(lin_cost, linear_term, expr[name, time_period])
-    end
+    lin_cost = linear_term * expr[name, time_period]
     add_to_objective_investment_expression!(container, lin_cost)
     return lin_cost
 end
@@ -122,7 +118,7 @@ function add_capital_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        storage_capital_costs = PSIP.get_capital_costs_storage(d)
+        storage_capital_costs = PSIP.get_capital_costs(d)
         value_curve = PSIP.get_energy_capital_cost(storage_capital_costs)
         _add_cost_to_objective!(container, U(), d, value_curve, V(), tech_model)
     end
@@ -141,7 +137,7 @@ function get_power_capital_cost(
     if PSIP.get_charge_capital_cost(capital_costs) != PSY.LinearCurve(0.0)
         error(
             "Technology $(PSIP.get_name(technology)) has a charge capital cost, which is " *
-            "not supported: storage power capacity is priced with the discharge capital cost.",
+            "not currently supported: storage power capacity is priced with the discharge capital cost.",
         )
     end
     return PSIP.get_discharge_capital_cost(capital_costs)
@@ -159,7 +155,7 @@ function add_capital_cost!(
     V <: InvestmentTechnologyFormulation,
 }
     for d in devices
-        storage_capital_costs = PSIP.get_capital_costs_storage(d)
+        storage_capital_costs = PSIP.get_capital_costs(d)
         value_curve = get_power_capital_cost(d, storage_capital_costs)
         interconnection_cost = PSIP.get_interconnection_cost(storage_capital_costs)
         _add_cost_to_objective!(

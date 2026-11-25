@@ -22,19 +22,11 @@ get_default_attributes(
 # Value of one MWh consumed (USD/MWh): the price of the product over the MWh per unit
 _product_price(curve::PSY.LinearCurve) = IS.get_proportional_term(curve)
 function _product_price(curve::PSY.ValueCurve)
-    error("Product prices of type $(typeof(curve)) are not supported. Use a LinearCurve.")
+    error("Product prices of type $(typeof(curve)) are not supported; use a LinearCurve")
 end
 
 function check_end_use(d::PSIP.DemandSideTechnology)
     name = PSIP.get_name(d)
-    if PSIP.get_technology_efficiency(d) <= 0.0
-        error("technology_efficiency of $name must be positive (MWh per unit of product).")
-    end
-    if !(0.0 <= PSIP.get_min_power(d) <= 1.0)
-        error(
-            "min_power of $name is a fraction of its capacity and must be between 0 and 1.",
-        )
-    end
     if _product_price(PSIP.get_price_per_unit(d)) > 0.0 &&
        PSIP.get_capacity_limits(d).max >= 1e8
         @warn "$name earns $(PSIP.get_price_per_unit(d)) per unit of product and has no " *
@@ -44,9 +36,6 @@ function check_end_use(d::PSIP.DemandSideTechnology)
     return
 end
 
-################## Expressions ###################
-
-# Existing capacity plus the capacity built up to each investment period
 function add_expression!(
     container::SingleOptimizationContainer,
     portfolio::PSIP.Portfolio,
@@ -82,14 +71,13 @@ function add_expression!(
     return
 end
 
-# Containers of the variable cost and the product revenue of each technology, for results
 function add_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
     devices::U,
     formulation::V,
 ) where {
-    T <: Union{VariableOMCost, ProductRevenue},
+    T <: ProductRevenue,
     U <: Vector{D},
     V <: EndUseDispatch,
 } where {D <: PSIP.DemandSideTechnology}
@@ -104,7 +92,6 @@ function add_expression!(
     return
 end
 
-# Consumption is withdrawn from the energy balance of its region
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -157,9 +144,6 @@ function _add_end_use_consumption!(
     return
 end
 
-################## Constraints ###################
-
-# Consumption is between min_power and all of the capacity installed in the period
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -214,7 +198,7 @@ function add_constraints!(
     return
 end
 
-# Consumption changes by at most the ramp limits (fraction of capacity per hour) between steps
+# Ramp limits are fractions of capacity per hour
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -276,8 +260,6 @@ function add_constraints!(
     end
     return
 end
-
-############### Objective Function ###############
 
 function objective_function!(
     container::SingleOptimizationContainer,

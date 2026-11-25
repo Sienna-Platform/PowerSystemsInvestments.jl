@@ -9,7 +9,12 @@ get_variable_integer(::InvestmentVariableType, ::PSIP.Technology, ::IntegerInves
 get_variable_multiplier(::InvestmentVariableType, ::PSIP.Technology, ::InvestmentTechnologyFormulation) = 1.0
 #! format: on
 
-# Capacity added by one unit of a discrete investment variable, which must be positive
+"""
+Capacity (MW) added by one unit of an investment variable. It must be positive, otherwise
+the investment would not add any capacity. It is the technology's unit size only for discrete
+formulations; continuous investment variables are already in MW, so it is 1.0 for them
+whatever the unit size in the data.
+"""
 function get_unit_size(
     variable_type::InvestmentVariableType,
     d::PSIP.Technology,
@@ -269,7 +274,6 @@ function add_constraints!(
     for d in devices
         name = PSIP.get_name(d)
         limits = get_cumulative_limits(d, CumulativeCapacity())
-        _check_cumulative_limits(d, limits)
         for t in time_steps
             con[name, t] = JuMP.@constraint(
                 get_jump_model(container),

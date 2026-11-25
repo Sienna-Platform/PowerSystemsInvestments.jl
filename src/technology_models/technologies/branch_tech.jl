@@ -1,9 +1,10 @@
-# Transport technologies whose flow is controlled directly
 const ControllableTransportTechnology =
     Union{PSIP.AggregateTransportTechnology, PSIP.NodalHVDCTransportTechnology}
 
 #! format: off
 _supported_investment_formulations(::Type{<:PSIP.TransmissionTechnology}) = (ContinuousInvestment, IntegerInvestment, BinaryInvestment)
+_supported_operation_formulations(::Type{<:PSIP.TransmissionTechnology}) = (BasicDispatch,)
+_supported_operation_formulations(::Type{<:ControllableTransportTechnology}) = (BasicDispatch, BasicDispatchWithLosses)
 
 # New capacity is limited by the cumulative capacity limits, which account for the existing
 # capacity
@@ -19,7 +20,7 @@ get_variable_upper_bound(::FlowActivePowerVariable, d::ControllableTransportTech
 get_variable_lower_bound(::Union{FlowActivePowerFromToVariable, FlowActivePowerToFromVariable}, d::ControllableTransportTechnology, ::BasicDispatchWithLosses) = 0.0
 get_variable_upper_bound(::Union{FlowActivePowerFromToVariable, FlowActivePowerToFromVariable}, d::ControllableTransportTechnology, ::BasicDispatchWithLosses) = nothing
 
-# Operations variable bounds: bidirectional flow with magnitude <= capacity
+# |flow| <= maximum capacity
 get_variable_lower_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = -PSIP.get_capacity_limits(d).max
 get_variable_upper_bound(::FlowActivePowerVariable, d::PSIP.NodalACTransportTechnology, ::OperationsTechnologyFormulation) = PSIP.get_capacity_limits(d).max
 
@@ -29,7 +30,6 @@ _arc(d::PSIP.AggregateTransportTechnology) = (PSIP.get_name(PSIP.get_start_regio
 _arc(d::PSIP.TransmissionTechnology) = (PSIP.get_name(PSIP.get_start_node(d)), PSIP.get_name(PSIP.get_end_node(d)))
 
 # Proportional loss rate, and constant loss per MW of capacity
-_loss_terms(d::ControllableTransportTechnology) = _loss_terms(PSIP.get_line_loss(d))
 _loss_terms(loss::Float64) = (loss, 0.0)
 _loss_terms(loss::PSY.LinearCurve) = (PSY.get_proportional_term(loss), PSY.get_constant_term(loss))
 _loss_terms(::PSY.PiecewiseIncrementalCurve) = error("Piecewise line losses are not supported")
@@ -39,6 +39,18 @@ _has_losses(d::ControllableTransportTechnology) = _has_losses(PSIP.get_line_loss
 _has_losses(loss::Union{Float64, PSY.LinearCurve}) = any(!iszero, _loss_terms(loss))
 _has_losses(::PSY.PiecewiseIncrementalCurve) = true
 #! format: on
+
+function _loss_terms(d::ControllableTransportTechnology)
+    rate, constant = _loss_terms(PSIP.get_line_loss(d))
+    if rate < 0.0 || constant < 0.0
+        throw(
+            IS.DataFormatError(
+                "Line $(PSIP.get_name(d)) has negative losses (rate $rate, constant $constant)",
+            ),
+        )
+    end
+    return rate, constant
+end
 
 function get_default_attributes(
     ::Type{U},
@@ -165,7 +177,7 @@ function add_to_expression!(
         rate, constant = _loss_terms(d)
         inv_model = string(get_investment_formulation(tech_model_vector[ix]))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
-        for op_ix in get_operational_indexes(time_mapping)
+        for op_ix in get_all_indexes(time_mapping)
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in consecutive_slices[op_ix],
                 (node, sent, received) in ((from, from_to, to_from), (to, to_from, from_to))
@@ -181,6 +193,61 @@ function add_to_expression!(
         end
     end
 
+    return
+end
+
+# Branches are internal to a single region and add no imports
+function add_to_expression!(
+    ::SingleOptimizationContainer,
+    ::T,
+    ::U,
+    ::S,
+    ::TransportModel{V},
+    ::Vector{X},
+) where {
+    T <: FeasibilityImportCapacity,
+    S <: BasicDispatchFeasibility,
+    U <: Vector{D},
+    V <: SingleRegionBalanceModel,
+    X <: TechnologyModel,
+} where {D <: PSIP.TransmissionTechnology}
+    return
+end
+
+# Either end of a branch can import over its cumulative capacity in the feasibility periods
+function add_to_expression!(
+    container::SingleOptimizationContainer,
+    expression_type::T,
+    devices::U,
+    formulation::S,
+    transport_model::TransportModel{V},
+    tech_model_vector::Vector{X},
+) where {
+    T <: FeasibilityImportCapacity,
+    S <: BasicDispatchFeasibility,
+    U <: Vector{D},
+    V <: Union{MultiRegionBalanceModel, AbstractNodalTransportAggregation},
+    X <: TechnologyModel,
+} where {D <: PSIP.TransmissionTechnology}
+    IS.@assert_op length(devices) > 0
+    time_mapping = get_time_mapping(container)
+    consecutive_slices = get_consecutive_slices(time_mapping)
+    inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
+    expression = get_expression(container, T(), PSIP.Portfolio)
+    for (ix, d) in enumerate(devices)
+        name = PSIP.get_name(d)
+        inv_model = string(get_investment_formulation(tech_model_vector[ix]))
+        installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
+        for op_ix in get_feasibility_indexes(time_mapping), t in consecutive_slices[op_ix]
+            for region in _arc(d)
+                _add_to_jump_expression!(
+                    expression[region, t],
+                    installed_cap[name, inverse_invest_mapping[op_ix]],
+                    1.0,
+                )
+            end
+        end
+    end
     return
 end
 
@@ -220,7 +287,7 @@ function add_constraints!(
     )
 
     active_power = get_variable(container, V(), D, tech_model)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
     for (ix, d) in enumerate(devices)
@@ -279,7 +346,7 @@ function add_constraints!(
         name = PSIP.get_name(d)
         inv_model = string(get_investment_formulation(tech_model_vector[ix]))
         installed_cap = get_expression(container, CumulativeCapacity(), D, inv_model)
-        for op_ix in get_operational_indexes(time_mapping)
+        for op_ix in get_all_indexes(time_mapping)
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in consecutive_slices[op_ix]
                 con[name, t] = JuMP.@constraint(
@@ -307,7 +374,7 @@ end
 
 ########################### Nodal AC Transport Technology Methods #################################
 
-# Constraints: |flow| <= cumulative capacity (two inequality constraints per line)
+# |flow| <= cumulative capacity
 function add_constraints!(
     container::SingleOptimizationContainer,
     ::T,
@@ -336,7 +403,6 @@ function add_constraints!(
         meta=tech_model,
     )
 
-    # Create second constraint container for upper bounds using different constraint type
     con_ub_upper = add_constraints_container!(
         container,
         FlowActivePowerUpperBoundConstraint(),
@@ -347,7 +413,7 @@ function add_constraints!(
     )
 
     variable = get_variable(container, FlowActivePowerVariable(), D, tech_model)
-    operational_indexes = get_operational_indexes(time_mapping)
+    operational_indexes = get_all_indexes(time_mapping)
     consecutive_slices = get_consecutive_slices(time_mapping)
     inverse_invest_mapping = get_inverse_invest_mapping(time_mapping)
 
@@ -360,12 +426,10 @@ function add_constraints!(
             time_slices = consecutive_slices[op_ix]
             time_step_inv = inverse_invest_mapping[op_ix]
             for t in time_slices
-                # Lower bound: flow >= -capacity
                 con_ub[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     variable[name, t] >= -installed_cap_inv[name, time_step_inv]
                 )
-                # Upper bound: flow <= capacity
                 con_ub_upper[name, t] = JuMP.@constraint(
                     get_jump_model(container),
                     variable[name, t] <= installed_cap_inv[name, time_step_inv]

@@ -45,7 +45,7 @@ function link_retrofits!(
         end
         retrofit = only(attributes)
         others = [
-            t for t in PSIP.get_associated_technologies(portfolio, retrofit) if
+            t for t in PSIP.get_attached_components(portfolio, retrofit) if
             PSIP.get_name(t) != name
         ]
         if length(others) != 1

@@ -24,6 +24,7 @@ function construct_transport!(
     transport_model::TransportModel{NodalBalanceModel},
 )
     add_constraints!(container, NodalBalanceConstraint, p)
+    add_constraints!(container, NodalBalanceFeasibilityConstraint, p)
     return
 end
 
@@ -45,6 +46,7 @@ function construct_transport!(
     add_constraints!(container, NewCorridorBuiltConstraint, p, network)
     add_constraints!(container, UnitLineBuiltConstraint, p, network)
     add_constraints!(container, VirtualTransactionLimitConstraint, p, network)
+    add_constraints!(container, NodalBalanceFeasibilityConstraint, p)
     add_aux_variable!(container, BranchFlow(), p, network)
     add_aux_variable!(container, LineFlow(), p, network)
     return

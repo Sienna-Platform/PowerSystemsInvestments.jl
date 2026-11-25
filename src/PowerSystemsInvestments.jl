@@ -7,11 +7,13 @@ export InvestmentModel
 export InvestmentModelTemplate
 export TransportModel
 export OptimizationProblemResults
+export InvestmentProblemResults
 
 ### Algorithms ###
 export SingleInstanceSolve
 export IterativeMonitoring
 export get_monitoring_log
+export get_monitoring_converged
 export get_monitored_corridors
 
 ### Technology Models ###
@@ -113,9 +115,12 @@ export LineFlow
 export BranchFlow
 
 ### Expressions ###
+export CapacityAdditions
+export PowerCapacityAdditions
+export EnergyCapacityAdditions
 export CumulativeCapacity
 export RetrofitCapacity
-export CapitalCost
+export CapitalCostExpression
 export TotalCapitalCost
 export FixedOperationModelCost
 export VariableOMCost
@@ -151,11 +156,35 @@ export get_infeasibility_conflict
 export serialize_problem
 export serialize_results
 #Results interfaces
+export get_portfolio
+export set_portfolio!
+export get_variable_values
+export get_expression_values
+export get_aux_variable_values
+export get_parameter_values
+export get_dual_values
+export list_variable_keys
+export list_expression_keys
+export list_aux_variable_keys
+export list_parameter_keys
+export list_dual_keys
+export list_variable_names
+export list_expression_names
+export list_aux_variable_names
+export list_parameter_names
+export list_dual_names
+export get_timestamps
+export get_investment_time_stamps
+export get_model_base_power
+export get_objective_value
+export get_optimizer_stats
+export export_results
 export read_variable
 export read_optimizer_stats
 export read_expression
 export read_dual
 export get_variable
+export get_variable_names
 export get_constraint
 export get_expression
 
@@ -246,12 +275,26 @@ import InfrastructureSystems.Optimization:
     encode_keys_as_strings,
     should_write_resulting_value,
     convert_result_to_natural_units,
-    to_matrix,
     get_store_container_type
 import InfrastructureSystems.Optimization:
     OptimizationProblemResults, OptimizationProblemResultsExport, OptimizerStats
 import InfrastructureSystems.Optimization:
-    list_variable_names, list_aux_variable_names, list_dual_names, list_expression_names
+    list_variable_names,
+    list_aux_variable_names,
+    list_dual_names,
+    list_expression_names,
+    list_parameter_names,
+    list_variable_keys,
+    list_aux_variable_keys,
+    list_dual_keys,
+    list_expression_keys,
+    list_parameter_keys
+import InfrastructureSystems.Optimization:
+    get_variable_values,
+    get_expression_values,
+    get_aux_variable_values,
+    get_parameter_values,
+    get_dual_values
 import InfrastructureSystems.Optimization:
     read_optimizer_stats,
     get_optimizer_stats,

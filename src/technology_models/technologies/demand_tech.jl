@@ -19,7 +19,6 @@ function get_default_attributes(
     return Dict{String, Any}()
 end
 
-# Region of the energy balance a demand or end-use technology is in
 _balance_region(
     ::TransportModel{SingleRegionBalanceModel},
     ::Union{PSIP.ProjectedDemand, PSIP.DemandSideTechnology},
@@ -34,7 +33,9 @@ _balance_region(
 # Curtailment tiers of a demand: the fraction of demand each one covers and its price (USD/MWh)
 function _curtailment_tiers(curve::PSY.LinearCurve, max_curtailment::Float64)
     if IS.get_constant_term(curve) != 0.0
-        error("A curtailment cost must be zero when nothing is curtailed.")
+        throw(
+            IS.DataFormatError("A curtailment cost must be zero when nothing is curtailed"),
+        )
     end
     max_curtailment == 0.0 && return Tuple{Float64, Float64}[]
     return [(max_curtailment, IS.get_proportional_term(curve))]
@@ -46,11 +47,22 @@ function _curtailment_tiers(curve::PSY.PiecewiseIncrementalCurve, max_curtailmen
     if first(x_coords) != 0.0 ||
        !isapprox(last(x_coords), max_curtailment) ||
        !issorted(x_coords; lt=<=)
-        error(
-            "The x coordinates of a piecewise curtailment cost are fractions of demand: " *
-            "they must start at 0, increase, and end at max_demand_curtailment " *
-            "($(max_curtailment)). Got $(x_coords)." *
-            (max_curtailment == 0.0 ? " Is max_demand_curtailment unset?" : ""),
+        throw(
+            IS.DataFormatError(
+                "The x coordinates of a piecewise curtailment cost, $(x_coords), are " *
+                "fractions of demand that must start at 0, increase, and end at " *
+                "max_demand_curtailment ($(max_curtailment))" *
+                (max_curtailment == 0.0 ? "; is max_demand_curtailment unset?" : ""),
+            ),
+        )
+    end
+    # Tiers are filled independently, so they are in order only if their prices increase
+    if !issorted(slopes)
+        throw(
+            IS.DataFormatError(
+                "The slopes of the piecewise curtailment cost of a demand must not " *
+                "decrease; got $(slopes)",
+            ),
         )
     end
     return [(x_coords[k + 1] - x_coords[k], slopes[k]) for k in eachindex(slopes)]
@@ -58,8 +70,8 @@ end
 
 function _curtailment_tiers(curve::PSY.ValueCurve, ::Float64)
     error(
-        "Curtailment costs of type $(typeof(curve)) are not supported. Use a LinearCurve " *
-        "or a PiecewiseIncrementalCurve.",
+        "Curtailment costs of type $(typeof(curve)) are not supported; use a LinearCurve " *
+        "or a PiecewiseIncrementalCurve",
     )
 end
 
@@ -67,27 +79,22 @@ end
 # shed involuntarily at the value of lost load
 function _unserved_tiers(d::PSIP.ProjectedDemand)
     max_curtailment = PSIP.get_max_demand_curtailment(d)
-    if !(0.0 <= max_curtailment <= 1.0)
-        error(
-            "max_demand_curtailment of demand $(PSIP.get_name(d)) is a fraction of " *
-            "demand and must be between 0 and 1. Got $(max_curtailment).",
-        )
-    end
     tiers = _curtailment_tiers(PSIP.get_curtailment_cost(d), max_curtailment)
     push!(tiers, (1.0 - max_curtailment, PSIP.get_value_of_lost_load(d)))
     if any(<(0.0), last.(tiers))
-        error(
-            "The unserved demand prices of demand $(PSIP.get_name(d)) must be non-negative.",
+        throw(
+            IS.DataFormatError(
+                "The unserved demand prices of demand $(PSIP.get_name(d)) must be " *
+                "non-negative",
+            ),
         )
     end
     return tiers
 end
 
-# Variable names of the tiers of a demand's unserved demand
-_unserved_names(d::PSIP.ProjectedDemand) =
-    ["$(PSIP.get_name(d))__tier$(k)" for k in eachindex(_unserved_tiers(d))]
+_unserved_names(d::PSIP.ProjectedDemand, tiers::Vector{Tuple{Float64, Float64}}) =
+    ["$(PSIP.get_name(d))__tier$(k)" for k in eachindex(tiers)]
 
-# Each tier of unserved demand is at most its share of the demand
 function add_variable!(
     container::SingleOptimizationContainer,
     variable_type::T,
@@ -100,7 +107,8 @@ function add_variable!(
 } where {D <: PSIP.ProjectedDemand}
     IS.@assert_op length(devices) > 0
     time_steps = get_operational_time_steps(get_time_mapping(container))
-    names = [name for d in devices for name in _unserved_names(d)]
+    tiers = Dict(PSIP.get_name(d) => _unserved_tiers(d) for d in devices)
+    names = [name for d in devices for name in _unserved_names(d, tiers[PSIP.get_name(d)])]
     variable = add_variable_container!(
         container,
         variable_type,
@@ -113,7 +121,7 @@ function add_variable!(
     store_names = get_store_variable_names(get_settings(container))
     demand = get_expression(container, DemandExpression(), PSIP.Portfolio)
     for d in devices
-        tiers = _unserved_tiers(d)
+        demand_tiers = tiers[PSIP.get_name(d)]
         max_curtailment = PSIP.get_max_demand_curtailment(d)
         # A piecewise curtailment cost needs a positive max_demand_curtailment, so a demand
         # without curtailment has a linear cost here
@@ -121,11 +129,13 @@ function add_variable!(
            IS.get_proportional_term(PSIP.get_curtailment_cost(d)) != 0.0
             @warn "Demand $(PSIP.get_name(d)) has a curtailment_cost but its " *
                   "max_demand_curtailment is 0, so it is never curtailed."
-        elseif max_curtailment > 0.0 && all(iszero, last.(tiers[1:(end - 1)]))
+        elseif max_curtailment > 0.0 && all(iszero, last.(demand_tiers[1:(end - 1)]))
             @warn "Demand $(PSIP.get_name(d)) can curtail $(max_curtailment) of its " *
                   "demand at no cost. Set its curtailment_cost."
         end
-        for ((share, _), name) in zip(tiers, _unserved_names(d)), t in time_steps
+        for ((share, _), name) in zip(demand_tiers, _unserved_names(d, demand_tiers)),
+            t in time_steps
+
             variable[name, t] = JuMP.@variable(
                 jump_model,
                 lower_bound = 0.0,
@@ -137,9 +147,8 @@ function add_variable!(
     return
 end
 
-# Adds coefficient times a demand's unserved demand at each time step to the expression
-# `expression_at(t)`. With `credited`, only the curtailment a capacity reserve margin
-# credits, not the involuntary shedding (the last tier).
+# Adds coefficient times a demand's unserved demand at each step to `expression_at(t)`; with
+# `credited`, only curtailment, not the involuntary shedding of the last tier
 function _add_unserved_demand!(
     expression_at::Function,
     container::SingleOptimizationContainer,
@@ -155,7 +164,7 @@ function _add_unserved_demand!(
         typeof(d),
         string(typeof(formulation)),
     )
-    names = _unserved_names(d)
+    names = _unserved_names(d, _unserved_tiers(d))
     for name in (credited ? names[1:(end - 1)] : names)
         for t in time_steps
             JuMP.add_to_expression!(expression_at(t), coefficient, variable[name, t])
@@ -209,7 +218,7 @@ function add_unserved_demand_cost!(
     variable = get_variable(container, UnservedDemandVariable(), D, string(S))
     for d in devices
         tiers = _unserved_tiers(d)
-        names = _unserved_names(d)
+        names = _unserved_names(d, tiers)
         for op_ix in get_operational_indexes(time_mapping)
             factor =
                 get_time_step_weight(container, op_ix) *
@@ -237,23 +246,14 @@ get_expression_multiplier(::EnergyBalance, ::DemandRecoveredVariable, ::PSIP.Pro
 # Price of shifting demand (USD/MWh shifted)
 _shift_price(curve::PSY.LinearCurve) = IS.get_proportional_term(curve)
 function _shift_price(curve::PSY.ValueCurve)
-    error("Shift costs of type $(typeof(curve)) are not supported. Use a LinearCurve.")
+    error("Shift costs of type $(typeof(curve)) are not supported; use a LinearCurve")
 end
 
 function check_flexible_demand(d::PSIP.ProjectedDemand)
     name = PSIP.get_name(d)
     flexible_fraction = PSIP.get_flexible_fraction(d)
-    if !(0.0 <= flexible_fraction <= 1.0)
-        error("flexible_fraction of demand $name must be between 0 and 1.")
-    end
-    if !(0.0 < PSIP.get_shift_efficiency(d) <= 1.0)
-        error("shift_efficiency of demand $name must be in (0, 1].")
-    end
-    if PSIP.get_max_demand_delay(d) < 0.0 || PSIP.get_max_demand_advance(d) < 0.0
-        error("The shifting windows of demand $name must be non-negative.")
-    end
     if _shift_price(PSIP.get_shift_cost(d)) < 0.0
-        error("The shift cost of demand $name must be non-negative.")
+        throw(IS.DataFormatError("The shift cost of demand $name must be non-negative"))
     end
     if flexible_fraction == 0.0 ||
        PSIP.get_max_demand_delay(d) == PSIP.get_max_demand_advance(d) == 0.0
@@ -263,20 +263,18 @@ function check_flexible_demand(d::PSIP.ProjectedDemand)
     return
 end
 
-# Number of time steps covered by a shifting window of `hours`. A window of 0 hours forbids
-# shifting in that direction, and a window can't reach past its own representative period,
-# which wraps around.
+# Whole time steps within a shifting window of `hours`, so shifting never exceeds it. A window
+# can't reach past its own representative period, which wraps around.
 function _shift_window(time_mapping::TimeMapping, op_ix::Int, hours::Float64)
-    hours == 0.0 && return 0
-    return min(
-        get_commitment_time_steps(time_mapping, op_ix, hours),
-        length(get_consecutive_slices(time_mapping)[op_ix]) - 1,
+    steps = floor(
+        Int,
+        hours / get_time_step_length(time_mapping, op_ix) + TIME_STEP_COUNT_TOLERANCE,
     )
+    return min(steps, length(get_consecutive_slices(time_mapping)[op_ix]) - 1)
 end
 
-# Deferred demand is at most the flexible share of the demand in its time step. Recovered
-# demand is at most the flexible share of the peak of the representative period, so the
-# backlog can't all be served in one step.
+# Recovered demand is limited by the flexible share of the period's peak rather than of its
+# step's demand, so the backlog can't all be served in one step
 _shift_limit(::DemandDeferredVariable, demand::Float64, ::Float64) = demand
 _shift_limit(::DemandRecoveredVariable, ::Float64, peak::Float64) = peak
 
@@ -582,7 +580,6 @@ _add_demand_shift!(
 
 ################## Expressions ###################
 
-# Demand is withdrawn from the energy balance of its region
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -608,7 +605,6 @@ function add_to_expression!(
     return
 end
 
-# Unserved demand is given back to the energy balance of its region
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -634,8 +630,6 @@ function add_to_expression!(
     return
 end
 
-# Deferred demand is given back to the energy balance of its region, and recovered demand is
-# withdrawn from it
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,
@@ -663,8 +657,7 @@ function add_to_expression!(
     return
 end
 
-# Weighted (representative-day) demand per operational index, aggregated by the region or
-# node of the demand. A numeric constant, the gross demand.
+# Weighted gross demand per operational index, by region or node
 function add_to_expression!(
     container::SingleOptimizationContainer,
     expression_type::T,

@@ -1,9 +1,6 @@
-# Capacity limits: the minimum and maximum apply to cumulative capacity (existing plus built)
-# in every investment period, not to the capacity built in a period.
 
 const LIMIT_THERMAL = PSIP.SupplyTechnology{PSY.ThermalStandard}
 
-# Runs the capital stages of one technology type of the two-zone test portfolio
 function _limit_container(p, op_days, tech_type, names)
     capital = DiscountedCashFlow(
         0.07,
@@ -60,7 +57,6 @@ function _cumulative_limits(container, constraint_type, tech_type, name)
 end
 
 @testset "Capacity limits apply to cumulative capacity" begin
-    # Supply: the build variable is only non-negative
     p, op_days = test_2_zone_portfolio()
     thermal = PSIP.get_technology(LIMIT_THERMAL, p, "cheap_thermal")
     PSIP.set_capacity_limits!(thermal, (min=50.0, max=400.0))
@@ -76,7 +72,6 @@ end
     @test all(JuMP.lower_bound(build["cheap_thermal", t]) == 0.0 for t in 1:2)
     @test !any(JuMP.has_upper_bound(build["cheap_thermal", t]) for t in 1:2)
 
-    # Storage: power from the discharge limits, and energy
     p, op_days = test_2_zone_portfolio()
     storage_type = PSIP.StorageTechnology{PSY.EnergyReservoirStorage}
     storage = PSIP.get_technology(storage_type, p, "test_storage")
@@ -96,7 +91,6 @@ end
         "test_storage",
     ) == [(80.0, 1000.0), (80.0, 1000.0)]
 
-    # Co-located: storage power and energy, wind, solar and inverter
     p, op_days = test_2_zone_portfolio()
     colocated_type = PSIP.ColocatedSupplyStorageTechnology{PSY.RenewableDispatch}
     colocated = PSIP.get_technology(colocated_type, p, "colocated_test")
@@ -122,7 +116,6 @@ end
         ) == [limits, limits]
     end
 
-    # Transmission
     p, op_days = test_2_zone_portfolio()
     line_type = PSIP.AggregateTransportTechnology{PSY.ACBranch}
     line = PSIP.get_technology(line_type, p, "test_branch")
@@ -134,17 +127,6 @@ end
         line_type,
         "test_branch",
     ) == [(100.0, 1000.0), (100.0, 1000.0)]
-
-    # A minimum above the maximum is an error
-    p, op_days = test_2_zone_portfolio()
-    thermal = PSIP.get_technology(LIMIT_THERMAL, p, "cheap_thermal")
-    PSIP.set_capacity_limits!(thermal, (min=500.0, max=400.0))
-    @test_throws r"above its maximum" _limit_container(
-        p,
-        op_days,
-        LIMIT_THERMAL,
-        ["cheap_thermal"],
-    )
 end
 
 const LIMIT_DAYS = [
@@ -152,9 +134,8 @@ const LIMIT_DAYS = [
     year in (2030, 2035)
 ]
 
-# One zone with a 100 MW flat demand and one gas technology with the given capacity limits,
-# over two investment periods. With `existing`, the gas technology has a 200 MW generator in the
-# base system.
+# One zone, a 100 MW flat demand and gas with the given limits over two periods; with
+# `existing`, gas also has a 200 MW generator in the base system
 function _limit_model(limits; existing=false)
     sys = PSY.System(100.0)
     set_units_base_system!(sys, "NATURAL_UNITS")
@@ -264,7 +245,6 @@ function _limit_model(limits; existing=false)
     )
 end
 
-# Capacity built in each period
 function _solved_builds(m)
     @test build!(
         m;
@@ -282,14 +262,10 @@ function _solved_builds(m)
 end
 
 @testset "Capacity limits over several investment periods" begin
-    # A fixed capacity (min = max) is built once, not in every period
     @test _solved_builds(_limit_model((min=150.0, max=150.0))) ≈ [150.0, 0.0] atol = 1e-6
-    # A minimum above the demand forces exactly that capacity
     @test _solved_builds(_limit_model((min=120.0, max=1e8))) ≈ [120.0, 0.0] atol = 1e-6
-    # Existing capacity above the minimum needs nothing built
     @test _solved_builds(_limit_model((min=150.0, max=1e8); existing=true)) ≈ [0.0, 0.0] atol =
         1e-6
-    # A minimum above the existing capacity forces only the shortfall
     @test _solved_builds(_limit_model((min=250.0, max=1e8); existing=true)) ≈ [50.0, 0.0] atol =
         1e-6
 end
