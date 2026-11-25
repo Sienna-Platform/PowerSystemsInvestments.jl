@@ -54,6 +54,19 @@ function _add_requirement_capacity!(
     return
 end
 
+function _add_requirement_capacity!(
+    expression::JuMP.AffExpr,
+    container::SingleOptimizationContainer,
+    technology::PSIP.DemandSideTechnology,
+    tech_model::TechnologyModel{D},
+    period::Int,
+) where {D <: PSIP.DemandSideTechnology}
+    investment_meta = string(get_investment_formulation(tech_model))
+    capacity = get_expression(container, CumulativeCapacity(), D, investment_meta)
+    JuMP.add_to_expression!(expression, capacity[PSIP.get_name(technology), period])
+    return
+end
+
 _capacity_constraint(
     jump_model::JuMP.Model,
     requirement::PSIP.MinimumCapacityRequirements,
@@ -84,7 +97,13 @@ function construct_requirement!(
 }
     for name in names
         req = PSIP.get_requirement(T, p, name)
-        _check_contributors(p, req, names_to_model_map; demands=false)
+        _check_contributors(
+            p,
+            req,
+            names_to_model_map;
+            demands=false,
+            end_use_capacity=true,
+        )
         _warn_ignored_contributors(_contributing_lines(p, req), req, "Lines")
         _warn_ignored_contributors(
             _contributing_demands(p, req),
@@ -150,7 +169,7 @@ function add_constraints!(
         req_name = PSIP.get_name(req)
         period = _target_investment_period(time_mapping, req)
         capacity = JuMP.AffExpr(0.0)
-        for resource in _contributing_resources(p, req)
+        for resource in [_contributing_resources(p, req); _contributing_end_uses(p, req)]
             tech_model = _contributor_model(names_to_model_map, req_name, resource)
             _add_requirement_capacity!(capacity, container, resource, tech_model, period)
         end

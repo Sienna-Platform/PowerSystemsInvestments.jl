@@ -151,13 +151,14 @@ function _time_step_test_model(step_hours::Int, gas_formulation=BasicDispatch)
         ),
         financial_data=financial_data(),
     )
-    demand = DemandRequirement{PowerLoad}(;
+    demand = ProjectedDemand{PowerLoad}(;
         name="demand",
         id=4,
         available=true,
         region=[zone],
         power_systems_type="PowerLoad",
-        value_of_lost_load=0.0,
+        peak_demand_mw=maximum(load_profile),
+        conformity=PSY.LoadConformity.NON_CONFORMING,
     )
 
     portfolio = Portfolio(2025, 0.07, 0.02, 0.04)
@@ -172,7 +173,7 @@ function _time_step_test_model(step_hours::Int, gas_formulation=BasicDispatch)
             demand,
             SingleTimeSeries(;
                 name="ops_demand",
-                data=TimeArray(time_stamps, load_profile),
+                data=TimeArray(time_stamps, load_profile ./ maximum(load_profile)),
             );
             year=year,
             rep_day=rep_day,
@@ -193,12 +194,12 @@ function _time_step_test_model(step_hours::Int, gas_formulation=BasicDispatch)
         DiscountedCashFlow(0.07, Year(2025), TIME_STEP_TEST_PERIODS),
         OperationalRepresentativeDays(days, [365, 365]),
         RepresentativePeriods(Vector{Vector{DateTime}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
     set_technology_model!(
         template,
         ["demand"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,

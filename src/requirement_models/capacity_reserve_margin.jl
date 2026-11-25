@@ -258,6 +258,11 @@ function construct_requirement!(
     for name in names
         req = PSIP.get_requirement(T, p, name)
         _check_contributors(p, req, names_to_model_map; demands=true)
+        _warn_ignored_contributors(
+            _contributing_end_uses(p, req),
+            req,
+            "Demand side technologies",
+        )
         area = _reserve_area(p, req, transport_model)
         lines = _boundary_lines(p, req, area; warn=true)
         for (line, _) in lines
@@ -319,6 +324,7 @@ function add_constraints!(
     consecutive_slices = get_consecutive_slices(time_mapping)
     map_to_op = get_investment_map_to_operational_slices(time_mapping)
     jump_model = get_jump_model(container)
+    demand_expression = get_expression(container, DemandExpression(), PSIP.Portfolio)
     con = add_constraints_container!(
         container,
         CapacityReserveMarginConstraint(),
@@ -366,6 +372,29 @@ function add_constraints!(
                 )
             end
         end
+        # Curtailment and the net demand shifted out of a time step count as capacity, the shift
+        # in full until requirements have a derating; involuntary shedding does not
+        for d in _contributing_demands(p, req)
+            formulation = _demand_formulation(names_to_model_map, d)
+            _add_unserved_demand!(
+                t -> reserve[t],
+                container,
+                d,
+                formulation,
+                keys(reserve),
+                1.0;
+                credited=true,
+            )
+            _add_demand_shift!(
+                t -> reserve[t],
+                container,
+                d,
+                formulation,
+                keys(reserve),
+                -1.0,
+            )
+        end
+
         if get_use_slacks(model)
             cost_factor =
                 get_attributes(model)["slack_penalty"] *
@@ -382,12 +411,13 @@ function add_constraints!(
         end
 
         margin = 1.0 + PSIP.get_capacity_reserve_fraction(req)
-        for op_ix in op_indexes
-            demand = _requirement_demand(p, req, time_mapping, op_ix)
-            for (ix, t) in enumerate(consecutive_slices[op_ix])
-                con[req_name, t] =
-                    JuMP.@constraint(jump_model, reserve[t] >= margin * demand[ix])
-            end
+        demand_names = PSIP.get_name.(_contributing_demands(p, req))
+        for (t, contribution) in reserve
+            demand = sum(
+                JuMP.constant(demand_expression[name, t]) for name in demand_names;
+                init=0.0,
+            )
+            con[req_name, t] = JuMP.@constraint(jump_model, contribution >= margin * demand)
         end
     end
     return

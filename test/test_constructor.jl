@@ -75,7 +75,7 @@ end
     # step of its representative period, starting at its first time stamp.
     p, op_days = test_hydro_portfolio()
     hydro = PSIP.get_technology(PSIP.SupplyTechnology{PSY.HydroDispatch}, p, "hydro")
-    demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, "demand")
+    demand = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p, "demand")
     periods = [
         (Date(Month(1), Year(2030)), Date(Month(12), Year(2034))),
         (Date(Month(1), Year(2035)), Date(Month(12), Year(2039))),
@@ -124,7 +124,7 @@ end
         capital,
         operations,
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
 
     settings = PSIN.Settings(p_5bus)
@@ -135,10 +135,11 @@ end
 
     transport_model = PSIN.get_transport_model(template)
     PSIN.initialize_system_expressions!(container, transport_model, p_5bus)
+    PSIN.initialize_demands!(container, p_5bus)
 
     #Define technology models
     demand_model = PSIN.TechnologyModel(
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.StaticLoadInvestment,
         PSIN.BasicDispatch,
         PSIN.BasicDispatchFeasibility,
@@ -167,14 +168,14 @@ end
 
     # Argument Stage
 
-    #DemandRequirements
+    #ProjectedDemands
     PSIN.construct_technologies!(
         container,
         p_5bus,
         ["demand1"],
         PSIN.ArgumentConstructStage(),
         capital,
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.StaticLoadInvestment,
         transport_model,
         [demand_model],
@@ -185,15 +186,16 @@ end
         ["demand1"],
         PSIN.ArgumentConstructStage(),
         operations,
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.BasicDispatch,
         transport_model,
         [demand_model],
     )
 
-    # System expressions: EnergyBalance, FeasibilitySurplus, WeightedEnergyDemand.
+    # System expressions: EnergyBalance, FeasibilitySurplus, WeightedEnergyDemand, and
+    # DemandExpression from initialize_demands!.
     # The demand argument stage only populates these existing containers.
-    @test length(container.expressions) == 3
+    @test length(container.expressions) == 4
     @test length(container.variables) == 0
 
     #SupplyTechnology{RenewableDispatch}
@@ -221,7 +223,7 @@ end
     )
 
     # + build, cost and generation expressions for wind, which has no fuel curve.
-    @test length(container.expressions) == 9
+    @test length(container.expressions) == 10
     @test length(container.variables) == 2
 
     v = PSIN.get_variable(
@@ -274,7 +276,7 @@ end
     )
 
     # + build and generation expressions for thermal.
-    @test length(container.expressions) == 15
+    @test length(container.expressions) == 16
     @test length(container.variables) == 4
 
     v = PSIN.get_variable(
@@ -322,14 +324,14 @@ end
 
     # Model Stage
 
-    #DemandRequirement{PowerLoad}
+    #ProjectedDemand{PowerLoad}
     PSIN.construct_technologies!(
         container,
         p_5bus,
         ["demand1"],
         PSIN.ModelConstructStage(),
         capital,
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.StaticLoadInvestment,
         transport_model,
         [demand_model],
@@ -340,7 +342,7 @@ end
         ["demand1"],
         PSIN.ModelConstructStage(),
         operations,
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         PSIN.BasicDispatch,
         transport_model,
         [demand_model],
@@ -384,7 +386,7 @@ end
 
     c = PSIN.get_constraint(
         container,
-        PSIN.MaximumCumulativeCapacity(),
+        PSIN.CumulativeCapacityLimit(),
         PSIP.SupplyTechnology{PSY.RenewableDispatch},
         "ContinuousInvestment",
     )
@@ -418,7 +420,7 @@ end
 
     c = PSIN.get_constraint(
         container,
-        PSIN.MaximumCumulativeCapacity(),
+        PSIN.CumulativeCapacityLimit(),
         PSIP.SupplyTechnology{PSY.ThermalStandard},
         "ContinuousInvestment",
     )

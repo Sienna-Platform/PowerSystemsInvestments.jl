@@ -410,7 +410,7 @@ function solve!(
     console_level=Logging.Error,
     file_level=Logging.Info,
     disable_timer_outputs=false,
-    export_optimization_problem=true,
+    export_optimization_problem=false,
     kwargs...,
 )
     build_if_not_already_built!(

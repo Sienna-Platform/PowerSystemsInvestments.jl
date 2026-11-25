@@ -20,7 +20,7 @@ function _energy_share_model(
 )
     p_5bus, op_days = test_2_zone_portfolio()
     wind = PSIP.get_technology(PSIP.SupplyTechnology{PSY.RenewableDispatch}, p_5bus, "wind")
-    demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand2")
+    demand2 = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p_5bus, "demand2")
     esr = PSIP.EnergyShareRequirements(;
         name="wind_share",
         id=1,
@@ -43,7 +43,7 @@ function _energy_share_model(
         PSIP.add_requirement!(p_5bus, thermal_esr)
         for (type, name) in (
             (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal"),
-            (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1"),
+            (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand1"),
         )
             PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [thermal_esr])
         end
@@ -67,12 +67,12 @@ function _energy_share_model(
         DiscountedCashFlow(0.07, Year(2025), ESR_PERIODS),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{DateTime}}()),
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -155,7 +155,7 @@ function _demand_2030(demand2)
             year="2030",
             rep_day=1,
         ).data
-    return 365 * sum(TimeSeries.values(data))
+    return 365 * sum(TimeSeries.values(data)) * PSIP.get_peak_demand_mw(demand2)
 end
 
 const ESR_KEY =
@@ -375,12 +375,12 @@ function _policy_model(
         DiscountedCashFlow(0.07, Year(2025), ESR_PERIODS),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{DateTime}}()),
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -436,7 +436,7 @@ function _policy_model(
             CARBON_THERMAL_TYPE
         for (type, name) in [
             [(supply_type(name), name) for name in supply]...,
-            [(PSIP.DemandRequirement{PSY.PowerLoad}, name) for name in demands]...,
+            [(PSIP.ProjectedDemand{PSY.PowerLoad}, name) for name in demands]...,
             fill((ESR_STORAGE_TYPE, "test_storage"), storage)...,
             fill((ESR_COLOCATED_TYPE, "colocated_test"), colocated)...,
             fill((PSIP.AggregateTransportTechnology{PSY.ACBranch}, "test_branch"), line)...,
@@ -495,7 +495,7 @@ function _carbon_totals(m)
     demand = sum(
         _demand_2030(
             PSIP.get_technology(
-                PSIP.DemandRequirement{PSY.PowerLoad},
+                PSIP.ProjectedDemand{PSY.PowerLoad},
                 PSIN.get_portfolio(m),
                 name,
             ),
@@ -665,11 +665,11 @@ function _reserve_surplus(m, fraction)
     )
     capacity_factor =
         series(PSIP.get_technology(wind_type, p, "wind"), "ops_variable_cap_factor")
+    # Demand series are normalized to the peak demand
+    demand_mw(d) = series(d, "ops_demand") .* PSIP.get_peak_demand_mw(d)
     demand = sum(
-        series(
-            PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, name),
-            "ops_demand",
-        ) for name in ("demand1", "demand2")
+        demand_mw(PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p, name)) for
+        name in ("demand1", "demand2")
     )
     storage(variable_type) =
         JuMP.value.(
@@ -801,10 +801,9 @@ _constraint_surplus(constraint) =
         )
         capacity_factor =
             series(PSIP.get_technology(wind_type, p, "wind"), "ops_variable_cap_factor")
-        demand = series(
-            PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, "demand2"),
-            "ops_demand",
-        )
+        demand2 = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p, "demand2")
+        # Demand series are normalized to the peak demand
+        demand = series(demand2, "ops_demand") .* PSIP.get_peak_demand_mw(demand2)
         in_area(type, name) =
             PSIP.get_name.(PSIP.get_region(PSIP.get_technology(type, p, name))) ==
             ["Zone_2"]
@@ -833,8 +832,8 @@ _constraint_surplus(constraint) =
     requirement = _capacity_reserve_margin(0.3)
     PSIP.add_requirement!(p_5bus, requirement)
     for (type, name) in (
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1"),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2"),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand1"),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand2"),
         (line_type, "test_branch"),
     )
         PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [requirement])
@@ -944,7 +943,7 @@ end
 
     p_5bus, _ = test_2_zone_portfolio()
     requirement = _capacity_requirement(PSIP.MinimumCapacityRequirements, 100.0)
-    demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, "demand1")
+    demand = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p_5bus, "demand1")
     @test_logs (
         :warn,
         r"Demand technologies demand1 attached to requirement 'capacity_requirement' do not contribute",
@@ -984,20 +983,21 @@ end
             )
         discharge = storage(PSIN.ActiveOutPowerVariable())
         charge = storage(PSIN.ActiveInPowerVariable())
-        demand2 = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, "demand2")
-        demand = vcat(
-            [
-                TimeSeries.values(
-                    IS.get_time_series(
-                        IS.SingleTimeSeries,
-                        demand2,
-                        "ops_demand";
-                        year=year,
-                        rep_day=day,
-                    ).data,
-                ) for (year, day) in (("2030", 1), ("2035", 2))
-            ]...,
-        )
+        demand2 = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p, "demand2")
+        demand =
+            vcat(
+                [
+                    TimeSeries.values(
+                        IS.get_time_series(
+                            IS.SingleTimeSeries,
+                            demand2,
+                            "ops_demand";
+                            year=year,
+                            rep_day=day,
+                        ).data,
+                    ) for (year, day) in (("2030", 1), ("2035", 2))
+                ]...,
+            ) .* PSIP.get_peak_demand_mw(demand2)
         return [
             demand[t] - wind["wind", t] - discharge["test_storage", t] +
             charge["test_storage", t] for t in 1:48
@@ -1047,7 +1047,7 @@ end
     requirement = _capacity_reserve_margin(0.1)
     PSIP.add_requirement!(p_5bus, requirement)
     wind_type = PSIP.SupplyTechnology{PSY.RenewableDispatch}
-    demand_type = PSIP.DemandRequirement{PSY.PowerLoad}
+    demand_type = PSIP.ProjectedDemand{PSY.PowerLoad}
     models = Dict{String, PSIN.TechnologyModel}()
     @test_throws r"Requirement 'reserve_margin' has no available contributing resources or demand technologies." PSIN._check_contributors(
         p_5bus,

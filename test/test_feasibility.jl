@@ -7,13 +7,17 @@ function _feasibility_portfolio()
     p, op_days = test_2_zone_portfolio()
     feasibility_rep_day = length(op_days) + 1
     for name in ["demand1", "demand2"]
-        demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, name)
+        demand = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p, name)
         PSIP.add_time_series!(
             p,
             demand,
             SingleTimeSeries(;
                 name="ops_demand",
-                data=TimeArray(FEASIBILITY_DAY, fill(FEASIBILITY_DEMAND, 24)),
+                # Demand series are normalized to the peak demand
+                data=TimeArray(
+                    FEASIBILITY_DAY,
+                    fill(FEASIBILITY_DEMAND / PSIP.get_peak_demand_mw(p, demand), 24),
+                ),
             );
             year="2030",
             rep_day=feasibility_rep_day,
@@ -54,7 +58,7 @@ function _feasibility_model(
     set_technology_model!(
         template,
         demand_names,
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -116,7 +120,7 @@ _first_feasibility_step(container) =
     m = _feasibility_model(
         p,
         op_days,
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
         ["demand1"],
         # The branch is internal to the region and adds no import capacity.
         [(["test_branch"], PSIP.AggregateTransportTechnology{PSY.ACBranch})],
@@ -137,7 +141,7 @@ _first_feasibility_step(container) =
     )
     # The installed capacity covers the demand of the feasibility day.
     @test JuMP.normalized_coefficient(feasibility[t], build["cheap_thermal", 1]) == 1.0
-    @test JuMP.normalized_rhs(feasibility[t]) == FEASIBILITY_DEMAND
+    @test JuMP.normalized_rhs(feasibility[t]) ≈ FEASIBILITY_DEMAND
     @test solve!(m) == PSIN.RunStatus.SUCCESSFULLY_FINALIZED
 end
 
@@ -147,7 +151,7 @@ end
     m = _feasibility_model(
         p,
         op_days,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
         ["demand1", "demand2"],
         [(["test_branch"], branch_type)],
     )
@@ -182,7 +186,7 @@ end
         @test JuMP.normalized_coefficient(feasibility[zone, t], branch_build) == 1.0
     end
     @test JuMP.normalized_coefficient(system[t], branch_build) == 0.0
-    @test JuMP.normalized_rhs(system[t]) == 2 * FEASIBILITY_DEMAND
+    @test JuMP.normalized_rhs(system[t]) ≈ 2 * FEASIBILITY_DEMAND
     # Operational time steps have no import capacity.
     @test JuMP.coefficient(imports[first(zones), 1], branch_build) == 0.0
     # The flow over the branch is limited by its installed capacity in the feasibility periods.
@@ -221,7 +225,7 @@ function _test_nodal_feasibility(transport)
     storage_type = PSIP.StorageTechnology{PSY.EnergyReservoirStorage}
     PSIP.set_region!(PSIP.get_technology(storage_type, p, "test_storage"), [nodes[2]])
     for (name, node) in zip(["demand1", "demand2"], nodes)
-        demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p, name)
+        demand = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p, name)
         PSIP.set_region!(demand, [node])
     end
     branch_type = PSIP.NodalACTransportTechnology{PSY.ACBranch}
@@ -251,7 +255,7 @@ function _test_nodal_feasibility(transport)
     m = _feasibility_model(
         p,
         op_days,
-        TransportModel(transport, use_slacks=false),
+        TransportModel(transport),
         ["demand1", "demand2"],
         [(["line"], branch_type)];
         storage=true,
@@ -283,7 +287,7 @@ function _test_nodal_feasibility(transport)
         1,
     ]
     @test JuMP.normalized_coefficient(feasibility["Node_2", t], storage_build) == 1.0
-    @test JuMP.normalized_rhs(feasibility["Node_2", t]) == FEASIBILITY_DEMAND
+    @test JuMP.normalized_rhs(feasibility["Node_2", t]) ≈ FEASIBILITY_DEMAND
     if transport == NodalBalanceModel
         flow_limit = PSIN.get_constraint(
             container,

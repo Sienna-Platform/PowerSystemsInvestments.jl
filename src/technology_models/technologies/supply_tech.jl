@@ -5,9 +5,9 @@ _supported_operation_formulations(::Type{<:PSIP.SupplyTechnology{PSY.ThermalStan
 
 get_variable_lower_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = 0.0
 get_variable_upper_bound(::VariableType, d::PSIP.SupplyTechnology, ::AbstractTechnologyFormulation) = nothing
-get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::InvestmentTechnologyFormulation) = PSIP.get_capacity_limits(d).max
-# Discrete investments count units, so the limit in MW does not apply to the variable
-get_variable_upper_bound(::BuildCapacity, d::PSIP.SupplyTechnology, ::Union{IntegerInvestment, BinaryInvestment}) = nothing
+# The capacity limits apply to cumulative capacity (CumulativeCapacityLimit), not to the
+# capacity built in a period
+get_cumulative_limits(d::PSIP.SupplyTechnology, ::CumulativeCapacity) = PSIP.get_capacity_limits(d)
 
 get_variable_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
 get_expression_multiplier(_, ::Type{<:PSIP.SupplyTechnology}, ::AbstractTechnologyFormulation) = 1.0
@@ -978,7 +978,7 @@ function add_constraints!(
     devices::U,
     formulation::S,
 ) where {
-    T <: MaximumCumulativeCapacity,
+    T <: CumulativeCapacityLimit,
     S <: InvestmentTechnologyFormulation,
     U <: Vector{D},
     V <: CumulativeCapacity,
@@ -988,7 +988,7 @@ function add_constraints!(
     tech_model = string(S)
 
     device_names = PSIP.get_name.(devices)
-    con_ub = add_constraints_container!(
+    con = add_constraints_container!(
         container,
         T(),
         D,
@@ -997,16 +997,18 @@ function add_constraints!(
         meta=tech_model,
     )
 
-    installed_cap = get_expression(container, CumulativeCapacity(), D, tech_model)
+    installed_cap = get_expression(container, V(), D, tech_model)
 
     for d in devices
         name = PSIP.get_name(d)
         variable_names = get_variable_names(d)
-        max_capacity = PSIP.get_capacity_limits(d).max
+        limits = get_cumulative_limits(d, V())
         for t in time_steps
-            con_ub[name, t] = JuMP.@constraint(
+            con[name, t] = JuMP.@constraint(
                 get_jump_model(container),
-                sum(installed_cap[variable_name, t] for variable_name in variable_names) <= max_capacity
+                limits.min <=
+                sum(installed_cap[variable_name, t] for variable_name in variable_names) <=
+                limits.max
             )
         end
     end

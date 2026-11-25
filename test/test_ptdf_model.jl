@@ -2,8 +2,8 @@ const PTDF_TECHNOLOGIES = (
     (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal", ContinuousInvestment),
     (PSIP.SupplyTechnology{PSY.ThermalStandard}, "expensive_thermal", ContinuousInvestment),
     (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind", ContinuousInvestment),
-    (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1", StaticLoadInvestment),
-    (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2", StaticLoadInvestment),
+    (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand1", StaticLoadInvestment),
+    (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand2", StaticLoadInvestment),
 )
 
 const PTDF_LINE_TYPE = PSIP.NodalACTransportTechnology{PSY.Line}
@@ -44,6 +44,10 @@ function _ptdf_line(
     )
 end
 
+_operations_formulation(::Type{<:PSIP.Technology}, demand_formulation) = BasicDispatch
+_operations_formulation(::Type{<:PSIP.ProjectedDemand}, demand_formulation) =
+    demand_formulation
+
 # `lines`: (name, from, to, reactance, existing line), `discrete_lines`: (name, from, to,
 # reactance, formulation, unit size, limit), `hvdc_lines`: (name, from, to, formulation, loss)
 function _nodal_test_model(
@@ -52,7 +56,7 @@ function _nodal_test_model(
     placement,
     lines,
     ratings=Dict{String, Float64}(),
-    use_slacks=false,
+    demand_formulation=BasicDispatch,
     candidate_cost=5000.0,
     candidate_costs=Dict{String, Float64}(),
     discrete_lines=[],
@@ -77,7 +81,7 @@ function _nodal_test_model(
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(transport; use_slacks=use_slacks, attributes=attributes),
+        TransportModel(transport; attributes=attributes),
     )
     first_id = next_region_id(p_5bus)
     regions = Dict(
@@ -100,7 +104,7 @@ function _nodal_test_model(
             [name],
             type,
             investment,
-            BasicDispatch,
+            _operations_formulation(type, demand_formulation),
             BasicDispatchFeasibility,
         )
     end
@@ -600,7 +604,7 @@ function _triangle_model(
         ),
         lines=TRIANGLE_LINES,
         ratings=Dict("1" => 100.0),
-        use_slacks=true,
+        demand_formulation=UnservedDemandDispatch,
         attributes=attributes,
         algorithm=algorithm,
         voltages=voltages,
@@ -652,11 +656,13 @@ end
     balance = PSIN.get_constraint(container, IslandBalanceConstraint(), PSIP.Portfolio)
     @test axes(balance, 1) == ["n1"]
 
-    for slack in (PSIN.BalanceSlackUp(), PSIN.BalanceSlackDown())
-        @test all(
-            JuMP.value.(PSIN.get_variable(container, slack, PSIP.Portfolio).data) .<= 1e-6,
-        )
-    end
+    unserved = PSIN.get_variable(
+        container,
+        UnservedDemandVariable(),
+        PSIP.ProjectedDemand{PSY.PowerLoad},
+        "UnservedDemandDispatch",
+    )
+    @test all(JuMP.value.(unserved.data) .<= 1e-6)
 
     nodal_objective = _solved_objective(_triangle_model(NodalBalanceModel))
     @test nodal_objective < ptdf_objective * (1 - 1e-3)
@@ -697,7 +703,7 @@ function _ring_model(
         ),
         lines=lines,
         ratings=Dict("1" => 100.0, "2" => 2000.0, "4" => 2000.0, "5" => 2000.0),
-        use_slacks=true,
+        demand_formulation=UnservedDemandDispatch,
         candidate_cost=candidate_cost,
         candidate_costs=candidate_costs,
         discrete_lines=discrete_lines,
@@ -1367,7 +1373,7 @@ end
         ),
         lines=TRIANGLE_LINES,
         ratings=Dict("1" => 100.0),
-        use_slacks=true,
+        demand_formulation=UnservedDemandDispatch,
         attributes=Dict{String, Any}("monitored" => String[]),
     )
     p = PSIN.get_portfolio(m)
@@ -1380,7 +1386,7 @@ end
     )
     PSIP.add_requirement!(p, requirement)
     thermal_type = PSIP.SupplyTechnology{PSY.ThermalStandard}
-    demand_type = PSIP.DemandRequirement{PSY.PowerLoad}
+    demand_type = PSIP.ProjectedDemand{PSY.PowerLoad}
     for (type, name) in (
         (thermal_type, "cheap_thermal"),
         (thermal_type, "expensive_thermal"),
@@ -1429,15 +1435,17 @@ end
                 "ContinuousInvestment",
             ),
         )
-    demand = TimeSeries.values(
-        IS.get_time_series(
-            IS.SingleTimeSeries,
-            PSIP.get_technology(demand_type, p, "demand2"),
-            "ops_demand";
-            year="2030",
-            rep_day=1,
-        ).data,
-    )
+    demand2 = PSIP.get_technology(demand_type, p, "demand2")
+    demand =
+        TimeSeries.values(
+            IS.get_time_series(
+                IS.SingleTimeSeries,
+                demand2,
+                "ops_demand";
+                year="2030",
+                rep_day=1,
+            ).data,
+        ) .* PSIP.get_peak_demand_mw(demand2)
     for t in 1:24
         constraint = JuMP.constraint_object(constraints["reserve_margin", t])
         @test constraint.set isa MOI.GreaterThan
@@ -1468,7 +1476,7 @@ end
             ("l13", "n1", "n3", 0.3, "3"),
         ],
         discrete_lines=[("tiny", "n1", "n3", 0.3, IntegerInvestment, 100.0, 50.0)],
-        use_slacks=true,
+        demand_formulation=UnservedDemandDispatch,
         attributes=Dict{String, Any}("monitored" => String[]),
     )
     p = PSIN.get_portfolio(m)
@@ -1482,7 +1490,7 @@ end
     PSIP.add_requirement!(p, requirement)
     for (type, name) in (
         (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal"),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2"),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand2"),
         (PTDF_LINE_TYPE, "n1_n2"),
         (PTDF_LINE_TYPE, "tiny"),
     )

@@ -10,12 +10,12 @@ function _transmission_template(transport)
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{Dates}}()),
-        TransportModel(transport, use_slacks=false),
+        TransportModel(transport),
     )
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -70,8 +70,8 @@ function _nodal_line_model(formulation; name="nodal_line")
         (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind", 2),
         (PSIP.SupplyTechnology{PSY.ThermalStandard}, "cheap_thermal", 1),
         (PSIP.SupplyTechnology{PSY.ThermalStandard}, "expensive_thermal", 1),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand1", 1),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2", 2),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand1", 1),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand2", 2),
     )
         PSIP.set_region!(PSIP.get_technology(type, p_5bus, name), [nodes[node]])
     end
@@ -287,7 +287,7 @@ end
     PSIP.add_requirement!(p_5bus, requirement)
     for (type, name) in (
         (PSIP.SupplyTechnology{PSY.RenewableDispatch}, "wind"),
-        (PSIP.DemandRequirement{PSY.PowerLoad}, "demand2"),
+        (PSIP.ProjectedDemand{PSY.PowerLoad}, "demand2"),
     )
         PSIP.set_requirements!(PSIP.get_technology(type, p_5bus, name), [requirement])
     end

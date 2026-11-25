@@ -40,7 +40,7 @@ function construct_requirement!(
 ) where {T <: PSIP.HourlyMatching, B <: RequirementHourlyMatching, X <: RequirementModel}
     for name in names
         req = PSIP.get_requirement(T, p, name)
-        _check_contributors(p, req, names_to_model_map; demands=true)
+        _check_contributors(p, req, names_to_model_map; demands=true, end_use_demand=true)
         _warn_ignored_contributors(_contributing_lines(p, req), req, "Lines")
     end
     return
@@ -86,6 +86,7 @@ function add_constraints!(
     operational_indexes = get_operational_indexes(time_mapping)
     time_steps = get_operational_time_steps(time_mapping)
     jump_model = get_jump_model(container)
+    demand_expression = get_expression(container, DemandExpression(), PSIP.Portfolio)
     con = add_constraints_container!(
         container,
         HourlyMatchingConstraint(),
@@ -99,13 +100,55 @@ function add_constraints!(
     for (req, model) in zip(requirements, requirement_model_vector)
         req_name = PSIP.get_name(req)
         resources = _contributing_resources(p, req)
+        demands = _contributing_demands(p, req)
+        end_uses = _contributing_end_uses(p, req)
+        end_use_formulations = [
+            get_operations_formulation(
+                _contributor_model(names_to_model_map, req_name, d),
+            )() for d in end_uses
+        ]
         resource_models = [
             _contributor_model(names_to_model_map, req_name, resource) for
             resource in resources
         ]
         for op_ix in operational_indexes
             time_slices = consecutive_slices[op_ix]
-            demand = _requirement_demand(p, req, time_mapping, op_ix)
+            demand = zeros(length(time_slices))
+            # Unserved demand does not need to be matched, and shifted demand is matched
+            # where it is served
+            adjustment = Dict(t => JuMP.AffExpr(0.0) for t in time_slices)
+            for d in demands
+                formulation = _demand_formulation(names_to_model_map, d)
+                for (ix, t) in enumerate(time_slices)
+                    demand[ix] += JuMP.constant(demand_expression[PSIP.get_name(d), t])
+                end
+                _add_unserved_demand!(
+                    t -> adjustment[t],
+                    container,
+                    d,
+                    formulation,
+                    time_slices,
+                    1.0,
+                )
+                _add_demand_shift!(
+                    t -> adjustment[t],
+                    container,
+                    d,
+                    formulation,
+                    time_slices,
+                    -1.0,
+                )
+            end
+            for (d, formulation) in zip(end_uses, end_use_formulations)
+                _add_end_use_consumption!(
+                    t -> adjustment[t],
+                    container,
+                    d,
+                    formulation,
+                    time_slices,
+                    -1.0,
+                )
+            end
             slack_cost =
                 get_attributes(model)["slack_penalty"] *
                 get_time_step_weight(container, op_ix) *
@@ -125,6 +168,7 @@ function add_constraints!(
                         t,
                     )
                 end
+                JuMP.add_to_expression!(output, adjustment[t])
                 con[req_name, t] = JuMP.@constraint(jump_model, output >= demand[ix])
             end
         end

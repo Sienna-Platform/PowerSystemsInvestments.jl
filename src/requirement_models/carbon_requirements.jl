@@ -33,7 +33,13 @@ function construct_requirement!(
 ) where {T <: PSIP.CarbonCaps, B <: CarbonCapFormulation, X <: RequirementModel}
     requirements = [PSIP.get_requirement(T, p, n) for n in names]
     for req in requirements
-        _check_contributors(p, req, names_to_model_map; demands=_uses_demands(B))
+        _check_contributors(
+            p,
+            req,
+            names_to_model_map;
+            demands=_uses_demands(B),
+            end_use_demand=true,
+        )
     end
     add_expression!(
         container,
@@ -224,7 +230,8 @@ function _add_carbon_limit!(
             p,
             requirement,
             names_to_model_map,
-            op_ix,
+            op_ix;
+            served=true,
         )
     end
     JuMP.add_to_expression!(limit, PSIP.get_max_tons_mwh(requirement), demand)

@@ -54,7 +54,6 @@ function copy_for_model(template::InvestmentModelTemplate)
         get_feasibility_model(template),
         TransportModel(
             get_transport_formulation(transport_model);
-            use_slacks=get_use_slacks(transport_model),
             attributes=copy(transport_model.attributes),
         ),
     )

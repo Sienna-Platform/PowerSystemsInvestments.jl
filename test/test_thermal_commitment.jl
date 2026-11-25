@@ -143,12 +143,12 @@ function _ramp_test_solution(ramp_limits, start_up_cost)
         DiscountedCashFlow(0.07, Year(2025), periods),
         OperationalRepresentativeDays(op_days, [365, 365]),
         RepresentativePeriods(Vector{Vector{DateTime}}()),
-        TransportModel(SingleRegionBalanceModel, use_slacks=false),
+        TransportModel(SingleRegionBalanceModel),
     )
     set_technology_model!(
         template,
         ["demand1"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,

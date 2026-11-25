@@ -13,7 +13,7 @@ function _set_multi_region_supply_models!(template::InvestmentModelTemplate)
     set_technology_model!(
         template,
         ["demand1", "demand2"],
-        PSIP.DemandRequirement{PSY.PowerLoad},
+        PSIP.ProjectedDemand{PSY.PowerLoad},
         StaticLoadInvestment,
         BasicDispatch,
         BasicDispatchFeasibility,
@@ -79,7 +79,7 @@ function _test_multi_region_wind(model::InvestmentModel, region_names::Vector{St
 
     max_capacity = PSIN.get_constraint(
         container,
-        PSIN.MaximumCumulativeCapacity(),
+        PSIN.CumulativeCapacityLimit(),
         wind_type,
         "ContinuousInvestment",
     )
@@ -133,7 +133,7 @@ end
         capital,
         OperationalRepresentativeDays(op_days, weights),
         feasibility,
-        TransportModel(MultiRegionBalanceModel, use_slacks=false),
+        TransportModel(MultiRegionBalanceModel),
     )
     _set_multi_region_supply_models!(template)
     set_technology_model!(
@@ -191,7 +191,7 @@ end
         PSIP.set_region!(thermal, [nodes[1]])
     end
     for (name, node) in zip(["demand1", "demand2"], nodes)
-        demand = PSIP.get_technology(PSIP.DemandRequirement{PSY.PowerLoad}, p_5bus, name)
+        demand = PSIP.get_technology(PSIP.ProjectedDemand{PSY.PowerLoad}, p_5bus, name)
         PSIP.set_region!(demand, [node])
     end
 
@@ -219,7 +219,7 @@ end
         capital,
         OperationalRepresentativeDays(op_days, weights),
         feasibility,
-        TransportModel(NodalBalanceModel, use_slacks=false),
+        TransportModel(NodalBalanceModel),
     )
     _set_multi_region_supply_models!(template)
     set_technology_model!(
@@ -257,7 +257,6 @@ end
     @test isnothing(PSIN.check_multi_region_technology(wind, 0.0))
     # Existing capacity cannot be assigned to a region.
     @test_throws ErrorException PSIN.check_multi_region_technology(wind, 100.0)
-    # Neither can a minimum capacity limit.
     PSIP.set_capacity_limits!(wind, (min=10.0, max=1e8))
-    @test_throws ErrorException PSIN.check_multi_region_technology(wind, 0.0)
+    @test isnothing(PSIN.check_multi_region_technology(wind, 0.0))
 end

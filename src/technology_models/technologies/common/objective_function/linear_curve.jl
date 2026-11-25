@@ -192,6 +192,27 @@ function _add_cost_to_objective!(
     return
 end
 
+# A load's variable cost is on what it consumes
+function _add_cost_to_objective!(
+    container::SingleOptimizationContainer,
+    ::T,
+    technology::PSIP.Technology,
+    om_cost::PSY.LoadCost,
+    ::U,
+    tech_model::String,
+) where {T <: ActiveInPowerVariable, U <: AbstractTechnologyFormulation}
+    _add_variable_cost_to_objective!(
+        container,
+        T(),
+        technology,
+        om_cost,
+        PSY.get_variable(om_cost),
+        U(),
+        tech_model,
+    )
+    return
+end
+
 #Storage Discharge cost
 function _add_cost_to_objective!(
     container::SingleOptimizationContainer,
