@@ -110,6 +110,7 @@ export FlowActivePowerVariable
 export FlowActivePowerFromToVariable
 export FlowActivePowerToFromVariable
 export BranchBuiltVariable
+export RetrofitAllocationVariable
 export VirtualTransactionVariable
 export LineFlow
 export BranchFlow

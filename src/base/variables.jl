@@ -134,6 +134,11 @@ Whether a prospective PTDF branch is built by an investment period.
 struct BranchBuiltVariable <: InvestmentVariableType end
 
 """
+Source capacity (MW) a retrofit option converts from one eligible unit over the horizon.
+"""
+struct RetrofitAllocationVariable <: InvestmentVariableType end
+
+"""
 Transaction that cancels the flow of an unbuilt PTDF branch.
 """
 struct VirtualTransactionVariable <: OperationsVariableType end
