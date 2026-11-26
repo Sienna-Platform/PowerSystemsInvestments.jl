@@ -40,6 +40,7 @@ struct TotalCapitalCost <: ISOPT.ExpressionType end
 struct RetrofitCapacity <: ISOPT.ExpressionType end
 
 struct VariableOMCost <: OperationsExpressionType end
+struct CurtailmentCost <: OperationsExpressionType end
 # Value of the product of an end-use technology, a negative operating cost
 struct ProductRevenue <: OperationsExpressionType end
 
@@ -75,6 +76,7 @@ should_write_resulting_value(::Type{WeightedCarbonEmissions}) = true
 
 should_write_resulting_value(::Type{FuelConsumptionExpression}) = true
 should_write_resulting_value(::Type{FuelCost}) = true
+should_write_resulting_value(::Type{CurtailmentCost}) = true
 should_write_resulting_value(::Type{StartUpCost}) = true
 should_write_resulting_value(::Type{ShutDownCost}) = true
 

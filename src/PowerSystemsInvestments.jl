@@ -42,6 +42,7 @@ export BinaryInvestment
 
 ### Operation Formulations ###
 export BasicDispatch
+export FixedOutput
 export BasicDispatchWithBudget
 export BasicDispatchWithLosses
 export UnservedDemandDispatch
@@ -125,6 +126,7 @@ export CapitalCostExpression
 export TotalCapitalCost
 export FixedOperationModelCost
 export VariableOMCost
+export CurtailmentCost
 export ProductRevenue
 export FuelCost
 export StartUpCost

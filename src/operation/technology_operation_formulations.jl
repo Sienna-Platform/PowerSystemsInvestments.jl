@@ -4,6 +4,9 @@ struct BasicDispatch <: OperationsTechnologyFormulation end
 struct BasicDispatchWithBudget <: OperationsTechnologyFormulation end
 struct BasicDispatchWithLosses <: OperationsTechnologyFormulation end
 
+# Generation follows the available capacity profile without curtailment
+struct FixedOutput <: OperationsTechnologyFormulation end
+
 # Demand that can go unserved at the price of its unserved demand cost
 struct UnservedDemandDispatch <: OperationsTechnologyFormulation end
 # Unserved demand, plus shifting of the flexible share of demand within time windows
